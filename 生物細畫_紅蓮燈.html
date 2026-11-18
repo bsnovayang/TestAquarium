@@ -82,7 +82,8 @@ function makeN(extra = {}) {
   Object.assign(e, { size: 1, adult: 1, dir: 1, id: 9, amp: .45, freq: 2.4, phase: 0, pec: 0, mode: 'cruise' }, extra);
   return e;
 }
-const L = { new: makeN(), old: makeN(), anat: makeN({ amp: .12, freq: 1 }), card: makeN(), neon: makeN({ size: .78 }), night: makeN({ mode: 'hover', amp: .1, freq: .8, fadeV: 1 }) };
+const NT = makeEnt('neontetra', 0, 0, false); Object.assign(NT, { size: 1, adult: 1, dir: 1, id: 10, amp: .45, freq: 2.4, phase: 0, pec: 0, mode: 'cruise' });
+const L = { new: makeN(), old: makeN(), anat: makeN({ amp: .12, freq: 1 }), card: makeN(), neon: NT, night: makeN({ mode: 'hover', amp: .1, freq: .8, fadeV: 1 }) };
 const school = Array.from({ length: 9 }, (_, i) => makeN({ id: 30 + i, phase: i * .9, ox: (i % 3) * 60 - 60 + (i > 5 ? 20 : 0), oy: Math.floor(i / 3) * 34 - 34 }));
 const nightSchool = Array.from({ length: 5 }, (_, i) => makeN({ id: 50 + i, mode: 'hover', amp: .1, freq: .7, fadeV: 1, ox: i * 70 - 140, oy: (i % 2) * 30 - 10 }));
 const ctx = id => document.getElementById(id).getContext('2d');
@@ -99,9 +100,7 @@ function frame(now) {
   for (const e of [...Object.values(L), ...school, ...nightSchool]) { e.phase += Math.PI * 2 * e.freq * dt; e.pec += dt * 7; }
   for (const [id, e, sc] of [['new', L.new, 2.4], ['card', L.card, 2.2], ['neontetra', L.neon, 2.2]]) {
     const c = ctx(id === 'card' ? 'cardinal' : id); c.setTransform(1, 0, 0, 1, 0, 0); c.clearRect(0, 0, c.canvas.width, c.canvas.height);
-    if (id === 'neontetra') SPECIES.neon.look.redFull = false;
     draw(c, e, sc, c.canvas.width / 2 + 10 * sc, c.canvas.height / 2);
-    SPECIES.neon.look.redFull = true;
   }
   { const c = ctx('old'); c.setTransform(1, 0, 0, 1, 0, 0); c.clearRect(0, 0, 460, 240); c.setTransform(2.4, 0, 0, 2.4, 230 + 24, 120); G.begin(c); drawFishGeneric(L.old); }
   { // 結構標示

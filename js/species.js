@@ -27,6 +27,13 @@ const SPECIES = {
     look: { shape: 'tetra', redFull: true, body: ['#4a5560', '#b9c6cf', '#eef2f4'], tail: ['#d7e1e7', '#c4d0d8', '#aebcc6'], tailType: 'fork',
             fin: 'rgba(220,230,236,.55)', hScale: .72, stripe: '#2fd3ff', belly: '#ff3348' },
   },
+  neontetra: {
+    name: '日光燈', kind: 'fish', len: 50, speed: 40, dash: 150, sight: 140, hungerTime: 750, huntBelow: 80, hit: 21, school: true,
+    growTime: 150, birth: .3, breed: { how: 'live', cool: [150, 240], count: [2, 5] },   // 實際是撒卵，這裡簡化
+    // neon tetra（約 2.8 cm）：紅色只有後半段，前半腹部銀白；和紅蓮燈各自成群
+    look: { shape: 'tetra', redFull: false, body: ['#4a5560', '#b9c6cf', '#eef2f4'], tail: ['#d7e1e7', '#c4d0d8', '#aebcc6'], tailType: 'fork',
+            fin: 'rgba(220,230,236,.55)', hScale: .72, stripe: '#2fd3ff', belly: '#ff3348' },
+  },
   redtail: {
     name: '紅尾黑鯊', kind: 'fish', len: 216, speed: 30, dash: 120, sight: 180, hungerTime: 1000, huntBelow: 75, hit: 34,
     growTime: 300, birth: .3, territorial: true, bottom: true, grazer: true,   // 地盤性、待在底層、會啃食藻類；水族缸內幾乎不繁殖

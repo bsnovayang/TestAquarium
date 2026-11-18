@@ -7,7 +7,7 @@ const UI = { sel: null, drag: null, mode: 'edit', speed: 1 };
 // 物件面板：用頁籤分類（物件變多時比較好找）
 const PALETTE = [
   { cat: '造景', items: ['mound', 'boulder', 'rock', 'wood', 'plant', 'bubbler'] },
-  { cat: '魚類', items: ['guppy', 'neon', 'redtail'] },
+  { cat: '魚類', items: ['guppy', 'neon', 'neontetra', 'redtail'] },
   { cat: '兩棲爬蟲', items: ['frog', 'goldfrog', 'tadpole', 'turtle', 'gecko'] },
   { cat: '昆蟲', items: ['mosquito', 'larva'] },
   { cat: '迷你版', items: ['whale'] },
@@ -37,7 +37,7 @@ function drawThumb(cv, type) {
   } else {
     const e = makeEnt(type, 0, 0, false);
     e.size = e.adult = 1; e.dir = 1; e.amp = .3; e.mode = type === 'turtle' ? 'walk' : 'sit';
-    const conf = { guppy: [36, 22, .55], neon: [33, 22, .6], redtail: [37, 22, .17], turtle: [30, 38, .45], frog: [32, 38, .7], goldfrog: [31, 38, .66], tadpole: [34, 22, 1.5],
+    const conf = { guppy: [36, 22, .55], neon: [33, 22, .6], neontetra: [33, 22, .7], redtail: [37, 22, .17], turtle: [30, 38, .45], frog: [32, 38, .7], goldfrog: [31, 38, .66], tadpole: [34, 22, 1.5],
                    gecko: [38, 34, .38], mosquito: [32, 22, 2], larva: [32, 24, 2], whale: [32, 22, .036], cricket: [30, 30, 1.6], fly: [32, 22, 4] }[type];
     if (type === 'larva') e.phase = 1;
     if (e.sex) { e.sex = 'm'; e.morph = 0; e.size = e.adult = 1; }
@@ -180,6 +180,7 @@ function bindCanvas() {
     if (hit) {
       select(hit);
       UI.drag = { obj: hit, dx: hit.x - p.x, dy: hit.y - p.y, sx: p.x, sy: p.y, moved: false, snap: JSON.stringify(serialize()) };
+      if (hit.kind === 'gecko' && world.settings.autotomy && Math.random() < .3) dropTail(hit);   // 被抓：壁虎可能斷尾求生
       if (hit.kind) hit.held = true;
     } else {
       const v = toView(ev);
@@ -356,6 +357,7 @@ function bindSidePanel() {
     <label><input type="checkbox" data-set="breed"> 生物會繁殖</label>
     <label><input type="checkbox" data-set="sizeCheck"> 依體型判斷能不能吃</label>
     <label><input type="checkbox" data-set="sharkChase"> 紅尾黑鯊驅趕其他魚</label>
+    <label><input type="checkbox" data-set="autotomy"> 壁虎被抓時可能斷尾</label>
     <div class="sub">除錯</div>
     <label><input type="checkbox" data-set="debugSight"> 顯示所有視野</label>
     <label><input type="checkbox" data-set="debugBones"> 顯示骨架</label>`;

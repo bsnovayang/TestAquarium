@@ -21,6 +21,7 @@ const world = {
   fx: [],              // 純視覺效果（不影響模擬）
   hist: [], histT: 0,  // 族群數量歷史（折線圖用）
   particles: [],       // 水花、漣漪、氣泡（純視覺）
+  tailBits: [],        // 壁虎斷掉、還在扭動的尾巴（純視覺）
   tod: .375,           // 一天中的時間（0 = 午夜；預設早上 9 點）
   settings: {
     death: true,
@@ -31,6 +32,7 @@ const world = {
     sizeCheck: true,     // 依體型判斷能不能吃（獵物要小於掠食者的一半）
     breed: true,         // 生物會繁殖
     sharkChase: true,    // 紅尾黑鯊驅趕其他魚
+    autotomy: true,      // 壁虎被抓時可能斷尾
     dayCycle: 'normal',  // 日夜循環：off / fast / normal / real
   },
 };
@@ -152,6 +154,7 @@ function makeEnt(type, x, y, push = true) {
   if (sp.kind === 'nest') { e.adult = e.size = 1; e.t = 0; e.hatch = 30; e.count = 1; e.of = 'frog'; e.medium = 'water'; }
   if (sp.kind === 'whale') { e.breathT = rand(...sp.breath) * .5; e.wmode = 'cruise'; }
   if (sp.kind === 'cricket' || sp.kind === 'fly') { e.life = rand(...sp.life); e.adult = e.size = rand(.9, 1.1); }
+  if (sp.kind === 'gecko') { e.tailLen = 1; e.regrown = false; }
   if (sp.sexed) { e.morph = Math.floor(Math.random() * GUPPY_MORPHS.length); setSex(e, Math.random() < .5 ? 'm' : 'f'); }
   if (push) { world.ents.push(e); afterDrop(e); }
   return e;
@@ -189,6 +192,18 @@ function setSex(e, sex) {
   e.sex = sex;
   if (sex === 'f') e.adult *= sp.femaleScale;
   e.size = e.adult * ratio; e.preg = 0;
+}
+// 壁虎斷尾：斷掉的尾巴會扭動一陣子；壁虎的尾巴之後慢慢長回來（再生的尾巴沒有疣鱗）
+function dropTail(e) {
+  if (e.kind !== 'gecko' || e.tailLen < .95) return false;
+  const s = e.size;
+  let x, y, ang;
+  if (e.surface === 'glass' && e.chain) { const c = e.chain[9]; x = c.x; y = c.y; ang = chainAngle(e.chain, 9) + Math.PI; }
+  else { x = e.x - e.dir * 50 * s; y = e.y - 3 * s; ang = e.dir > 0 ? Math.PI : 0; }
+  world.tailBits.push({ x, y, ang, len: 40 * s, t: 0, seed: Math.random() * 10, onGlass: e.surface === 'glass' });
+  e.tailLen = .25; e.regrown = true;
+  logEvent('🦎 壁虎斷尾了（尾巴會慢慢長回來）');
+  return true;
 }
 function dropFood(x, n = 5) {
   for (let i = 0; i < n; i++)
@@ -277,6 +292,8 @@ function step(dt) {
   world.ents = world.ents.filter(e => !e.removed);
   world.food = world.food.filter(f => !f.removed);
   tickParticles(dt);
+  for (const b of world.tailBits) b.t += dt;
+  world.tailBits = world.tailBits.filter(b => b.t < 9);
   for (const f of world.fx) { f.t += dt; f.y -= 18 * dt; }
   world.fx = world.fx.filter(f => f.t < 1.2);
   world.histT -= dt;
@@ -347,8 +364,8 @@ function serialize() {
   return {
     v: 1, tank: world.tank, level: world.level, tod: world.tod, settings: world.settings,
     decor: world.decor.map(({ type, x, y, w, h, rot, seed }) => ({ type, x, y, w, h, rot, seed })),
-    ents: world.ents.filter(e => !e.dead).map(({ type, x, y, dir, hunger, hp, size, adult, stage, grow, count, meta, of, medium, t, hatch, sex, morph, preg }) =>
-      ({ type, x, y, dir, hunger, hp, size, adult, stage, grow, count, meta, of, medium, t, hatch, sex, morph, preg })),
+    ents: world.ents.filter(e => !e.dead).map(({ type, x, y, dir, hunger, hp, size, adult, stage, grow, count, meta, of, medium, t, hatch, sex, morph, preg, tailLen, regrown }) =>
+      ({ type, x, y, dir, hunger, hp, size, adult, stage, grow, count, meta, of, medium, t, hatch, sex, morph, preg, tailLen, regrown })),
   };
 }
 function deserialize(data, keepLogs = false) {
@@ -368,6 +385,7 @@ function deserialize(data, keepLogs = false) {
     if (e.kind === 'larva') Object.assign(e, { stage: s.stage || 'larva', grow: s.grow || 0, count: s.count || 0 });
     if (e.kind === 'tadpole') e.meta = s.meta || 0;
     if (s.sex) Object.assign(e, { sex: s.sex, morph: s.morph ?? 0, preg: s.preg || 0 });
+    if (e.kind === 'gecko' && s.tailLen !== undefined) Object.assign(e, { tailLen: s.tailLen, regrown: !!s.regrown });
     if (e.kind === 'nest') Object.assign(e, { of: s.of || 'frog', medium: s.medium || 'water', t: s.t || 0, hatch: s.hatch || 30, count: s.count || 1 });
     afterDrop(e);
   }

@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>壁虎細畫</title>
+<style>
+  :root { --bg:#1d2124; --panel:#262b2f; --ink:#e8e6e1; --muted:#9aa0a4; --line:#3a4146; --accent:#4fb89f; }
+  @media (prefers-color-scheme: light) { :root:not([data-theme="dark"]) { --bg:#e9e6df; --panel:#fbfaf7; --ink:#2b2b2b; --muted:#6f6f6f; --line:#d8d2c5; --accent:#2f8f78; } }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.6 system-ui, "Microsoft JhengHei", "PingFang TC", sans-serif; }
+  main { max-width: 1200px; margin: 0 auto; padding: 16px; }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  h2 { font-size: 16px; margin: 22px 0 8px; }
+  p.lead { color: var(--muted); margin: 0 0 12px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
+  figure { margin: 0; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 8px; }
+  figcaption { font-weight: 600; margin-bottom: 4px; }
+  figcaption small { font-weight: 400; color: var(--muted); }
+  canvas { display: block; width: 100%; border-radius: 6px; }
+  .land { background: linear-gradient(#e3eedb 0 78%, #8c6a44 78%); }
+  .glass { background: linear-gradient(#d4e2dc, #b9cec6); }
+  .night { background: linear-gradient(#26324a 0 78%, #3a2c1e 78%); }
+  ul { margin: 6px 0; padding-left: 20px; }
+  .src a { color: var(--accent); }
+</style>
+</head>
+<body>
+<main>
+  <h1>壁虎細畫：疣尾蝎虎</h1>
+  <p class="lead">依真實疣尾蝎虎（<i>Hemidactylus frenatus</i>，家壁虎）的結構重畫。壁虎在陸地上用側面圖、在背面玻璃上用俯視圖。下方的圖直接使用遊戲裡的繪圖程式。</p>
+
+  <h2>舊版 vs 新版（側面）</h2>
+  <div class="grid">
+    <figure><figcaption>舊版</figcaption><canvas id="old" class="land" width="520" height="260"></canvas></figure>
+    <figure><figcaption>新版</figcaption><canvas id="new" class="land" width="520" height="260"></canvas></figure>
+  </div>
+
+  <h2>結構標示</h2>
+  <div class="grid" style="grid-template-columns: 1.4fr 1fr">
+    <figure><figcaption>側面（陸地上）</figcaption><canvas id="aSide" class="land" width="760" height="380"></canvas></figure>
+    <figure><figcaption>俯視（背面玻璃上）</figcaption><canvas id="aTop" class="glass" width="520" height="380"></canvas></figure>
+  </div>
+
+  <h2>行為與變化</h2>
+  <div class="grid">
+    <figure><figcaption>在玻璃上爬 <small>對角線的腳一組輪流踏步</small></figcaption><canvas id="crawl" class="glass" width="420" height="260"></canvas></figure>
+    <figure><figcaption>舔眼睛 <small>壁虎沒有眼瞼，用舌頭清潔眼睛</small></figcaption><canvas id="lick" class="land" width="420" height="260"></canvas></figure>
+    <figure><figcaption>白天 <small>體色較深、瞳孔細</small></figcaption><canvas id="day" class="land" width="420" height="260"></canvas></figure>
+    <figure><figcaption>夜晚 <small>體色變淡、瞳孔放大</small></figcaption><canvas id="night" class="night" width="420" height="260"></canvas></figure>
+    <figure><figcaption>斷尾 <small>斷掉的尾巴會扭動；尾巴慢慢長回來，再生的部分沒有疣鱗</small></figcaption><canvas id="tail" class="land" width="420" height="260"></canvas></figure>
+  </div>
+
+  <h2>參考的真實特徵</h2>
+  <ul>
+    <li><b>大小與顏色</b>：全長約 7.5～15 cm；背部灰色或淺褐到米色，腹部白色；家壁虎白天體色較深、夜裡較淡</li>
+    <li><b>學名 frenatus</b>：意為「戴著韁繩的」，指眼睛和鼻孔之間的深色條紋</li>
+    <li><b>趾下瓣</b>：腳底有吸附用的皮瓣，能貼在垂直面甚至倒掛</li>
+    <li><b>叫聲</b>：招牌的「嘖嘖嘖」（tik tik tik）</li>
+    <li><b>習性</b>：夜行性，常在燈光附近捕食被吸引來的昆蟲</li>
+    <li><b>眼睛</b>：沒有可動的眼瞼，會用舌頭舔眼睛；直立瞳孔，暗處會放大（壁虎科的一般特徵）</li>
+    <li><b>疣尾</b>：尾巴上一圈圈的刺狀疣鱗（中文名的由來）</li>
+    <li><b>斷尾</b>：遇到危險可以自斷尾巴，之後會再生，但再生尾的花紋和疣鱗比較少（蜥蜴的一般特徵）</li>
+  </ul>
+  <p class="src">資料來源：
+    <a href="https://en.wikipedia.org/wiki/Common_house_gecko">Wikipedia</a>、
+    <a href="https://animaldiversity.org/accounts/Hemidactylus_frenatus/">Animal Diversity Web</a>、
+    <a href="https://singapore.biodiversity.online/taxo4254/mainSpace/Hemidactylus%20frenatus.html">Singapore Biodiversity Online</a>、
+    <a href="https://www.herpedia.com/lizards/gekkonidae/common-house-gecko.html">Herpedia</a>。
+    眼瞼、瞳孔、斷尾、日夜體色、尾部疣鱗是壁虎科或家壁虎的一般知識，這次沒有找到逐條可引用的來源。
+  </p>
+</main>
+
+<script src="js/core.js"></script>
+<script src="js/species.js"></script>
+<script src="js/world.js"></script>
+<script src="js/effects.js"></script>
+<script src="js/creatures.js"></script>
+<script src="js/draw.js"></script>
+<script>
+// ---------------- 舊版（保留做比較） ----------------
+function drawGeckoSideOld(e) {
+  const R = geckoSideRig(e), n = R.nodes;
+  const legDraw = (l, col, edge) => { G.line([l.hip, l.knee, l.foot], 4.6, edge); G.line([l.hip, l.knee, l.foot], 3, col);
+    for (const kx of [-1.5, -.5, .5, 1.5]) { const tx = l.foot.x + kx * 2.6, ty = Math.min(l.foot.y + .5, 0); G.line([l.foot, P(tx, ty)], 1.2, col); G.circle(tx, ty, 1.25, col); } };
+  R.legs.filter(l => !l.near).forEach(l => legDraw(l, '#b0926e', '#7d6447'));
+  G.poly(chaikin(sideOutline(n), true, 2), { lin: [0, -20, 0, 0, [[0, '#c4a27a'], [.5, '#dfc6a2'], [1, '#f4e9d8']]] }, 'rgba(90,65,40,.45)', 1);
+  for (let i = 2; i <= 6; i++) for (const t of [.3, .7]) G.circle(lerp(n[i].x, n[i + 1].x, t), lerp(n[i].y, n[i + 1].y, t) - lerp(n[i].t, n[i + 1].t, t) * .55, 1.1, 'rgba(140,105,70,.55)');
+  const h0 = n[0], h1 = n[1];
+  G.line([P(h0.x + 1.5, h0.y + 1), P(h1.x + 2, h1.y + 3), P(h1.x - 3, h1.y + 2.5)], .9, 'rgba(90,65,40,.6)');
+  G.circle(h1.x + 2, h1.y - 2.5, 3.3, '#c9a04e', 'rgba(90,65,40,.7)', .8);
+  G.poly(ellipsePts(h1.x + 2, h1.y - 2.5, .8, 2.6, 0, 10), '#1a1208');
+  R.legs.filter(l => l.near).forEach(l => legDraw(l, '#dcc29e', '#8a6d4c'));
+}
+
+// ---------------- 場景 ----------------
+world.waterY = 99999;
+function makeK(extra = {}) {
+  const e = makeEnt('gecko', 0, 0, false);
+  Object.assign(e, { size: 1, adult: 1, dir: 1, id: 4, surface: 'ground', mode: 'walk', modeT: 0, v: 0, dist: 0, lungeK: 0, mouth: 0, turnT: 0, lickT: 0 }, extra);
+  return e;
+}
+function makeTop(extra = {}) {
+  const e = makeK(extra); e.x = 0; e.y = 0; initChain(e, 0); e.v = 0; return e;
+}
+const V = {
+  old: makeK({ v: 0 }), new: makeK({ v: 0 }), aSide: makeK({ v: 0 }), lick: makeK({ v: 0 }),
+  day: makeK({ v: 0 }), night: makeK({ v: 0 }), tail: makeK({ v: 0, tailLen: .25, regrown: true }),
+  aTop: makeTop(), crawl: makeTop(),
+};
+const ctx = id => document.getElementById(id).getContext('2d');
+const SIDE_LABELS = [
+  ['眼鼻之間的深色條紋（frenatus）', 50, -11.5, 4, 34], ['大眼睛、直立瞳孔（沒有眼瞼）', 44, -14.5, -40, -40], ['耳孔', 37.5, -12.5, -40, 26],
+  ['尾巴上的刺狀疣鱗（疣尾）', -42, -6, -14, -26], ['腳趾末端膨大的趾下瓣', 30, -.5, 26, 22], ['白色腹部', 10, -3.5, -14, 30], ['小疣粒與斑駁', 6, -16, -30, -34],
+];
+let last = performance.now(), tailBit = null;
+function frame(now) {
+  const dt = Math.min(.05, (now - last) / 1000); last = now;
+  world.t += dt;
+  const side = (id, e, sc, tod, extraDraw) => {
+    const c = ctx(id), cw = c.canvas.width, ch = c.canvas.height;
+    world.tod = tod ?? .5;
+    c.setTransform(1, 0, 0, 1, 0, 0); c.clearRect(0, 0, cw, ch);
+    c.setTransform(sc, 0, 0, sc, cw / 2 + 10 * sc, ch * .78); G.begin(c);
+    if (extraDraw) extraDraw(c);
+    (id === 'old' ? drawGeckoSideOld : drawGecko)(e);
+    return { c, cw, ch };
+  };
+  side('old', V.old, 3.3); side('new', V.new, 3.3);
+  { const { c, cw, ch } = side('aSide', V.aSide, 5.2);
+    c.setTransform(1, 0, 0, 1, 0, 0); c.font = '14px system-ui, "Microsoft JhengHei", sans-serif'; c.textBaseline = 'middle';
+    const ox = cw / 2 + 52, oy = ch * .78;
+    for (const [text, lx, ly, dx, dy] of SIDE_LABELS) {
+      const px = ox + lx * 5.2, py = oy + ly * 5.2, tx = px + dx * 2.2, ty = py + dy * 2.2;
+      c.strokeStyle = 'rgba(20,20,20,.75)'; c.lineWidth = 1.2; c.beginPath(); c.moveTo(px, py); c.lineTo(tx, ty); c.stroke();
+      c.fillStyle = '#ff9f1c'; c.beginPath(); c.arc(px, py, 3.5, 0, 7); c.fill();
+      const w = c.measureText(text).width, bx = clamp(tx - (dx < 0 ? w + 10 : 0), 2, cw - w - 12);
+      c.fillStyle = 'rgba(255,255,255,.92)'; c.fillRect(bx, ty - 11, w + 10, 22); c.fillStyle = '#222'; c.textAlign = 'left'; c.fillText(text, bx + 5, ty);
+    } }
+  V.lick.lickT = .7 - ((world.t * .6) % 1) * .7;
+  side('lick', V.lick, 3.6);
+  side('day', V.day, 3, .5); side('night', V.night, 3, .95);
+  // 斷尾：斷掉的尾巴在旁邊扭動（每 9 秒重來）、尾巴慢慢長回來
+  { const T = world.t % 9; V.tail.tailLen = .25 + Math.min(.75, T / 9 * .75);
+    side('tail', V.tail, 2.8, .5, () => {
+      const wig = Math.max(0, 1 - T / 7), pts = [];
+      for (let i = 0; i <= 8; i++) { const f = i / 8; pts.push(P(-66 + f * 32, -3 + Math.sin(T * 14 * wig - f * 4) * 4 * wig * (.3 + f))); }
+      for (let i = 0; i < 8; i++) G.line([pts[i], pts[i + 1]], 4.5 - i * .45, '#b8a27a');
+    }); }
+  // 俯視：繞圈爬行
+  for (const [id, e, sc, still] of [['aTop', V.aTop, 3.6, true], ['crawl', V.crawl, 2.6, false]]) {
+    const c = ctx(id), cw = c.canvas.width, ch = c.canvas.height;
+    world.tod = .5;
+    if (!still) { const t = world.t * .35; const tx = Math.cos(t) * 40, ty = Math.sin(t) * 22; e.ang = Math.atan2(ty - e.y, tx - e.x) || e.ang; e.v = 30; e.x = tx; e.y = ty; }
+    else { e.ang = 0; e.x = 18; e.y = 0; }
+    updChain(e); stepLegs(e, dt);
+    c.setTransform(1, 0, 0, 1, 0, 0); c.clearRect(0, 0, cw, ch);
+    c.setTransform(sc, 0, 0, sc, cw / 2, ch / 2); G.begin(c); drawGecko(e);
+    if (id === 'aTop') {
+      c.setTransform(1, 0, 0, 1, 0, 0); c.font = '14px system-ui, "Microsoft JhengHei", sans-serif'; c.textBaseline = 'middle';
+      const lab = [['眼睛凸在兩側', e.chain[0], 70, -40], ['兩排疣粒、深色橫帶', e.chain[5], -40, -75], ['尾巴兩側的刺狀疣鱗', e.chain[10], -30, 66], ['趾下瓣（5 趾）', e.feet ? e.feet[0] : e.chain[2], 20, 60]];
+      for (const [text, p, dx, dy] of lab) {
+        const px = cw / 2 + p.x * sc, py = ch / 2 + p.y * sc, tx = px + dx, ty = py + dy;
+        c.strokeStyle = 'rgba(20,20,20,.75)'; c.lineWidth = 1.2; c.beginPath(); c.moveTo(px, py); c.lineTo(tx, ty); c.stroke();
+        c.fillStyle = '#ff9f1c'; c.beginPath(); c.arc(px, py, 3.5, 0, 7); c.fill();
+        const w = c.measureText(text).width, bx = clamp(tx - w / 2, 2, cw - w - 12);
+        c.fillStyle = 'rgba(255,255,255,.92)'; c.fillRect(bx, ty - 11, w + 10, 22); c.fillStyle = '#222'; c.textAlign = 'left'; c.fillText(text, bx + 5, ty);
+      }
+    }
+  }
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

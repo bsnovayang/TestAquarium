@@ -513,6 +513,12 @@ const GK_SEG = 6.5, GK_N = 14;
 function updGecko(e, dt) {
   e.modeT += dt; e.think -= dt;
   if (e.surface === 'glass') updGeckoGlass(e, dt); else updGeckoGround(e, dt);
+  if (e.tailLen < 1) e.tailLen = Math.min(1, e.tailLen + dt / 240);          // 尾巴約 4 分鐘長回來
+  if (e.lickT > 0) e.lickT -= dt; else if (!e.lunge && e.mode !== 'lunge' && Math.random() < dt / 25) e.lickT = .7;   // 沒有眼瞼：用舌頭舔眼睛
+  if (e.chirpT > 0) e.chirpT -= dt;
+  else if (isNight() && Math.random() < dt / 30) { e.chirpT = 1.2; addFx(e.x, e.y - 22 * e.size, '嘖嘖嘖', '#efe2c4'); }
+  if (e.chirpT > 0) e.state = '鳴叫（嘖嘖嘖）';
+  else if (e.lickT > 0) e.state = '舔眼睛（壁虎沒有眼瞼）';
 }
 function initChain(e, ang) {
   e.surface = 'glass';
@@ -736,6 +742,7 @@ function geckoSideRig(e) {
     if (i <= 5) py -= bob;
     if (i <= 1) { px += L * 6; py -= L * 5; }
     if (i === 2) { px += L * 3; py -= L * 2; }
+    if (i >= 6) { const tl = e.tailLen ?? 1; px = GK_BASE[5][0] + (x - GK_BASE[5][0]) * tl; py = GK_BASE[5][1] + (y - GK_BASE[5][1]) * tl; }   // 斷尾後尾巴變短
     if (i >= 6 && moving) py += Math.sin(d * .25 - i);
     if (i === 10) py += tw; if (i === 9) py += tw * .4;
     return { x: px, y: py, t: GK_THICK[i] };

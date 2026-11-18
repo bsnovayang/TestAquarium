@@ -604,8 +604,16 @@ function drawFrog(e) {
 }
 
 // ---------------------------------------------------------------------
-// 壁虎
+// 壁虎（疣尾蝎虎，細畫）
+//   參考特徵：灰褐到米色、腹部白；白天體色較深、夜裡較淡；眼睛到鼻孔有深色條紋（frenatus＝戴韁繩）；
+//   大眼睛、直立瞳孔（夜裡放大）、沒有眼瞼（會舔眼睛）；耳孔；尾巴有一圈圈刺狀疣鱗（再生尾沒有）；
+//   腳趾末端膨大的趾下瓣＋小爪
 // ---------------------------------------------------------------------
+function geckoColors(e) {
+  const L = daylight(), juv = e.size < e.adult * .6;
+  const base = mixColor('#ece0c8', '#a68e6a', L), dark = mixColor('#b9a585', '#6e5a40', L), belly = mixColor('#f7f1e4', '#e6dcc8', L);
+  return { base: juv ? mixColor(base, '#8a7a60', .25) : base, dark, belly, edge: mixColor('#9a8462', '#5a4630', L), pupil: lerp(1.6, .55, L) };
+}
 function drawGecko(e) { if (e.surface === 'glass') drawGeckoTop(e); else drawGeckoSide(e); }
 function sideOutline(nodes) {
   const top = [], bot = [];
@@ -616,72 +624,135 @@ function sideOutline(nodes) {
   });
   return [P(nodes[0].x + 2, nodes[0].y + .5), ...top, ...bot.reverse()];
 }
-function toes(foot, ang, lift, col) {
+// 腳趾：末端膨大的趾下瓣＋小爪（5 趾）
+function toes(foot, ang, lift, col, edge, s = 1) {
   const curl = lift > 1 ? .4 : 0;
-  for (const k of [-1.5, -.5, .5, 1.5]) {
-    const a = ang + k * .45, tip = P(foot.x + Math.cos(a) * (4.5 - curl * 2), foot.y + Math.sin(a) * (4.5 - curl * 2));
-    G.line([foot, tip], 1.2, col); G.circle(tip.x, tip.y, 1.25, col);
+  for (const k of [-2, -1, 0, 1, 2]) {
+    const a = ang + k * .38, len = (4.6 - curl * 2) * s, tip = P(foot.x + Math.cos(a) * len, foot.y + Math.sin(a) * len);
+    G.line([foot, tip], 1 * s, col);
+    G.poly(ellipsePts(tip.x, tip.y, 1.5 * s, 1 * s, a, 8), col, edge, .4);
+    G.line([tip, P(tip.x + Math.cos(a) * .9 * s, tip.y + Math.sin(a) * .9 * s)], .4, '#3a2e22');
   }
 }
 function drawGeckoSide(e) {
-  const R = geckoSideRig(e), n = R.nodes, s = e.size;
+  const R = geckoSideRig(e), n = R.nodes, s = e.size, C = geckoColors(e);
+  const tl = e.tailLen ?? 1, origFrac = e.regrown ? Math.min(1, .25 / tl) : 1;           // 原本的尾巴佔多少（其餘是再生的）
   G.save(); G.tf(e.x, e.y, 0, R.sx * s, s);
   if (e.dead) G.alpha(.6);
-  G.save(); G.alpha(.18); G.poly(ellipsePts(10, 1, 48, 3, 0, 16), '#000'); G.restore();
+  G.save(); G.alpha(.18); G.poly(ellipsePts(10, 1, 48 * (.6 + .4 * tl), 3, 0, 16), '#000'); G.restore();
   const legDraw = (l, col, edge) => {
-    G.line([l.hip, l.knee, l.foot], 4.6, edge); G.line([l.hip, l.knee, l.foot], 3, col);
-    // 側面看腳趾沿地面張開
-    for (const kx of [-1.5, -.5, .5, 1.5]) { const tx = l.foot.x + kx * 2.6, ty = Math.min(l.foot.y + .5, 0); G.line([l.foot, P(tx, ty)], 1.2, col); G.circle(tx, ty, 1.25, col); }
+    G.line([l.hip, l.knee, l.foot], 4.4, edge); G.line([l.hip, l.knee, l.foot], 3, col);
+    for (const kx of [-2, -1, 0, 1, 2]) {                     // 側面：腳趾沿地面張開、趾下瓣
+      const tx = l.foot.x + kx * 2.3, ty = Math.min(l.foot.y + .5, 0);
+      G.line([l.foot, P(tx, ty)], 1, col); G.poly(ellipsePts(tx, ty - .2, 1.3, .8, 0, 8), col, edge, .4);
+    }
   };
-  R.legs.filter(l => !l.near).forEach(l => legDraw(l, '#b0926e', '#7d6447'));
+  R.legs.filter(l => !l.near).forEach(l => legDraw(l, C.dark, C.edge));
   const ol = chaikin(sideOutline(n), true, 2);
-  G.poly(ol, { lin: [0, -20, 0, 0, [[0, '#c4a27a'], [.5, '#dfc6a2'], [1, '#f4e9d8']]] }, 'rgba(90,65,40,.45)', 1);
-  for (let i = 2; i <= 6; i++) for (const t of [.3, .7]) G.circle(lerp(n[i].x, n[i + 1].x, t), lerp(n[i].y, n[i + 1].y, t) - lerp(n[i].t, n[i + 1].t, t) * .55, 1.1, 'rgba(140,105,70,.55)');
-  for (let i = 6; i <= 9; i++) G.line([P(n[i].x, n[i].y - n[i].t * .9), P(n[i].x + 1, n[i].y + n[i].t * .6)], 1.2, 'rgba(140,105,70,.4)');
-  const h0 = n[0], h1 = n[1];
+  G.poly(ol, { lin: [0, -20, 0, 0, [[0, C.dark], [.45, C.base], [1, C.belly]]] }, C.edge, .9);
+  // 深色斑駁
+  G.save(); G.alpha(.35);
+  for (const [i, f, r] of [[2, .4, 2.6], [3, .2, 2.2], [4, .45, 2.8], [5, .25, 2], [3, .6, 1.4]]) G.poly(ellipsePts(lerp(n[i].x, n[i + 1].x, f), n[i].y - n[i].t * .5, r, r * .55, 0, 10), C.edge);
+  G.restore();
+  // 背上的小疣粒
+  for (let i = 2; i <= 5; i++) for (const t of [.3, .7]) G.circle(lerp(n[i].x, n[i + 1].x, t), lerp(n[i].y, n[i + 1].y, t) - lerp(n[i].t, n[i + 1].t, t) * .62, .9, mixColor(C.edge, '#000000', .1));
+  // 尾巴：一圈圈刺狀疣鱗（再生的部分沒有，顏色也比較素）
+  for (let i = 6; i <= 9; i++) {
+    const frac = (i - 5) / 5, p = n[i], up = p.y - p.t;
+    if (frac <= origFrac + .01) {
+      G.poly([P(p.x + 1.2, up + .3), P(p.x - 1.4, up - 1.7), P(p.x - 2, up + .4)], C.edge);
+      G.poly([P(p.x + 1, p.y + p.t * .6), P(p.x - 1, p.y + p.t + 1.1), P(p.x - 1.6, p.y + p.t * .6)], C.edge);
+      G.line([P(p.x, p.y - p.t * .9), P(p.x + 1, p.y + p.t * .6)], 1, 'rgba(90,70,45,.35)');
+    } else { G.save(); G.alpha(.25); G.circle(p.x, p.y, p.t * .9, '#d6c8a8'); G.restore(); }
+  }
+  // 頭
+  const h0 = n[0], h1 = n[1], ex = h1.x + 2, ey = h1.y - 2.5;
+  G.line([P(ex + 2.6, ey + .3), P(h0.x + .8, h0.y - 1.2)], 1.3, mixColor(C.edge, '#000000', .25));   // 眼睛到鼻孔的深色條紋
+  G.circle(h1.x - 4.5, h1.y - .5, .9, '#2a2016');                                                     // 耳孔
+  G.circle(h0.x + 1, h0.y - 1.4, .35, '#2a2016');                                                     // 鼻孔
   if (R.mouth) {
     G.poly([P(h0.x + 2, h0.y + .5), P(h1.x - 2, h1.y + 3), P(h0.x - 1, h0.y + 7)], '#9b3d43');
-    G.line([P(h1.x - 2, h1.y + 3), P(h0.x - 1, h0.y + 7)], 1, 'rgba(90,65,40,.7)');
-  } else G.line([P(h0.x + 1.5, h0.y + 1), P(h1.x + 2, h1.y + 3), P(h1.x - 3, h1.y + 2.5)], .9, 'rgba(90,65,40,.6)');
-  G.circle(h1.x + 2, h1.y - 2.5, 3.3, '#c9a04e', 'rgba(90,65,40,.7)', .8);
-  G.poly(ellipsePts(h1.x + 2, h1.y - 2.5, .8, 2.6, 0, 10), '#1a1208');   // 直立瞳孔
-  R.legs.filter(l => l.near).forEach(l => legDraw(l, '#dcc29e', '#8a6d4c'));
+    G.line([P(h1.x - 2, h1.y + 3), P(h0.x - 1, h0.y + 7)], 1, C.edge);
+  } else G.line([P(h0.x + 1.5, h0.y + 1), P(h1.x + 2, h1.y + 3), P(h1.x - 3, h1.y + 2.5)], .9, C.edge);
+  G.circle(ex, ey, 3.5, '#b8a27a', C.edge, .7);                                                       // 大眼睛（沒有眼瞼）
+  G.poly(ellipsePts(ex, ey, C.pupil * .7, 2.8, 0, 12), '#140e06');                                     // 直立瞳孔：夜裡放大
+  if (!e.dead) G.circle(ex + 1.1, ey - 1.2, .55, '#fff');
+  if (e.lickT > 0) {                                                                                  // 舔眼睛
+    const k = Math.sin(Math.min(1, (.7 - e.lickT) / .7) * Math.PI);
+    G.line([P(h0.x + 1, h0.y + 1.5), P(lerp(h0.x + 1, ex + 2.5, k), lerp(h0.y + 1.5, ey + .5, k))], 1.6, '#e07a8a');
+  }
+  R.legs.filter(l => l.near).forEach(l => legDraw(l, C.base, C.edge));
   G.restore();
 }
 const GK_TOP_W = [5, 5.5, 5, 6, 7, 7.5, 7.5, 6.5, 5, 4, 3, 2.2, 1.4, .7];
 function drawGeckoTop(e) {
-  const c = e.chain, s = e.size;
-  if (!c) return;
+  const c0 = e.chain, s = e.size, C = geckoColors(e);
+  if (!c0) return;
+  const tl = e.tailLen ?? 1, nVis = 7 + Math.max(1, Math.round(7 * tl)), c = c0.slice(0, nVis);
+  const origN = e.regrown ? 7 + Math.round(7 * .25) : 99;                                   // 再生前的尾巴節數
   G.save();
   if (e.dead) G.alpha(.6);
   // 腳（俯視）
   if (e.feet) e.feet.forEach((f, i) => {
-    const L = GLASS_LEGS[i], j = c[L.j], a = chainAngle(c, L.j), sa = a + L.side * Math.PI / 2;
+    const L = GLASS_LEGS[i], j = c0[L.j], a = chainAngle(c0, L.j), sa = a + L.side * Math.PI / 2;
     const hip = P(j.x + Math.cos(sa) * 4 * s, j.y + Math.sin(sa) * 4 * s);
     const r = ik2(hip, f, 8 * s, 9 * s, (k1, k2) => {
       const out = p => (p.x - j.x) * Math.cos(sa) + (p.y - j.y) * Math.sin(sa);
       return out(k1) > out(k2) ? k1 : k2;                     // 膝蓋朝外
     });
-    G.line([hip, r.knee, r.foot], 4.4 * s, '#8a6d4c'); G.line([hip, r.knee, r.foot], 3 * s, '#d8bf98');
-    toes(r.foot, Math.atan2(r.foot.y - r.knee.y, r.foot.x - r.knee.x), f.t < 1 ? 2 : 0, '#d8bf98');
+    G.line([hip, r.knee, r.foot], 4.2 * s, C.edge); G.line([hip, r.knee, r.foot], 2.9 * s, C.base);
+    toes(r.foot, Math.atan2(r.foot.y - r.knee.y, r.foot.x - r.knee.x), f.t < 1 ? 2 : 0, C.base, C.edge, s);
   });
   // 身體
-  const left = [], right = [];
+  const left = [], right = [], wAt = i => GK_TOP_W[i] * s * (i >= nVis - 2 ? .7 : 1);
   c.forEach((p, i) => {
-    const a = chainAngle(c, i), w = GK_TOP_W[i] * s;
+    const a = chainAngle(c0, i), w = wAt(i);
     left.push(P(p.x + Math.cos(a - Math.PI / 2) * w, p.y + Math.sin(a - Math.PI / 2) * w));
     right.push(P(p.x + Math.cos(a + Math.PI / 2) * w, p.y + Math.sin(a + Math.PI / 2) * w));
   });
-  const a0 = e.ang, snout = P(c[0].x + Math.cos(a0) * 10 * s, c[0].y + Math.sin(a0) * 10 * s);
-  G.poly(chaikin([snout, ...right, ...left.reverse()], true, 2), '#dcc4a0', 'rgba(90,65,40,.55)', 1);
-  for (let i = 3; i < 11; i++) G.circle(c[i].x, c[i].y, (i % 2 ? 1.6 : 1.1) * s, 'rgba(140,105,70,.6)');
-  for (let i = 9; i < 13; i++) { const a = chainAngle(c, i), w = GK_TOP_W[i] * s; G.line([P(c[i].x + Math.cos(a - Math.PI / 2) * w, c[i].y + Math.sin(a - Math.PI / 2) * w), P(c[i].x + Math.cos(a + Math.PI / 2) * w, c[i].y + Math.sin(a + Math.PI / 2) * w)], 1.2, 'rgba(140,105,70,.45)'); }
+  const a0 = e.ang, tip = c[c.length - 1], tipA = chainAngle(c0, c.length - 1);
+  const snout = P(c[0].x + Math.cos(a0) * 10 * s, c[0].y + Math.sin(a0) * 10 * s), tailTip = P(tip.x - Math.cos(tipA) * 4 * s, tip.y - Math.sin(tipA) * 4 * s);
+  G.poly(chaikin([snout, ...right, tailTip, ...left.reverse()], true, 2), C.base, C.edge, .9);
+  // 背部斑紋：深色波浪橫帶＋兩排疣粒
+  G.save(); G.alpha(.4);
+  for (let i = 3; i < Math.min(10, nVis); i += 2) {
+    const a = chainAngle(c0, i), w = wAt(i) * .75;
+    G.line(chaikin([P(c[i].x + Math.cos(a - Math.PI / 2) * w, c[i].y + Math.sin(a - Math.PI / 2) * w), P(c[i].x - Math.cos(a) * 1.5 * s, c[i].y - Math.sin(a) * 1.5 * s), P(c[i].x + Math.cos(a + Math.PI / 2) * w, c[i].y + Math.sin(a + Math.PI / 2) * w)], false, 1), 1.3 * s, C.edge);
+  }
+  G.restore();
+  for (let i = 3; i < Math.min(8, nVis); i++) for (const sd of [-1, 1]) { const a = chainAngle(c0, i) + sd * Math.PI / 2, w = wAt(i) * .45; G.circle(c[i].x + Math.cos(a) * w, c[i].y + Math.sin(a) * w, .8 * s, mixColor(C.edge, '#000000', .1)); }
+  // 尾巴兩側的刺狀疣鱗（再生的部分沒有）
+  for (let i = 7; i < nVis - 1; i++) {
+    if (i >= origN) continue;
+    const a = chainAngle(c0, i), w = wAt(i);
+    for (const sd of [-1, 1]) {
+      const sa = a + sd * Math.PI / 2, b = P(c[i].x + Math.cos(sa) * w, c[i].y + Math.sin(sa) * w);
+      G.poly([P(b.x + Math.cos(a) * 1.2 * s, b.y + Math.sin(a) * 1.2 * s), P(b.x + Math.cos(sa) * 1.6 * s - Math.cos(a) * 1 * s, b.y + Math.sin(sa) * 1.6 * s - Math.sin(a) * 1 * s), P(b.x - Math.cos(a) * 1.4 * s, b.y - Math.sin(a) * 1.4 * s)], C.edge);
+    }
+  }
+  // 頭：眼睛凸在兩側、眼鼻之間的深色條紋
   for (const sd of [-1, 1]) {
-    const ea = a0 + sd * 1.1;
-    G.circle(c[0].x + Math.cos(ea) * 4.6 * s, c[0].y + Math.sin(ea) * 4.6 * s, 2.4 * s, '#c9a04e', 'rgba(90,65,40,.7)', .8);
+    const ea = a0 + sd * 1.1, epos = P(c[0].x + Math.cos(ea) * 4.6 * s, c[0].y + Math.sin(ea) * 4.6 * s);
+    G.line([epos, P(snout.x + Math.cos(a0 + sd * 1.6) * 1.6 * s, snout.y + Math.sin(a0 + sd * 1.6) * 1.6 * s)], 1.1 * s, mixColor(C.edge, '#000000', .25));
+    G.circle(epos.x, epos.y, 2.5 * s, '#b8a27a', C.edge, .7);
+    G.poly(ellipsePts(epos.x, epos.y, C.pupil * .45 * s, 1.9 * s, a0, 10), '#140e06');
   }
   if (e.mouth) G.circle(snout.x, snout.y, 2.5 * s, '#9b3d43');
   G.restore();
+}
+// 斷掉的尾巴：在原地扭動，慢慢停下來、淡出
+function drawTailBits() {
+  for (const b of world.tailBits) {
+    const wig = Math.max(0, 1 - b.t / 7), pts = [];
+    for (let i = 0; i <= 8; i++) {
+      const f = i / 8, a = b.ang + Math.sin(b.t * 14 * wig + b.seed - f * 4) * .6 * wig * f;
+      pts.push(P(b.x + Math.cos(b.ang) * b.len * f + Math.cos(a + Math.PI / 2) * Math.sin(b.t * 12 + f * 5) * 4 * wig,
+                 b.y + Math.sin(b.ang) * b.len * f + Math.sin(a + Math.PI / 2) * Math.sin(b.t * 12 + f * 5) * 4 * wig));
+    }
+    G.save(); G.alpha(Math.min(1, (9 - b.t) / 2));
+    for (let i = 0; i < 8; i++) G.line([pts[i], pts[i + 1]], 5 - i * .5, '#b8a27a');
+    G.restore();
+  }
 }
 
 // ---------------------------------------------------------------------
@@ -927,6 +998,7 @@ function render(selected) {
   for (const e of world.ents) if (e.kind === 'gecko' && e.surface === 'glass') drawGecko(e);   // 背面玻璃上的壁虎
   for (const d of world.decor) if (d.type === 'plant') drawDecor(d);
   for (const d of world.decor) if (d.type !== 'plant') drawDecor(d);
+  drawTailBits();
   for (const f of world.food) drawFood(f);
   const order = { nest: 0, larva: 0, tadpole: 1, whale: 1, fish: 2, cricket: 3, turtle: 3, frog: 4, gecko: 5, mosquito: 6, fly: 6 };
   const list = world.ents.filter(e => !(e.kind === 'gecko' && e.surface === 'glass')).sort((a, b) => order[a.kind] - order[b.kind]);
