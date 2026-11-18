@@ -94,6 +94,15 @@ function solidAt(x, y, skip) {
   return false;
 }
 // 腳下的地面：找 y 附近（最多往上 step）最近的一個上緣
+// 已經卡在實心地形裡：回傳最近的邊緣（上緣或下緣）的 y；沒卡住回傳 null
+function escapeSolid(x, y, skip) {
+  for (const d of world.decor) {
+    if (d === skip || !DECOR_TYPES[d.type].solid) continue;
+    const s = decorSpan(d, x);
+    if (s && y >= s.top && y <= s.bottom) return (y - s.top < s.bottom - y) ? s.top - 3 : s.bottom + 3;
+  }
+  return null;
+}
 function groundY(x, y, step = 10, skip) {
   let g = TANK.floor;
   for (const d of world.decor) {
@@ -391,29 +400,4 @@ function deserialize(data, keepLogs = false) {
   }
 }
 function resetLogs() { world.events = []; world.fx = []; world.hist = []; world.histT = 0; world.particles = []; }
-function loadSampleScene() {
-  world.decor = []; world.ents = []; world.food = []; resetLogs();
-  world.level = .55; updateWaterY();
-  // 範例場景以標準缸設計，其他尺寸依比例放大
-  const sx = (TANK.right - TANK.left) / 1248, sy = (TANK.floor - TANK.top) / 628;
-  const X = x => TANK.left + (x - 16) * sx, Y = y => TANK.floor - (668 - y) * sy;
-  makeDecor('mound', X(200), TANK.floor, { h: 400 * sy, w: 440 * Math.min(sx, 1.6) });
-  makeDecor('boulder', X(1140), TANK.floor, { h: 400 * sy });
-  makeDecor('rock', X(660), TANK.floor + 8);
-  makeDecor('rock', X(830), TANK.floor + 8, { w: 100, h: 55 });
-  makeDecor('wood', X(200) + 145, Y(330), { rot: .24 });
-  for (const [x, h] of [[560, 170], [740, 220], [960, 150], [1010, 200]]) makeDecor('plant', X(x), TANK.floor, { h: h * sy });
-  makeDecor('bubbler', X(880), TANK.floor);
-  const wy = world.waterY, n = Math.max(1, Math.round(sx));
-  for (let i = 0; i < 4 * n; i++) setSex(makeEnt('guppy', X(rand(500, 1000)), rand(wy + 60, TANK.floor - 80)), i % 2 ? 'f' : 'm');   // 公母各半
-  for (let i = 0; i < 6 * n; i++) makeEnt('neon', X(rand(600, 900)), rand(wy + 80, TANK.floor - 100));
-  makeEnt('turtle', X(760), wy + 120);
-  makeEnt('turtle', X(560), wy + 160);
-  makeEnt('redtail', X(740), TANK.floor - 70);
-  for (const fx of [X(130), X(260)]) { const fr = makeEnt('frog', fx, TANK.top + 60); fr.y = highestTop(fx) - 1; }
-  for (const fx of [X(1110), X(1170)]) { const fr = makeEnt('goldfrog', fx, TANK.top + 60); fr.y = highestTop(fx) - 1; }
-  makeEnt('gecko', X(640), Y(150));
-  makeEnt('gecko', X(900), Y(200));
-  for (let i = 0; i < 5 * n; i++) makeEnt('mosquito', X(rand(300, 1000)), rand(TANK.top + 40, wy - 40));
-  for (let i = 0; i < 6; i++) { const l = makeEnt('larva', X(rand(700, 1030)), wy + 8); l.grow = rand(0, 40); }
-}
+function loadSampleScene() { loadPreset('foodweb'); }   // 舊名稱保留給測試用

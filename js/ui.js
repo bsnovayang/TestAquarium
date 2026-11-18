@@ -120,10 +120,16 @@ function placeObject(type, x, y) {
   if (type === 'cricket' || type === 'fly') return dropLive(type, x, y);
   pushUndo();
   if (DECOR_TYPES[type]) { const d = makeDecor(type, x, y); settle(d); select(d); return; }
+  const before = stockingDensity().level;
   const e = makeEnt(type, x, y);
   select(e);
   const L = SPECIES[type].len * e.size;
-  if (L > (TANK.right - TANK.left) * .8) toast(`${SPECIES[type].name}約 ${Math.round(L / PX_PER_CM)} cm，這個缸太小了，建議換大缸或調小體型`);
+  const notes = [];
+  if (L > (TANK.right - TANK.left) * .8) notes.push(`${SPECIES[type].name}約 ${Math.round(L / PX_PER_CM)} cm，這個缸太小了，建議換大缸或調小體型`);
+  const warn = compatibilityWarnings(e);                     // 混養提醒
+  if (warn.length) notes.push('注意：' + warn.slice(0, 2).join('、'));
+  if (before !== '擁擠' && stockingDensity().level === '擁擠') notes.push('魚缸變得擁擠了');   // 飼養密度提醒
+  if (notes.length) toast(notes.join('；'), 3200);
 }
 
 // ---------------------------------------------------------------------
@@ -307,10 +313,14 @@ function updatePop() {
     counts[e.type] = (counts[e.type] || 0) + 1;
     if (e.kind === 'larva') st[e.stage] += e.stage === 'egg' ? e.count : 1;
   }
-  $('popPanel').innerHTML = Object.keys(SPECIES).filter(t => t !== 'larva' && t !== 'nest').map(t => `<div class="kv"><span>${SPECIES[t].name}</span><b>${counts[t] || 0}</b></div>`).join('')
-    + `<div class="kv"><span>孑孓 / 蛹 / 卵</span><b>${st.larva} / ${st.pupa} / ${st.egg}</b></div>`
-    + `<div class="kv"><span>青蛙卵 / 爬蟲蛋</span><b>${world.ents.filter(e => e.kind === 'nest' && !e.dead && e.medium === 'water').length} / ${world.ents.filter(e => e.kind === 'nest' && !e.dead && e.medium === 'land').length}</b></div>`
-    + `<div class="kv"><span>飼料</span><b>${world.food.length}</b></div>`;
+  const D = stockingDensity(), dCol = { 寬鬆: '#4caf50', 適中: '#e0a030', 擁擠: '#e0603a' }[D.level];
+  $('popPanel').innerHTML = `<div class="kv" title="水中生物總身長 ${Math.round(D.cm)} cm ÷ 水量約 ${Math.round(D.liters)} 公升"><span>飼養密度</span><b style="color:${dCol}">${D.level}</b></div>`
+    + `<div class="bar"><i style="width:${clamp(D.r / 2 * 100, 3, 100)}%;background:${dCol}"></i></div>`
+    + Object.keys(SPECIES).filter(t => t !== 'larva' && t !== 'nest' && counts[t]).map(t => `<div class="kv"><span>${SPECIES[t].name}</span><b>${counts[t]}</b></div>`).join('');
+  const nestW = world.ents.filter(e => e.kind === 'nest' && !e.dead && e.medium === 'water').length, nestL = world.ents.filter(e => e.kind === 'nest' && !e.dead && e.medium === 'land').length;
+  $('popPanel').innerHTML += (st.larva + st.pupa + st.egg ? `<div class="kv"><span>孑孓 / 蛹 / 卵</span><b>${st.larva} / ${st.pupa} / ${st.egg}</b></div>` : '')   // 有數量才顯示
+    + (nestW + nestL ? `<div class="kv"><span>蛙卵 / 爬蟲蛋</span><b>${nestW} / ${nestL}</b></div>` : '')
+    + (world.food.length ? `<div class="kv"><span>飼料</span><b>${world.food.length}</b></div>` : '');
   const ev = world.events.slice(0, 8);
   $('eventPanel').innerHTML = ev.length ? ev.map(e => `<div class="ev"><time>${fmtTime(e.t)}</time>${e.text}</div>`).join('') : '<p class="muted">還沒有事件</p>';
   drawChart();
@@ -428,7 +438,9 @@ function bindBar() {
     ev.target.value = '';
   };
   $('clear').onclick = () => { if (confirm('清空整個水族箱？（可以按「復原」救回來）')) { pushUndo(); world.decor = []; world.ents = []; world.food = []; resetLogs(); select(null); } };
-  $('sample').onclick = () => { pushUndo(); loadSampleScene(); syncSettings(); select(null); };
+  $('newTank').onclick = openPresetModal;
+  $('pmClose').onclick = () => { $('presetModal').hidden = true; };
+  $('presetModal').addEventListener('pointerdown', ev => { if (ev.target.id === 'presetModal') $('presetModal').hidden = true; });
   $('undo').onclick = undo; $('redo').onclick = redo;
   document.addEventListener('pointerup', () => { UNDO.sliding = false; });
   $('toView').onclick = () => setMode('view');
@@ -436,9 +448,25 @@ function bindBar() {
 }
 function syncTankUI() { const el = $('tank'); if (el) el.value = world.tank; }
 let toastT = 0;
-function toast(msg) {
+function toast(msg, ms = 1600) {
   const t = $('toast'); t.textContent = msg; t.classList.add('show');
-  clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('show'), 1600);
+  clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('show'), ms);
+}
+// 新魚缸：選擇預設配置
+function openPresetModal() {
+  const grid = $('pmGrid');
+  if (!grid.childElementCount) for (const p of PRESETS) {
+    const card = document.createElement('button'); card.className = 'pmCard';
+    const t = TANK_PRESETS[p.tank];
+    card.innerHTML = `<div class="pmIcons"></div><b>${p.name}</b><span>${p.desc}</span><small>${t.name.split(' ')[0]}・水位 ${Math.round(p.level * 100)}%</small>`;
+    for (const type of p.icons) { const cv = document.createElement('canvas'); card.querySelector('.pmIcons').appendChild(cv); drawThumb(cv, type); }
+    card.onclick = () => {
+      pushUndo(); loadPreset(p.id); syncSettings(); select(null);
+      $('presetModal').hidden = true; toast(`已建立「${p.name}」`);
+    };
+    grid.appendChild(card);
+  }
+  $('presetModal').hidden = false;
 }
 
 // ---------------------------------------------------------------------

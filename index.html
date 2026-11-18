@@ -43,11 +43,17 @@
     <div class="grp">
       <button id="save">存檔</button><button id="load">讀檔</button>
       <button id="export">匯出</button><button id="import">匯入</button>
-      <button id="sample">範例場景</button><button id="clear">清空</button></div>
+      <button id="newTank" class="primary">＋ 新魚缸</button><button id="clear">清空</button></div>
     <div class="grp"><button id="openBal">⚙ 平衡</button></div>
     <div class="grp right"><button id="toView" class="primary">▶ 觀賞模式</button></div>
     <input id="file" type="file" accept=".json,application/json" hidden>
   </footer>
+</div>
+<div id="presetModal" hidden>
+  <div class="pmBox">
+    <div class="pmHead"><b>選擇魚缸配置</b><small>目前的魚缸會被取代（可以按「復原」救回來）</small><button id="pmClose">✕</button></div>
+    <div id="pmGrid"></div>
+  </div>
 </div>
 <div id="toast"></div>
 <div id="rotateHint"><div>📱↻<br>請將裝置轉為橫向</div></div>
@@ -58,6 +64,7 @@
 <script src="js/effects.js"></script>
 <script src="js/creatures.js"></script>
 <script src="js/draw.js"></script>
+<script src="js/presets.js"></script>
 <script src="js/ui.js"></script>
 <script src="js/balance.js"></script>
 <script src="js/main.js"></script>

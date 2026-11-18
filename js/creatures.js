@@ -155,7 +155,12 @@ function updFish(e, dt) {
     if (!solidAt(hx, ny - 20)) ny -= 40 * dt;
     else { nx = e.x; startTurn(e); fishWander(e); }
   }
-  if (solidAt(nx, ny)) ny -= 60 * dt;
+  if (solidAt(nx, ny)) {                                      // 身體不能游進地形（例如水中的漂流木）；分開處理水平、垂直
+    if (!solidAt(nx, e.y)) ny = e.y;
+    else if (!solidAt(e.x, ny)) nx = e.x;
+    else if (!solidAt(e.x, e.y)) { nx = e.x; ny = e.y; }
+    else { const ey = escapeSolid(e.x, e.y); if (ey !== null) ny = clamp(lerp(e.y, ey, ease(dt, 6)), minY, maxY); nx = e.x; }   // 已經卡住：往最近的邊緣出去
+  }
   e.x = nx; e.y = ny;
   if (prey && dist(fishHead(e), prey) < 10 + 6 * e.size) {
     if (prey.kind === 'larva' && prey.dive > 0 && Math.random() < SPECIES.larva.escape) {
@@ -325,9 +330,23 @@ function updTurtle(e, dt) {
       if (!solidAt(hx, ny - 35)) ny -= 30 * dt;
       else { nx = e.x; e.tx = e.x - e.dir * 200; }
     }
+    const bodyHit = (x, y) => solidAt(x, y - 16 * e.size) || solidAt(x, y - 2);   // 龜殼中心和腳都不能進地形
+    if (bodyHit(nx, ny)) {                                    // 分開處理水平、垂直：只取消會撞到的方向
+      if (!bodyHit(nx, e.y)) ny = e.y;
+      else if (!bodyHit(e.x, ny)) nx = e.x;
+      else if (!bodyHit(e.x, e.y)) {
+        nx = e.x; ny = e.y;
+        if (!(e.blockCD > 0)) { e.tx = e.x - e.dir * 200; e.blockCD = 2; }   // 換方向有冷卻，避免原地來回翻
+      } else {
+        const ey = escapeSolid(e.x, e.y - 2) ?? escapeSolid(e.x, e.y - 16 * e.size);
+        if (ey !== null) ny = lerp(e.y, ey > e.y - 8 * e.size ? ey + 2 : ey + 16 * e.size, ease(dt, 6));
+        else ny = e.y - 30 * dt;
+      }
+    }
     e.x = nx; e.y = ny;
     if (prey && dist(turtleHead(e), prey) < 14 * e.size) eat(e, prey);
     e.limb += dt * (2 + e.vx / 10);
+    if (e.blockCD > 0) e.blockCD -= dt;
     return;
   }
   // 陸地：散步 / 曬背

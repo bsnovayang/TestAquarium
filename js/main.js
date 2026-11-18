@@ -57,7 +57,7 @@ function frame(now) {
 }
 
 updateWaterY();
-loadSampleScene();
+loadPreset('planted');                   // 第一次打開：水草魚缸
 initUI();
 camFit();
 resize();

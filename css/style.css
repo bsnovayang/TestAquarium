@@ -114,3 +114,18 @@ button:disabled { opacity: .4; cursor: default; }
 .tabs button { padding: 4px 2px; font-size: 13px; }
 .items[hidden] { display: none; }
 @media (max-width: 1000px), (max-height: 520px) { .tabs { grid-template-columns: 1fr; } }
+
+/* 新魚缸：配置選單 */
+#presetModal { position: fixed; inset: 0; z-index: 50; background: rgba(0,0,0,.55); display: flex; align-items: center; justify-content: center; padding: 16px; }
+#presetModal[hidden] { display: none; }
+.pmBox { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; width: min(900px, 100%); max-height: 100%; overflow: auto; padding: 14px; }
+.pmHead { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+.pmHead small { color: var(--muted); }
+.pmHead button { margin-left: auto; }
+#pmGrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; }
+.pmCard { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; text-align: left; padding: 10px; border-radius: 10px; }
+.pmCard b { font-size: 15px; }
+.pmCard span { font-size: 13px; color: var(--muted); line-height: 1.45; }
+.pmCard small { font-size: 12px; color: var(--muted); }
+.pmIcons { display: flex; gap: 4px; min-height: 44px; }
+.pmIcons canvas { width: 64px; height: 44px; background: #dfe9e4; border-radius: 6px; }
