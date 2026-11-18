@@ -21,6 +21,7 @@ const world = {
   fx: [],              // 純視覺效果（不影響模擬）
   hist: [], histT: 0,  // 族群數量歷史（折線圖用）
   particles: [],       // 水花、漣漪、氣泡（純視覺）
+  water: { dirt: 5, algae: 3 },   // 水質：髒污、藻類（0～100）
   tailBits: [],        // 壁虎斷掉、還在扭動的尾巴（純視覺）
   tod: .375,           // 一天中的時間（0 = 午夜；預設早上 9 點）
   settings: {
@@ -33,6 +34,7 @@ const world = {
     breed: true,         // 生物會繁殖
     sharkChase: true,    // 紅尾黑鯊驅趕其他魚
     autotomy: true,      // 壁虎被抓時可能斷尾
+    waterSim: true,      // 水質與藻類
     dayCycle: 'normal',  // 日夜循環：off / fast / normal / real
   },
 };
@@ -123,8 +125,9 @@ function highestTop(x) {
 }
 // 石頭、土坡放下後會落到下面的地面上；水草會長在地面上
 function settle(d) {
-  if (d.type === 'wood') return;
-  if (d.type === 'plant') { d.y = groundY(d.x, d.y - 10, 0, d); return; }
+  if (d.type === 'wood' || d.type === 'filter') return;
+  if (d.type === 'floater') { d.y = world.waterY; return; }
+  if (d.type === 'plant' || d.type === 'fern' || d.type === 'carpet') { d.y = groundY(d.x, d.y - 10, 0, d); return; }
   let base = TANK.floor;
   for (let k = -2; k <= 2; k++) base = Math.min(base, groundY(d.x + d.w * .17 * k, d.y - 4, 0, d));
   d.y = base + (base >= TANK.floor ? 0 : 8);
@@ -301,6 +304,7 @@ function step(dt) {
   world.ents = world.ents.filter(e => !e.removed);
   world.food = world.food.filter(f => !f.removed);
   tickParticles(dt);
+  tickWater(dt);
   for (const b of world.tailBits) b.t += dt;
   world.tailBits = world.tailBits.filter(b => b.t < 9);
   for (const f of world.fx) { f.t += dt; f.y -= 18 * dt; }
@@ -371,7 +375,7 @@ function spawnMosquitoes(dt) {
 // ---------------------------------------------------------------------
 function serialize() {
   return {
-    v: 1, tank: world.tank, level: world.level, tod: world.tod, settings: world.settings,
+    v: 1, tank: world.tank, level: world.level, tod: world.tod, water: { ...world.water }, settings: world.settings,
     decor: world.decor.map(({ type, x, y, w, h, rot, seed }) => ({ type, x, y, w, h, rot, seed })),
     ents: world.ents.filter(e => !e.dead).map(({ type, x, y, dir, hunger, hp, size, adult, stage, grow, count, meta, of, medium, t, hatch, sex, morph, preg, tailLen, regrown }) =>
       ({ type, x, y, dir, hunger, hp, size, adult, stage, grow, count, meta, of, medium, t, hatch, sex, morph, preg, tailLen, regrown })),
@@ -381,6 +385,7 @@ function deserialize(data, keepLogs = false) {
   world.decor = []; world.ents = []; world.food = []; world.particles = [];
   if (!keepLogs) resetLogs();
   if (data.tod !== undefined) world.tod = data.tod;
+  world.water = { dirt: 5, algae: 3, ...(data.water || {}) };
   applyTankDims(data.tank || 'standard');
   if (typeof onTankResize === 'function') onTankResize();
   world.level = data.level ?? .55;

@@ -67,7 +67,9 @@ const SPECIES = {
            pupaTime: 15,               // 蛹幾秒後羽化
            fear: 70,                   // 魚靠近多少距離會下潛逃跑
            escape: .55 },              // 正在下潛時，魚撲空的機率
-  nest: { name: '卵', kind: 'nest', len: 12, hit: 14 },             // 青蛙卵、烏龜蛋、壁虎蛋（共用）
+  nest: { name: '卵', kind: 'nest', len: 12, hit: 14 },
+  // 斑馬螺（蜑螺）：在水中的地面、石頭上慢慢爬，吃藻類；淡水中產的卵不會孵化，所以不會繁殖失控
+  nerite: { name: '斑馬螺', kind: 'snail', len: 36, speed: 5, hungerTime: 3000, huntBelow: 90, hit: 14 },             // 青蛙卵、烏龜蛋、壁虎蛋（共用）
   // 活餌：玩家投放，不繁殖；給青蛙、壁虎吃
   cricket: { name: '蟋蟀', kind: 'cricket', len: 30, hit: 12, life: [240, 360], drop: 5 },
   fly:     { name: '果蠅', kind: 'fly', len: 6, speed: 45, hit: 8, life: [90, 140], drop: 8 },
@@ -92,9 +94,27 @@ const DECOR_TYPES = {
   wood:    { name: '漂流木', w: 250, h: 20,  solid: true },
   plant:   { name: '水草',   w: 60,  h: 180, solid: false },
   bubbler: { name: '氣泡石', w: 36,  h: 14,  solid: false },
+  filter:  { name: '過濾器', w: 46,  h: 90,  solid: false },   // 掛在水面附近，持續清除髒污
+  floater: { name: '浮萍',   w: 140, h: 10,  solid: false },   // 浮在水面：吸收養分、遮光，抑制藻類
+  fern:    { name: '蕨類',   w: 90,  h: 90,  solid: false },   // 陸生植物，種在土坡或岩石上
+  carpet:  { name: '前景草', w: 220, h: 26,  solid: false },   // 沿著缸底長成一片草地，也會吸收髒污
 };
 
 // 吃到能恢復多少飽食度
+// 水質與藻類（髒污、藻類都是 0～100）
+const WATER = {
+  wastePerCm: .0003,   // 每公分水中生物身長，每秒產生的髒污（以 80 公升為準，大缸會稀釋）
+  turtleMess: 2.5,     // 烏龜特別髒
+  foodRot: .006,        // 每顆落底超過 20 秒的飼料，每秒產生的髒污
+  bodyRot: .05,        // 每具屍體每秒產生的髒污
+  plantClean: .002,    // 每株水草每秒清除
+  floaterClean: .005,   // 每片浮萍每秒清除
+  filterClean: .02,    // 每台過濾器每秒清除
+  algaeGrow: .05,      // 藻類生長速度（再乘上光照、養分、水草競爭）
+  harmAt: 60,          // 髒污超過這個值，魚開始生病
+  deadlyAt: 85,        // 超過這個值，生病得更快
+};
+
 const FOOD_VALUE = { food: 10, mosquito: 15, fish: 40, larva: 6, tadpole: 12, cricket: 25, fly: 6 };
 
 // 捕食規則：每一條都可以在設定面板單獨開關
@@ -119,6 +139,7 @@ const RULES = [
   { id: 'fish_food',      pred: 'fish',    prey: 'food',     label: '魚吃飼料' },
   { id: 'turtle_food',    pred: 'turtle',  prey: 'food',     label: '烏龜吃飼料' },
   { id: 'tadpole_food',   pred: 'tadpole', prey: 'food',     label: '蝌蚪吃飼料' },
+  { id: 'snail_food',     pred: 'snail',   prey: 'food',     label: '螺吃落底的飼料' },
 ];
 
 // 從缸外飛進來的蚊子：[每隻間隔秒數, 缸內成蟲少於幾隻才會飛進來]

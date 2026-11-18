@@ -5,7 +5,7 @@
 // =====================================================================
 
 const UPDATE = { fish: updFish, turtle: updTurtle, frog: updFrog, gecko: updGecko, mosquito: updMosquito, larva: updLarva,
-                 tadpole: updTadpole, whale: updWhale, nest: updNest, cricket: updCricket, fly: updFly };
+                 tadpole: updTadpole, whale: updWhale, nest: updNest, cricket: updCricket, fly: updFly, snail: updSnail };
 
 // 轉身：轉完後有 0.8 秒冷卻，避免目標在身邊晃動時原地連續翻轉
 function startTurn(e) { if (!e.turning && !(e.turnCD > 0)) { e.turning = true; e.turnT = 0; } }
@@ -123,6 +123,7 @@ function updFish(e, dt) {
     tgt = near ? 0 : sp.speed * .8;
     if (near) {
       g.t -= dt; e.state = '啃食藻類';
+      e.hunger = Math.min(100, e.hunger + eatAlgae(.012 * dt) * 1.5);   // 真的吃掉藻類
       if (g.t <= 0) { e.graze = null; e.mode = 'cruise'; e.hunger = Math.min(100, e.hunger + 4); addFx(g.x, g.y - 6, '+4', '#7fd067'); fishWander(e); }
     } else { e.state = '游向藻類'; if ((g.timeout -= dt) <= 0) e.graze = null; }
   }
@@ -927,6 +928,7 @@ function updTadpole(e, dt) {
   e.think -= dt;
   e.phase += dt * (6 + e.v * .3);
   if (e.hunger > 30) { e.meta += dt / sp.metaTime; e.size = lerp(.4, 1.3, Math.min(1, e.meta)); }
+  if (world.water.algae > 3) e.hunger = Math.min(100, e.hunger + eatAlgae(.0015 * dt) * 8);   // 蝌蚪也吃藻類
   // 逃離會吃蝌蚪的魚和烏龜
   let threat = null;
   for (const o of world.ents) if ((o.kind === 'fish' || o.kind === 'turtle') && !o.dead && canEat(o, e) && dist(o, e) < 80) threat = o;
@@ -1105,4 +1107,32 @@ function updFly(e, dt) {
   if (Math.abs(e.vx) > 3) e.dir = Math.sign(e.vx);
   e.phase += dt;
   e.state = '飛行';
+}
+
+
+// =====================================================================
+// 斑馬螺：在水中的地面、石頭、沉木上慢慢爬，吃藻類；藻類吃完會吃落底的飼料
+// =====================================================================
+function updSnail(e, dt) {
+  const sp = SPECIES.nerite, wy = world.waterY;
+  e.phase += dt * 2;
+  const g = groundY(e.x, e.y - 6, 8);
+  if (g > e.y + 3) { e.y = Math.min(g, e.y + 120 * dt); e.state = '掉落'; return; }   // 慢慢沉下去
+  e.y = g;
+  if (e.y < wy + 4) {                                       // 不在水裡：往水邊爬（簡化：換方向）
+    e.dir *= -1; e.x += e.dir * 2;
+  }
+  e.think -= dt;
+  const food = world.water.algae < 4 && e.hunger < sp.huntBelow ? findPrey(e, 160, t => t.y > wy && Math.abs(t.y - e.y) < 30) : null;
+  if (food) e.dir = Math.sign(food.x - e.x) || e.dir;
+  else if (e.think <= 0) { e.think = rand(6, 14); if (Math.random() < .3) e.dir *= -1; e.rest = Math.random() < .25 ? rand(3, 8) : 0; }
+  if (e.rest > 0) { e.rest -= dt; e.state = '休息'; return; }
+  const nx = e.x + e.dir * sp.speed * (1 + Math.sin(e.phase * 2) * .3) * dt;
+  const ng = groundY(nx, e.y - 6, 10);
+  if (nx < TANK.left + 10 || nx > TANK.right - 10 || ng < wy + 6 || ng - e.y > 18 || solidAt(nx + e.dir * 8, e.y - 6)) { e.dir *= -1; return; }
+  e.x = nx; e.y = ng;
+  if (food && dist(e, food) < 10) eat(e, food);
+  const got = eatAlgae(.004 * dt);                        // 邊爬邊刮藻
+  e.hunger = Math.min(100, e.hunger + got * 60 + .03 * dt);   // 沒有藻類時也能刮食表面的生物膜（勉強維生）
+  e.state = got > 0 ? '刮食藻類' : food ? '爬向飼料' : '刮食生物膜';
 }

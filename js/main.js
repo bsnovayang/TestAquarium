@@ -24,7 +24,7 @@ function camZoomAt(f, vx = VIEW_W / 2, vy = VIEW_H / 2) {   // vx, vy：畫面�
   cam.x = wx - vx / cam.z; cam.y = wy - vy / cam.z;
   camClamp();
 }
-function onTankResize() { SAND = makeSand(); camFit(); if (typeof syncTankUI === 'function') syncTankUI(); }
+function onTankResize() { SAND = makeSand(); ALGAE_SPOTS = makeAlgaeSpots(); SCENERY = makeScenery(); camFit(); if (typeof syncTankUI === 'function') syncTankUI(); }
 
 function resize() {
   const wrap = document.getElementById('stageWrap');

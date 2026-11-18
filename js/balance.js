@@ -15,6 +15,8 @@ const BALANCE_FIELDS = [
   ['fear', '察覺魚的距離（px）'], ['escape', '下潛時躲開的機率（0～1）'], ['drop', '一次投放幾隻'],
 ];
 const CAP_LABEL = { mosquito: '蚊子成蟲', larva: '孑孓（含蛹、卵）', fish: '魚', frog: '蛙類', tadpole: '蝌蚪', turtle: '烏龜', gecko: '壁虎' };
+const WATER_LABEL = { wastePerCm: '每公分身長產生髒污', turtleMess: '烏龜髒污倍率', foodRot: '腐爛飼料髒污', bodyRot: '屍體髒污',
+  plantClean: '水草清除量', floaterClean: '浮萍清除量', filterClean: '過濾器清除量', algaeGrow: '藻類生長速度', harmAt: '開始生病的髒污值', deadlyAt: '嚴重生病的髒污值' };
 const FOOD_LABEL = { food: '飼料', mosquito: '蚊子', fish: '魚', larva: '孑孓', tadpole: '蝌蚪', cricket: '蟋蟀', fly: '果蠅' };
 
 const getPath = (o, p) => p.split('.').reduce((a, k) => a?.[k], o);
@@ -26,13 +28,14 @@ function balanceData() {
     for (const [p] of BALANCE_FIELDS) { const v = getPath(sp, p); if (v !== undefined) f[p] = Array.isArray(v) ? [...v] : v; }
     if (Object.keys(f).length) species[k] = f;
   }
-  return { species, caps: { ...CAPS }, food: { ...FOOD_VALUE } };
+  return { species, caps: { ...CAPS }, food: { ...FOOD_VALUE }, water: { ...WATER } };
 }
 function applyBalance(d) {
   for (const [k, fields] of Object.entries(d.species || {})) if (SPECIES[k])
     for (const [p, v] of Object.entries(fields)) if (getPath(SPECIES[k], p) !== undefined) setPath(SPECIES[k], p, Array.isArray(v) ? v.map(Number) : Number(v));
   for (const [k, v] of Object.entries(d.caps || {})) if (k in CAPS) CAPS[k] = Number(v);
   for (const [k, v] of Object.entries(d.food || {})) if (k in FOOD_VALUE) FOOD_VALUE[k] = Number(v);
+  for (const [k, v] of Object.entries(d.water || {})) if (k in WATER) WATER[k] = Number(v);
 }
 const BAL_DEFAULT = JSON.stringify(balanceData());           // 讀入存檔前先記住預設值
 function saveBalance() { try { localStorage.setItem('aquarium.balance', JSON.stringify(balanceData())); } catch { } }
@@ -59,6 +62,8 @@ function buildBalancePanel() {
   for (const k in cur.caps) html += `<label>${CAP_LABEL[k] || k}</label>${numInput(`caps.${k}`, cur.caps[k], def.caps[k])}`;
   html += '</div></details><details><summary>吃到能恢復多少飽食度</summary><div class="balgrid">';
   for (const k in cur.food) html += `<label>${FOOD_LABEL[k] || k}</label>${numInput(`food.${k}`, cur.food[k], def.food[k])}`;
+  html += '</div></details><details><summary>水質與藻類</summary><div class="balgrid">';
+  for (const k in cur.water) html += `<label>${WATER_LABEL[k] || k}</label>${numInput(`water.${k}`, cur.water[k], def.water?.[k])}`;
   html += '</div></details>';
   const open = [...document.querySelectorAll('#balBody details')].map(d => d.open);
   $('balBody').innerHTML = html;
@@ -71,7 +76,7 @@ function bindBalance() {
   $('balBody').addEventListener('change', ev => {
     const t = ev.target; if (!t.dataset.bal) return;
     const [group, ...rest] = t.dataset.bal.split('.');
-    const d = { species: {}, caps: {}, food: {} };
+    const d = { species: {}, caps: {}, food: {}, water: {} };
     let v = Number(t.value); if (!Number.isFinite(v)) return;
     if (group === 'species') {
       const [k, ...pp] = rest, p = pp.join('.');

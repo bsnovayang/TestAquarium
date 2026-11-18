@@ -7,13 +7,16 @@
 const PRESETS = [
   {
     id: 'planted', name: '水草魚缸', desc: '高水位、水草和沉木，看魚群游、求偶和生小魚',
-    tank: 'standard', level: .88, mosq: 'off', icons: ['guppy', 'neon', 'plant'],
+    tank: 'standard', level: .88, mosq: 'off', icons: ['guppy', 'neon', 'nerite'],
     build(B) {
       B.decor('rock', 300, B.floor + 8, { w: 120, h: 70 });
       B.decor('rock', 380, B.floor + 8, { w: 80, h: 45 });
       B.decor('wood', 640, B.floor - 22, { rot: -.12, w: 300 });
       for (const [x, h] of [[120, 260], [180, 200], [470, 170], [820, 240], [880, 300], [950, 210], [1100, 280], [1170, 220]]) B.decor('plant', x, B.floor, { h });
       B.decor('bubbler', 1020, B.floor);
+      B.decor('filter', 1215, B.waterY + 40);
+      B.decor('floater', 260, B.waterY); B.decor('floater', 760, B.waterY);
+      B.ent('nerite', 330, B.floor - 70); B.ent('nerite', 700, B.floor - 30);
       for (let i = 0; i < 6; i++) B.ent('guppy', B.rx(500, 900), B.ry(.3, .8), { sex: i % 2 ? 'f' : 'm' });
       for (let i = 0; i < 8; i++) B.ent('neon', B.rx(600, 900), B.ry(.3, .6));
     },
@@ -26,6 +29,7 @@ const PRESETS = [
       B.decor('rock', 760, B.floor + 8, { w: 160, h: 120 });
       B.decor('wood', 640, B.waterY - 30, { rot: .18, w: 240 });
       for (const [x, h] of [[900, 150], [980, 190], [1130, 160]]) B.decor('plant', x, B.floor, { h });
+      B.decor('filter', 1215, B.waterY + 40);
       for (const x of [140, 260, 380]) B.onLand('frog', x);
       for (let i = 0; i < 5; i++) B.ent('neon', B.rx(880, 1180), B.ry(.4, .8));
       B.live('cricket', 260);
@@ -54,6 +58,7 @@ const PRESETS = [
       B.decor('mound', 120, B.floor, { w: 300, h: 340 });
       B.decor('rock', 700, B.floor + 8, { w: 180, h: 90 });
       for (const [x, h] of [[560, 150], [880, 190]]) B.decor('plant', x, B.floor, { h });
+      B.decor('filter', 1220, B.waterY + 50);
       B.ent('turtle', 600, B.ry(.4, .7)); B.ent('turtle', 820, B.ry(.4, .7));
       B.ent('redtail', 760, B.floor - 60);
     },
@@ -68,6 +73,8 @@ const PRESETS = [
       B.decor('wood', 345, B.waterY + 8, { rot: .24 });
       for (const [x, h] of [[560, 170], [740, 220], [960, 150], [1010, 200]]) B.decor('plant', x, B.floor, { h });
       B.decor('bubbler', 880, B.floor);
+      B.decor('filter', 1000, B.waterY + 40); B.decor('floater', 840, B.waterY);
+      B.ent('nerite', 660, B.floor - 70);
       for (let i = 0; i < 4; i++) B.ent('guppy', B.rx(500, 1000), B.ry(.3, .8), { sex: i % 2 ? 'f' : 'm' });
       for (let i = 0; i < 5; i++) B.ent('neon', B.rx(600, 900), B.ry(.3, .6));
       B.ent('turtle', 760, B.ry(.4, .7));
@@ -84,6 +91,7 @@ const PRESETS = [
       for (const [x, h] of [[80, 300], [150, 240], [420, 200], [980, 280], [1060, 220], [1200, 260]]) B.decor('plant', x, B.floor, { h });
       B.decor('rock', 300, B.floor + 8, { w: 200, h: 110 }); B.decor('rock', 1130, B.floor + 8, { w: 160, h: 90 });
       B.decor('bubbler', 640, B.floor); B.decor('bubbler', 860, B.floor);
+      B.decor('filter', 1215, B.waterY + 40); B.decor('filter', 60, B.waterY + 40);
       B.ent('whale', 640, B.ry(.35, .55));
       for (let i = 0; i < 16; i++) B.ent('neon', B.rx(450, 850), B.ry(.6, .85));
     },
@@ -126,6 +134,7 @@ function presetBuilder() {
 function loadPreset(id) {
   const p = PRESETS.find(q => q.id === id) || PRESETS[0];
   world.decor = []; world.ents = []; world.food = []; resetLogs();
+  world.water = { dirt: 5, algae: 3 };
   applyTankDims(p.tank);
   if (typeof onTankResize === 'function') onTankResize();
   world.level = p.level; updateWaterY();

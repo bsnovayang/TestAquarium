@@ -3,7 +3,7 @@
 // draw.js — 外觀層：把骨架資料畫出來（只使用 core.js 的 G 指令）
 // =====================================================================
 
-const DRAW = { fish: drawFish, turtle: drawTurtle, frog: drawFrog, gecko: drawGecko, mosquito: drawMosquito, larva: drawLarva,
+const DRAW = { snail: drawSnail, fish: drawFish, turtle: drawTurtle, frog: drawFrog, gecko: drawGecko, mosquito: drawMosquito, larva: drawLarva,
                tadpole: drawTadpole, whale: drawWhale, nest: drawNest, cricket: drawCricket, fly: drawFly };
 
 // ---------------------------------------------------------------------
@@ -16,6 +16,7 @@ let SAND = makeSand();
 
 function drawBackground() {
   G.rect(0, 0, W, H, { lin: [0, 0, 0, H, [[0, '#dfe9e4'], [.55, '#c9dcd6'], [1, '#9fb8b2']]] });
+  drawBackWall();
   // 背面玻璃的反光
   G.save(); G.alpha(.25);
   for (let x0 = 120; x0 < W; x0 += 1400) {
@@ -27,17 +28,26 @@ function drawBackground() {
 function drawWaterBack() {
   const wy = world.waterY;
   if (wy >= TANK.floor) return;
+  G.save(); G.alpha(.78);                                           // 半透明：讓背景岩壁透出來
   G.rect(TANK.left, wy, TANK.right - TANK.left, TANK.floor - wy, { lin: [0, wy, 0, TANK.floor, [[0, '#7cc2da'], [1, '#2f6f92']]] });
+  G.restore();
 }
 function drawSubstrate() {
   G.rect(0, TANK.floor, W, H - TANK.floor, { lin: [0, TANK.floor, 0, H, [[0, '#c8b285'], [1, '#937a50']]] });
   for (const s of SAND) G.circle(s.x, s.y, s.r, s.c);
+  G.save(); G.alpha(.25);                                           // 底沙波紋
+  for (let row = 0; row < 3; row++) {
+    const pts = []; for (let x = 0; x <= W; x += 40) pts.push(P(x, TANK.floor + 10 + row * 13 + Math.sin(x * .02 + row * 2) * 3));
+    G.line(chaikin(pts, false, 1), 1.2, row % 2 ? '#e0cc9c' : '#8a7550');
+  }
+  G.restore();
 }
 function drawWaterFront() {
   const wy = world.waterY;
   if (wy >= TANK.floor) return;
-  G.save(); G.alpha(.24);
-  G.rect(TANK.left, wy, TANK.right - TANK.left, TANK.floor - wy, '#2a7fb0');
+  const tint = waterTint();
+  G.save(); G.alpha(tint.alpha);
+  G.rect(TANK.left, wy, TANK.right - TANK.left, TANK.floor - wy, tint.color);
   G.restore();
   // 水面
   const pts = [];
@@ -71,6 +81,10 @@ function decorOutline(d, n = 28) {
 function drawDecor(d) {
   const wy = world.waterY;
   if (d.type === 'plant') return drawPlant(d);
+  if (d.type === 'filter') return drawFilter(d);
+  if (d.type === 'floater') return drawFloater(d);
+  if (d.type === 'fern') return drawFern(d);
+  if (d.type === 'carpet') return drawCarpet(d);
   if (d.type === 'bubbler') {                                  // 氣泡石
     G.poly(ellipsePts(d.x, d.y - 5, d.w / 2, d.h / 2, 0, 18), { lin: [0, d.y - 12, 0, d.y, [[0, '#b9c2c6'], [1, '#6f7a80']]] }, '#4f585c', 1);
     for (let i = -2; i <= 2; i++) G.circle(d.x + i * 5, d.y - 8, 1, '#4f585c');
@@ -81,22 +95,66 @@ function drawDecor(d) {
     const [a, b] = woodEnds(d), c = Math.cos(d.rot), s = Math.sin(d.rot), nx = -s * d.h / 2, ny = c * d.h / 2;
     const body = chaikin([P(a.x + nx, a.y + ny), P(a.x - nx, a.y - ny), P(b.x - nx, b.y - ny), P(b.x + nx, b.y + ny)], true, 1);
     G.poly(body, { lin: [0, d.y - d.h, 0, d.y + d.h, [[0, '#9a7650'], [1, '#5c4128']]] }, '#4a3420', 1.5);
-    for (let k = .15; k < .9; k += .18) G.line([P(lerp(a.x, b.x, k) + nx * .6, lerp(a.y, b.y, k) + ny * .6), P(lerp(a.x, b.x, k + .1) + nx * .2, lerp(a.y, b.y, k + .1) + ny * .2)], 1.4, 'rgba(60,40,20,.5)');
-    G.circle(lerp(a.x, b.x, .62), lerp(a.y, b.y, .62), d.h * .22, '#5c4128');
+    for (const f of [-.55, -.15, .25, .6]) {                         // 沿著木頭的木紋
+      const pts = []; for (let k = .04; k <= .96; k += .08) pts.push(P(lerp(a.x, b.x, k) + nx * f + Math.sin(k * 20 + d.seed + f * 5) * .8, lerp(a.y, b.y, k) + ny * f + Math.cos(k * 17 + f) * .8));
+      G.line(pts, .8, 'rgba(50,32,16,.45)');
+    }
+    for (const k of [.3, .68]) {                                     // 樹瘤
+      const p = P(lerp(a.x, b.x, k) + nx * .2, lerp(a.y, b.y, k) + ny * .2);
+      G.poly(ellipsePts(p.x, p.y, d.h * .3, d.h * .2, d.rot, 12), '#5c4128', '#3a2814', .8);
+      G.poly(ellipsePts(p.x, p.y, d.h * .14, d.h * .09, d.rot, 10), null, 'rgba(40,26,12,.7)', .6);
+    }
+    G.save(); G.alpha(.25); G.line([P(a.x - nx * .8, a.y - ny * .8), P(b.x - nx * .8, b.y - ny * .8)], 1.5, '#f0d8b0'); G.restore();   // 頂面受光
+    const film = []; for (let k = 0; k <= 1; k += .1) film.push(P(lerp(a.x, b.x, k) - nx, lerp(a.y, b.y, k) - ny));
+    const al = world.water.algae / 100, under = film.filter(p => p.y > wy + 4);
+    if (al > .05 && under.length > 1) { G.save(); G.alpha(Math.min(.8, al * 1.1)); G.line(under, 2 + al * 4, '#4f7a32'); G.restore(); }
     return;
   }
   const ol = decorOutline(d);
+  const algaeFilm = pts => {                                     // 水下表面的藻膜
+    const a = world.water.algae / 100, under = pts.filter(p => p.y > world.waterY + 4);
+    if (a > .05 && under.length > 1) { G.save(); G.alpha(Math.min(.8, a * 1.1)); G.line(under, 3 + a * 5, '#4f7a32'); G.restore(); }
+  };
   if (d.type === 'mound') {
     G.poly(ol, { lin: [0, d.y - d.h, 0, d.y, [[0, '#7a5a38'], [1, '#4f3a24']]] });
+    const topPts = ol.slice(0, -2), r = rng(d.seed);
+    for (const [off, col] of [[18, 'rgba(140,105,65,.35)'], [42, 'rgba(60,42,24,.35)'], [75, 'rgba(150,115,75,.25)']]) {   // 土層
+      const band = topPts.filter(p => p.y + off < d.y - 6).map((p, i) => P(p.x, p.y + off + Math.sin(i * .9 + d.seed) * 2.5));
+      if (band.length > 2) G.line(chaikin(band, false, 1), 2.2, col);
+    }
+    for (let i = 0; i < d.w / 6; i++) {                              // 小石子
+      const x = d.x - d.w / 2 + r() * d.w, s = decorSpan(d, clamp(x, d.x - d.w / 2 + 1, d.x + d.w / 2 - 1));
+      if (!s) continue;
+      const y = lerp(s.top + 10, d.y - 4, r());
+      G.poly(ellipsePts(x, y, 1.5 + r() * 3, 1 + r() * 2, r() * 3, 8), r() < .5 ? '#8a7558' : '#5e4a34');
+    }
+    for (let i = 0; i < 5; i++) {                                    // 樹根
+      const p = topPts[Math.floor(topPts.length * (.2 + r() * .6))];
+      if (!p || p.y > wy) continue;
+      G.line(chaikin([P(p.x, p.y + 4), P(p.x + (r() - .5) * 14, p.y + 16), P(p.x + (r() - .5) * 20, p.y + 30)], false, 1), 1, 'rgba(50,34,18,.55)');
+    }
     // 水面以上長草，水面以下長苔
     const top = ol.slice(0, -2);
     const above = top.filter(p => p.y < wy - 2), below = top.filter(p => p.y >= wy - 2);
     if (above.length > 1) G.line(above, 7, '#5f9a3c');
     if (below.length > 1) G.line(below, 5, '#3f6a3a');
     for (let i = 0; i < top.length; i += 2) { const p = top[i]; if (p.y < wy - 4) G.line([p, P(p.x + Math.sin(i + world.t) * 2, p.y - 9)], 2, '#78b04a'); }
+    algaeFilm(top);
     return;
   }
   G.poly(ol, { lin: [d.x - d.w / 2, d.y - d.h, d.x + d.w / 2, d.y, [[0, '#a3a7a8'], [.5, '#7d8487'], [1, '#4f5558']]] }, '#3f4446', 1.5);
+  { const r = rng(d.seed);                                          // 岩石的裂紋與斑點
+    for (let i = 0; i < 3 + d.w / 80; i++) {
+      const x0 = d.x + (r() - .5) * d.w * .6, s = decorSpan(d, x0); if (!s) continue;
+      const y0 = lerp(s.top + 8, d.y - 6, r() * .6), pts = [P(x0, y0)];
+      for (let k = 0; k < 3; k++) { const q = pts[pts.length - 1]; pts.push(P(q.x + (r() - .5) * 16, q.y + 4 + r() * 10)); }
+      G.line(pts, .9, 'rgba(40,44,46,.55)');
+    }
+    for (let i = 0; i < d.w / 5; i++) {
+      const x = d.x + (r() - .5) * d.w * .9, s = decorSpan(d, x); if (!s) continue;
+      G.circle(x, lerp(s.top + 4, d.y - 3, r()), .6 + r() * 1.2, r() < .5 ? 'rgba(210,214,214,.4)' : 'rgba(40,44,46,.35)');
+    } }
+  algaeFilm(ol.slice(0, -2));
   const hl = ol.slice(3, Math.floor(ol.length * .42)).map(p => P(p.x, p.y + 7));
   if (hl.length > 1) { G.save(); G.alpha(.3); G.line(chaikin(hl, false, 1), 3, '#ffffff'); G.restore(); }
 }
@@ -934,6 +992,215 @@ function drawFly(e) {
   G.restore();
 }
 
+
+// ---------------------------------------------------------------------
+// 水質相關的外觀：過濾器、浮萍、斑馬螺、藻類、水色
+// ---------------------------------------------------------------------
+function drawFilter(d) {
+  const wy = world.waterY, x0 = d.x - d.w / 2, y0 = Math.min(wy - 24, d.y - d.h / 2);
+  G.rect(x0 + 4, y0 - 8, d.w - 8, 10, '#2c3236');                                       // 掛勾
+  G.poly([P(x0, y0), P(x0 + d.w, y0), P(x0 + d.w, y0 + d.h), P(x0, y0 + d.h)], { lin: [x0, 0, x0 + d.w, 0, [[0, '#3c4448'], [.5, '#59646a'], [1, '#353c40']]] }, '#22282b', 1);
+  for (let i = 0; i < 5; i++) G.line([P(x0 + 8, y0 + 20 + i * 9), P(x0 + d.w - 8, y0 + 20 + i * 9)], 1.4, 'rgba(20,24,26,.6)');   // 進水格柵
+  G.line([P(d.x, y0 + d.h), P(d.x, y0 + d.h + 70)], 6, '#3c4448');                     // 進水管
+  G.rect(d.x - 6, y0 + d.h + 70, 12, 16, '#2c3236');
+  if (wy < TANK.floor - 10) for (let i = 0; i < 6; i++) {                                 // 出水口的細泡
+    const t = (world.t * 1.6 + i / 6) % 1;
+    G.save(); G.alpha(.6 * (1 - t)); G.circle(x0 - 6 - t * 18, wy + 6 + t * 26 + Math.sin(i * 3 + world.t * 5) * 2, 1.4 + t * 1.2, '#f2fbff'); G.restore();
+  }
+}
+function drawFloater(d) {
+  const wy = world.waterY, r = rng(d.seed);
+  if (wy >= TANK.floor - 4) return;
+  const n = Math.round(d.w / 16);
+  for (let i = 0; i < n; i++) {                                                            // 垂在水裡的根
+    const x = d.x - d.w / 2 + r() * d.w, len = 10 + r() * 22, sw = Math.sin(world.t * 1.2 + i) * 3;
+    G.line([P(x, wy + 2), P(x + sw * .5, wy + len * .5), P(x + sw, wy + len)], .8, 'rgba(230,240,220,.55)');
+  }
+  const r2 = rng(d.seed + 1);
+  for (let i = 0; i < n * 1.6; i++) {
+    const x = d.x - d.w / 2 + r2() * d.w, rr = 4 + r2() * 4, bob = Math.sin(world.t * 1.5 + x * .05) * .8;
+    G.poly(ellipsePts(x, wy + bob, rr, rr * .38, 0, 12), r2() < .5 ? '#5aa83c' : '#6fbf4a', '#3a7a2a', .5);
+    G.circle(x - rr * .3, wy + bob - .5, rr * .25, 'rgba(220,255,200,.5)');
+  }
+}
+function rng(seed) { let s = Math.floor(seed * 9973) % 2147483647 || 7; return () => (s = s * 16807 % 2147483647) / 2147483647; }
+// 斑馬螺（側面）：金黃色螺殼帶黑色條紋、灰色肉足、兩根觸角
+function drawSnail(e) {
+  const s = e.size;
+  G.save(); G.tf(e.x, e.y, 0, e.dir * s, s);
+  if (e.dead) G.alpha(.5);
+  const und = Math.sin(e.phase * 3) * .8;
+  G.poly(chaikin([P(-11, 0), P(-12, -2.5), P(4, -3.5), P(12 + und, -2.5), P(14 + und, 0)], true, 2), '#8a8578', '#5e5a50', .6);   // 肉足
+  G.line([P(11 + und, -2.5), P(16 + und, -7)], .9, '#6e6a60'); G.line([P(10 + und, -2.5), P(13.5 + und, -8)], .9, '#6e6a60');   // 觸角
+  G.circle(11.5 + und, -3.2, .7, '#111');
+  const shell = ellipsePts(-1, -8, 11, 8, -.15, 24);
+  G.poly(shell, { lin: [0, -16, 0, 0, [[0, '#e8c45a'], [1, '#b08a2a']]] }, '#4a3a14', .8);
+  for (let i = -3; i <= 3; i++) G.line(chaikin([P(-1 + i * 3, -15.5 + Math.abs(i) * .8), P(-3 + i * 3.4, -8), P(-1.5 + i * 3, -1)], false, 1), 1.4, 'rgba(30,22,10,.85)');   // 斑馬紋
+  G.line(arcPts(-4, -9, 3.5, 0, Math.PI * 1.6, 8), .8, 'rgba(60,40,10,.6)');                // 螺旋
+  G.circle(3, -12, 1.6, 'rgba(255,255,230,.5)');
+  G.restore();
+}
+// 背面玻璃上的藻斑（依魚缸大小產生一次）
+function makeAlgaeSpots() {
+  const r = rng(W * 7 + H), out = [];
+  for (let i = 0; i < Math.round(W / 22); i++) {                // 小而不規則的藻斑
+    const pts = []; const n = 7, rx = 6 + r() * 20, ry = 4 + r() * 12;
+    for (let j = 0; j < n; j++) { const a = j / n * Math.PI * 2, k = .6 + r() * .6; pts.push(P(Math.cos(a) * rx * k, Math.sin(a) * ry * k)); }
+    out.push({ fx: r(), fy: r(), pts: chaikin(pts, true, 2), k: r() });
+  }
+  return out;
+}
+let ALGAE_SPOTS = makeAlgaeSpots();
+function drawGlassAlgae() {
+  const a = world.water.algae / 100, wy = world.waterY;
+  if (a < .02 || wy >= TANK.floor) return;
+  G.save();
+  for (const sp of ALGAE_SPOTS) {
+    if (sp.k > a * 1.6) continue;                                                           // 藻越多，斑點越多
+    const x = TANK.left + sp.fx * (TANK.right - TANK.left), y = wy + 10 + sp.fy * (TANK.floor - wy - 20);
+    const sc = .6 + a * .8;
+    G.save(); G.alpha(Math.min(.42, a * .7)); G.poly(sp.pts.map(p => P(x + p.x * sc, y + p.y * sc)), '#566f35'); G.restore();
+  }
+  G.restore();
+}
+function drawFrontAlgae() {
+  const a = world.water.algae / 100, wy = world.waterY;
+  if (a < .3 || wy >= TANK.floor) return;
+  const k = (a - .3) / .7;
+  G.save(); G.alpha(k * .5);
+  const r = rng(13);
+  for (let i = 0; i < 26; i++) {
+    const side = i % 3, x = side === 0 ? TANK.left + r() * 60 : side === 1 ? TANK.right - r() * 60 : TANK.left + r() * (TANK.right - TANK.left);
+    const y = side === 2 ? TANK.floor - r() * 40 : wy + r() * (TANK.floor - wy);
+    G.poly(ellipsePts(x, y, 14 + r() * 30 * k, 8 + r() * 14 * k, r() * 3, 12), '#4a7a2e');
+  }
+  G.restore();
+}
+// 水色：藻多偏綠、髒污多偏黃褐並變混濁
+function waterTint() {
+  const w = world.water, c1 = mixColor('#2a7fb0', '#4f7a3a', w.algae / 100 * .55);
+  return { color: mixColor(c1, '#6a6040', w.dirt / 100 * .45), alpha: .24 + w.dirt / 100 * .2 };
+}
+function drawMurk() {
+  const d = world.water.dirt / 100, wy = world.waterY;
+  if (d < .35 || wy >= TANK.floor) return;
+  const r = rng(77), n = Math.round((d - .35) * 120 * W / 1280);
+  G.save(); G.alpha(Math.min(.6, (d - .35) * 1.2));
+  for (let i = 0; i < n; i++) {
+    const x = TANK.left + ((r() * (TANK.right - TANK.left) + world.t * (4 + r() * 6)) % (TANK.right - TANK.left));
+    const y = wy + 10 + ((r() * (TANK.floor - wy - 20) + Math.sin(world.t * .5 + i) * 6));
+    G.circle(x, y, .8 + r() * 1.4, '#c8b890');
+  }
+  G.restore();
+}
+
+
+// ---------------------------------------------------------------------
+// 美術：景深（背景岩壁、遠景水草、前景植物）、日夜色調、魚的影子、暗角
+// ---------------------------------------------------------------------
+function makeScenery() {
+  const r = rng(W * 3 + H * 5), back = [], far = [], front = [];
+  for (let x = TANK.left - 40; x < TANK.right + 40; x += 70 + r() * 90) back.push({ x, w: 120 + r() * 160, h: (TANK.floor - TANK.top) * (.35 + r() * .5), k: r() });
+  for (let x = TANK.left + 20; x < TANK.right; x += 40 + r() * 70) far.push({ x, h: 80 + r() * 200, k: r(), n: 2 + Math.floor(r() * 3) });
+  front.push({ x: TANK.left + 30, h: 150, side: 1 }, { x: TANK.left + 90, h: 100, side: 1 }, { x: TANK.right - 40, h: 170, side: -1 }, { x: TANK.right - 110, h: 110, side: -1 });
+  return { back, far, front };
+}
+let SCENERY = makeScenery();
+function drawBackWall() {                                          // 背景：深色岩壁（像生態缸的背板）
+  for (const b of SCENERY.back) {
+    const pts = [], n = 10;
+    for (let i = 0; i <= n; i++) {
+      const u = i / n, x = b.x - b.w / 2 + b.w * u;
+      pts.push(P(x, TANK.floor - b.h * Math.pow(Math.sin(Math.PI * u), .7) * (1 + Math.sin(u * 9 + b.k * 7) * .06)));
+    }
+    pts.push(P(b.x + b.w / 2, TANK.floor), P(b.x - b.w / 2, TANK.floor));
+    G.poly(pts, mixColor('#7d8a84', '#5c6862', b.k));
+    G.save(); G.alpha(.25); G.line(pts.slice(1, 6).map(p => P(p.x, p.y + 4)), 3, '#c8d4ce'); G.restore();   // 岩壁頂端受光
+  }
+}
+function drawFarPlants() {                                         // 遠景水草：顏色淡、輕輕擺動
+  const wy = world.waterY;
+  if (wy >= TANK.floor) return;
+  G.save(); G.alpha(.32);
+  for (const p of SCENERY.far) for (let k = 0; k < p.n; k++) {
+    const pts = [], h = Math.min(p.h, TANK.floor - wy - 10) * (.7 + .3 * Math.sin(p.k * 9 + k));
+    for (let i = 0; i <= 6; i++) { const t = i / 6; pts.push(P(p.x + k * 8 + Math.sin(world.t * .7 + p.k * 5 + t * 2) * 10 * t, TANK.floor - h * t)); }
+    G.line(chaikin(pts, false, 1), 5, '#4a7a5a');
+  }
+  G.restore();
+}
+function drawFrontPlants() {                                       // 前景：畫面左右下角的植物剪影（在玻璃前面）
+  G.save(); G.alpha(.5);
+  for (const f of SCENERY.front) for (let k = 0; k < 5; k++) {
+    const a = -Math.PI / 2 + f.side * (.15 + k * .16) + Math.sin(world.t * .8 + k + f.x) * .04, len = f.h * (.6 + (k % 3) * .2);
+    const base = P(f.x + k * 6 * f.side, H), tip = P(base.x + Math.cos(a) * len, base.y + Math.sin(a) * len), mid = P(lerp(base.x, tip.x, .5) - f.side * 10, lerp(base.y, tip.y, .5));
+    const nx = Math.cos(a + Math.PI / 2) * 9, ny = Math.sin(a + Math.PI / 2) * 9;
+    G.poly(chaikin([base, P(mid.x + nx, mid.y + ny), tip, P(mid.x - nx, mid.y - ny)], true, 2), '#1f3a24');
+  }
+  G.restore();
+}
+// 日夜色調：日出偏橘粉、白天自然、黃昏金黃轉粉紫、夜晚藍紫
+const GRADE_KEYS = [[0, '#0c1030', .6], [5, '#0c1030', .6], [6, '#ff8a5a', .2], [7.5, '#fff4e0', 0], [16.5, '#fff4e0', 0], [17.8, '#ffb040', .16], [19, '#c0507a', .24], [20.2, '#0c1030', .6], [24, '#0c1030', .6]];
+function drawGrading() {
+  const h = world.tod * 24;
+  let i = 0; while (i < GRADE_KEYS.length - 2 && h > GRADE_KEYS[i + 1][0]) i++;
+  const [h0, c0, a0] = GRADE_KEYS[i], [h1, c1, a1] = GRADE_KEYS[i + 1], t = clamp((h - h0) / (h1 - h0), 0, 1);
+  const alpha = lerp(a0, a1, t);
+  if (alpha > .005) { G.save(); G.alpha(alpha); G.rect(0, 0, W, H, mixColor(c0, c1, t)); G.restore(); }
+  const L = daylight();
+  if (L < .5) {                                                    // 月光
+    G.save(); G.alpha((.5 - L) * .14);
+    const mx = TANK.left + (TANK.right - TANK.left) * .7;
+    G.poly([P(mx - 40, TANK.top), P(mx + 60, TANK.top), P(mx + 260, TANK.floor), P(mx - 10, TANK.floor)], '#cfe0ff');
+    G.restore();
+  }
+}
+function drawShadows(list) {                                       // 水中生物投在缸底的軟影（光從左上方來）
+  const L = daylight(), wy = world.waterY;
+  if (L < .2 || wy >= TANK.floor) return;
+  for (const e of list) {
+    const swim = e.kind === 'fish' || e.kind === 'whale' || e.kind === 'tadpole' || (e.kind === 'turtle' && e.mode === 'swim');
+    if (!swim || e.dead || e.y < wy) continue;
+    const g = groundY(e.x, e.y + 4, 0), h = g - e.y;
+    if (h < 0 || h > 420) continue;
+    const len = SPECIES[e.type].len * e.size * (e.kind === 'turtle' ? .5 : .5);
+    G.save(); G.alpha(L * .22 * (1 - h / 420));
+    G.poly(ellipsePts(e.x + h * .12, g - 1, len * (1 + h / 500), 2.5 + h / 80, 0, 14), '#10202a');
+    G.restore();
+  }
+}
+function drawVignette() {                                          // 暗角
+  const e = 90;
+  G.save(); G.alpha(.22);
+  G.rect(0, 0, W, e, { lin: [0, 0, 0, e, [[0, '#000'], [1, 'rgba(0,0,0,0)']]] });
+  G.rect(0, H - e, W, e, { lin: [0, H, 0, H - e, [[0, '#000'], [1, 'rgba(0,0,0,0)']]] });
+  G.rect(0, 0, e, H, { lin: [0, 0, e, 0, [[0, '#000'], [1, 'rgba(0,0,0,0)']]] });
+  G.rect(W - e, 0, e, H, { lin: [W, 0, W - e, 0, [[0, '#000'], [1, 'rgba(0,0,0,0)']]] });
+  G.restore();
+}
+// 新植物：蕨類（陸地）、前景草（缸底）
+function drawFern(d) {
+  const r = rng(d.seed);
+  for (let k = 0; k < 6; k++) {
+    const a = -Math.PI / 2 + (k - 2.5) * .32 + Math.sin(world.t * .6 + k) * .03, len = d.h * (.65 + r() * .45);
+    const pts = []; for (let i = 0; i <= 6; i++) { const t = i / 6; pts.push(P(d.x + Math.cos(a) * len * t + (k - 2.5) * 3 * t * t * 4, d.y + Math.sin(a) * len * t + len * .35 * t * t)); }
+    G.line(chaikin(pts, false, 1), 1.6, '#3f7a2c');
+    for (let i = 1; i < pts.length; i++) for (const sd of [-1, 1]) {        // 小羽片
+      const p = pts[i], q = pts[i - 1], ang = Math.atan2(p.y - q.y, p.x - q.x) + sd * 1.1, l = 7 * (1 - i / 8);
+      G.poly(ellipsePts(p.x + Math.cos(ang) * l * .5, p.y + Math.sin(ang) * l * .5, l * .55, 1.8, ang, 8), i % 2 ? '#4f9a3a' : '#5fae44');
+    }
+  }
+}
+function drawCarpet(d) {
+  const wy = world.waterY, r = rng(d.seed), n = Math.round(d.w / 4);
+  for (let i = 0; i < n; i++) {
+    const x = d.x - d.w / 2 + r() * d.w, base = d.thumb ? d.y : groundY(x, d.y - 20, 30), h = d.h * (.5 + r() * .6), under = base > wy;
+    const sway = under ? Math.sin(world.t * 1.6 + x * .1) * 2.5 : .5;
+    G.line([P(x, base), P(x + sway, base - h)], 1.6, r() < .5 ? '#4f9a3a' : '#6ab04a');
+    if (r() < .3) G.circle(x + sway, base - h, 1.3, '#7fc45a');
+  }
+}
+
 // ---------------------------------------------------------------------
 // 編輯用疊加層（選取框、除錯）
 // ---------------------------------------------------------------------
@@ -995,19 +1262,26 @@ function render(selected) {
   drawBackground();
   drawWaterBack();
   drawLightShafts();
+  drawGlassAlgae();
+  drawFarPlants();
   for (const e of world.ents) if (e.kind === 'gecko' && e.surface === 'glass') drawGecko(e);   // 背面玻璃上的壁虎
   for (const d of world.decor) if (d.type === 'plant') drawDecor(d);
   for (const d of world.decor) if (d.type !== 'plant') drawDecor(d);
   drawTailBits();
   for (const f of world.food) drawFood(f);
-  const order = { nest: 0, larva: 0, tadpole: 1, whale: 1, fish: 2, cricket: 3, turtle: 3, frog: 4, gecko: 5, mosquito: 6, fly: 6 };
+  const order = { snail: 0, nest: 0, larva: 0, tadpole: 1, whale: 1, fish: 2, cricket: 3, turtle: 3, frog: 4, gecko: 5, mosquito: 6, fly: 6 };
   const list = world.ents.filter(e => !(e.kind === 'gecko' && e.surface === 'glass')).sort((a, b) => order[a.kind] - order[b.kind]);
+  drawShadows(list);
   for (const e of list) DRAW[e.kind](e);
   drawSubstrate();
   drawCaustics();
   drawWaterFront();
+  drawMurk();
+  drawFrontAlgae();
   drawParticles();
-  drawNightOverlay();
+  drawFrontPlants();
+  drawGrading();
+  drawVignette();
   drawFrame();
   drawFx();
   for (const e of world.ents) drawDebug(e, e === selected);
