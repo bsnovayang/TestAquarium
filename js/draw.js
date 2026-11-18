@@ -292,10 +292,64 @@ function drawGuppy(e) {
   G.restore();
 }
 
+
+// ---------------------------------------------------------------------
+// 紅蓮燈（cardinal tetra，細畫）：細長；藍綠色金屬條紋從眼睛到脂鰭附近；
+//   紅色從眼睛下方延伸到尾柄（日光燈只有後半段紅）；鰭半透明；脂鯉科有脂鰭；
+//   夜裡休息時紅色變淡、條紋變暗
+// ---------------------------------------------------------------------
+function drawTetra(e) {
+  const sp = SPECIES[e.type], lk = sp.look, R = fishRig(e), n = R.nodes, tb = n[FISH_N - 1], k = e.size * sp.len / 64;
+  const juv = e.size < e.adult * .6;
+  e.fadeV = lerp(e.fadeV || 0, isNight() && e.mode === 'hover' ? 1 : 0, .03);   // 夜間褪色（純視覺）
+  const fade = e.fadeV;
+  const red = mixColor('#ff2a3c', '#8a6a6a', fade * .65), red2 = mixColor('#d8182c', '#6a5050', fade * .65);
+  const shimmer = .75 + Math.sin(e.phase * .5 + e.id) * .15 + Math.cos(e.phase * .23) * .1;   // 金屬光澤隨角度變化
+  const T = i => P(n[i].x, n[i].y - n[i].h), B = i => P(n[i].x, n[i].y + n[i].h);
+  G.save(); G.tf(e.x, e.y, 0, R.sx * k, (e.dead ? -1 : 1) * k);
+  if (e.dead) G.alpha(.65);
+  if (juv) G.alpha(.7);
+  const finCol = 'rgba(225,235,240,.32)';
+  // 尾鰭（叉形、半透明）
+  G.save(); G.tf(tb.x, tb.y, R.tailRot, R.tailSx, 1);
+  G.poly(chaikin([P(1, -2.2), P(-7, -6), P(-15, -11), P(-17.5, -10.5), P(-11, -2.5), P(-8, 0), P(-11, 2.5), P(-17.5, 10.5), P(-15, 11), P(-7, 6), P(1, 2.2)], true, 1), finCol, 'rgba(200,215,225,.35)', .4);
+  G.poly([P(1, -1.1), P(-2.2, -1.2), P(-2.2, 1.2), P(1, 1.1)], red);   // 尾柄的紅色延伸到尾鰭基部
+  G.restore();
+  // 背鰭、脂鰭、臀鰭（長基部）、腹鰭
+  G.poly(chaikin([P(n[3].x + 2, T(3).y + 1.5), P(n[4].x + 1, T(4).y - 7), P(n[4].x - 3, T(4).y - 6), P(n[5].x + 2, T(5).y + 1.5)], true, 1), finCol, 'rgba(200,215,225,.4)', .4);
+  G.poly(ellipsePts(n[7].x + 1, T(7).y - .6, 2.2, 1.1, -.2, 10), 'rgba(225,235,240,.45)');   // 脂鰭
+  G.poly(chaikin([P(n[4].x + 2, B(4).y - 1), P(n[5].x, B(5).y + 5), P(n[7].x + 1, B(7).y + 3), P(n[7].x - 1, B(7).y - .5)], true, 1), finCol);
+  G.poly(chaikin([P(n[3].x + 1, B(3).y - 1), P(n[3].x - 3, B(3).y + 4), P(n[3].x - 4, B(3).y - .5)], true, 1), finCol);
+  // 身體
+  const ol = chaikin([P(n[0].x + 5, n[0].y), ...n.map((q, i) => T(i)), ...n.map((q, i) => B(i)).reverse()], true, 2);
+  G.poly(ol, { lin: [0, -12, 0, 12, [[0, '#6b6a55'], [.4, '#9ea296'], [1, '#e8ecee']]] }, 'rgba(40,50,60,.3)', .4);
+  // 紅色：紅蓮燈從眼睛下方延伸到尾柄（日光燈只有後半段）
+  const r0 = lk.redFull ? 1 : 4;
+  G.poly(fishBand(n, r0, FISH_N - 1, .08, .9), { lin: [n[r0].x, 0, tb.x, 0, [[0, red], [1, red2]]] });
+  if (lk.redFull) G.poly(fishBand(n, 1, 3, .72, .97), '#e9eef0');            // 胸口一小塊銀白
+  // 藍綠色金屬條紋（眼睛上方延伸到脂鰭附近）
+  G.save(); G.alpha(shimmer * (1 - fade * .55));
+  G.poly(fishBand(n, 0, 7, -.42, .02), { lin: [n[0].x, 0, n[7].x, 0, [[0, '#5ff0ff'], [.5, '#2ad4ff'], [1, '#2fe0c0']]] });
+  G.restore();
+  G.save(); G.alpha(.35 * shimmer); G.line(n.slice(0, 7).map(q => P(q.x, q.y - q.h * .3)), .6, '#ffffff'); G.restore();   // 條紋上的亮線
+  // 眼（大、銀色虹膜）、鰓蓋
+  G.line(arcPts(n[1].x + 5, n[1].y, 7 * lk.hScale + 1, Math.PI * .65, Math.PI * 1.35), .7, 'rgba(40,60,80,.35)');
+  const ex = n[0].x - .2, ey = n[0].y - .8;
+  G.circle(ex, ey, juv ? 4.6 : 3.8, '#dfe6ea', 'rgba(60,70,80,.5)', .4);
+  G.circle(ex + .4, ey, juv ? 3 : 2.3, e.dead ? '#777' : '#111');
+  if (!e.dead) G.circle(ex + 1.1, ey - .8, .7, '#fff');
+  // 胸鰭
+  G.save(); G.tf(n[2].x + 3, n[2].y + 3, R.pecRot);
+  G.poly(ellipsePts(-5, 0, 6, 2.2, 0, 12), 'rgba(235,240,245,.45)');
+  G.restore();
+  G.restore();
+}
+
 function drawFish(e) {
   const shape = (SPECIES[e.type].look || {}).shape;
   if (shape === 'shark') return drawSharkFish(e);
   if (shape === 'guppy') return drawGuppy(e);
+  if (shape === 'tetra') return drawTetra(e);
   drawFishGeneric(e);
 }
 function drawFishGeneric(e) {

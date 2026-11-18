@@ -37,7 +37,7 @@ function drawThumb(cv, type) {
   } else {
     const e = makeEnt(type, 0, 0, false);
     e.size = e.adult = 1; e.dir = 1; e.amp = .3; e.mode = type === 'turtle' ? 'walk' : 'sit';
-    const conf = { guppy: [36, 22, .55], neon: [32, 22, .75], redtail: [37, 22, .17], turtle: [30, 38, .45], frog: [32, 38, .7], goldfrog: [31, 38, .66], tadpole: [34, 22, 1.5],
+    const conf = { guppy: [36, 22, .55], neon: [33, 22, .6], redtail: [37, 22, .17], turtle: [30, 38, .45], frog: [32, 38, .7], goldfrog: [31, 38, .66], tadpole: [34, 22, 1.5],
                    gecko: [38, 34, .38], mosquito: [32, 22, 2], larva: [32, 24, 2], whale: [32, 22, .036], cricket: [30, 30, 1.6], fly: [32, 22, 4] }[type];
     if (type === 'larva') e.phase = 1;
     if (e.sex) { e.sex = 'm'; e.morph = 0; e.size = e.adult = 1; }

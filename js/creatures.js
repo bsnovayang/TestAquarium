@@ -26,6 +26,12 @@ function fishAnim(e, dt, freq, amp) {
   e.phase += Math.PI * 2 * e.freq * dt;
   e.pec += dt * (e.mode === 'hover' ? 14 : 7);
 }
+function schoolInfo(e) {
+  let sx = 0, sy = 0, sd = 0, n = 0;
+  for (const o of world.ents) if (o !== e && o.type === e.type && !o.dead && dist(o, e) < 300) { sx += o.x; sy += o.y; sd += o.dir; n++; }
+  if (!n) return null;
+  return { c: P(sx / n, sy / n), dir: sd === 0 ? e.dir : Math.sign(sd), n };
+}
 function schoolCenter(e) {
   let sx = 0, sy = 0, n = 0;
   for (const o of world.ents) if (o !== e && o.type === e.type && !o.dead && dist(o, e) < 300) { sx += o.x; sy += o.y; n++; }
@@ -45,9 +51,12 @@ function fishWander(e) {
       const plants = world.decor.filter(d => d.type === 'plant');
       if (plants.length) { const p = pick(plants); tx = p.x + rand(-25, 25); ty = rand(Math.max(wy + 20, p.y - p.h), p.y - 10); }
     }
-    if (sp.school) { const c = schoolCenter(e); if (c) { tx = lerp(tx, c.x, .7); ty = lerp(ty, c.y, .7); } }
+    if (sp.school) {                                          // 群游：往魚群中心、順著同伴的平均方向游
+      const s = schoolInfo(e);
+      if (s) { tx = s.c.x + s.dir * rand(80, 220); ty = s.c.y + rand(-25, 25); }
+    }
   } while (solidAt(tx, ty) && ++tries < 10);
-  e.tx = tx; e.ty = ty; e.think = rand(3, 7);
+  e.tx = tx; e.ty = ty; e.think = sp.school ? rand(1.5, 3) : rand(3, 7);
   e.mode = Math.random() < (isNight() ? .75 : .2) ? 'hover' : 'cruise';
 }
 function updFish(e, dt) {
@@ -73,6 +82,15 @@ function updFish(e, dt) {
   for (const o of world.ents)                                  // 會吃自己的掠食者靠近就逃
     if ((o.kind === 'turtle' && o.mode === 'swim' || o.kind === 'fish') && !o.dead && o !== e && dist(o, e) < 90 && canEat(o, e)) { threat = o; threatName = entName(o); }
   if (!threat && e.scaredT > 0) { e.scaredT -= dt; threat = e.scaredBy; threatName = '紅尾黑鯊'; }   // 被紅尾黑鯊驅趕
+  e.fleeReal = !!threat;
+  if (!threat && sp.school) {                                  // 魚群連鎖反應：旁邊的同伴真的在逃，自己也跟著逃
+    if (e.alarmCD > 0) e.alarmCD -= dt;
+    if (e.alarmT > 0) { e.alarmT -= dt; threat = e.alarmFrom; threatName = '（跟著魚群逃）'; }
+    else if (!(e.alarmCD > 0)) {                               // 驚慌 0.8 秒，之後 4 秒內不會再被同伴嚇到
+      const mate = world.ents.find(o => o !== e && o.type === e.type && o.fleeReal && !o.dead && dist(o, e) < 130);
+      if (mate) { e.alarmT = .8; e.alarmCD = 4; e.alarmFrom = P(e.x - (mate.tx - mate.x) * .5, e.y - (mate.ty - mate.y) * .5); threat = e.alarmFrom; threatName = '（跟著魚群逃）'; }
+    }
+  }
   if (sp.territorial) territorialTick(e, dt);
   const head = fishHead(e);
   const prey = e.hunger < sp.huntBelow && !e.chasing ? findPrey(e, sp.sight, t => {

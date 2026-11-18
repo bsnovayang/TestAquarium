@@ -21,9 +21,10 @@ const SPECIES = {
             fin: 'rgba(245,140,60,.85)', hScale: 1, spots: true },
   },
   neon: {
-    name: '紅蓮燈', kind: 'fish', len: 44, speed: 40, dash: 150, sight: 150, hungerTime: 800, huntBelow: 80, hit: 22, school: true,
+    name: '紅蓮燈', kind: 'fish', len: 60, speed: 40, dash: 150, sight: 150, hungerTime: 800, huntBelow: 80, hit: 24, school: true,
     growTime: 160, birth: .3, breed: { how: 'live', cool: [150, 240], count: [2, 5] },   // 實際是撒卵，這裡簡化
-    look: { body: ['#4a5560', '#b9c6cf', '#eef2f4'], tail: ['#d7e1e7', '#c4d0d8', '#aebcc6'], tailType: 'fork',
+    // cardinal tetra（約 3.3 cm）：紅色從眼睛下方延伸到尾柄；藍綠色金屬條紋；脂鯉科有脂鰭
+    look: { shape: 'tetra', redFull: true, body: ['#4a5560', '#b9c6cf', '#eef2f4'], tail: ['#d7e1e7', '#c4d0d8', '#aebcc6'], tailType: 'fork',
             fin: 'rgba(220,230,236,.55)', hScale: .72, stripe: '#2fd3ff', belly: '#ff3348' },
   },
   redtail: {
