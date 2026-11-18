@@ -1,0 +1,565 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>生物風格預覽</title>
+<style>
+  :root {
+    --bg: #f4f1ea; --panel: #ffffff; --ink: #2b2b2b; --muted: #777; --line: #ddd6c8;
+    --accent: #2f7d6d;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #1c1d1f; --panel: #26282b; --ink: #e8e6e1; --muted: #9a9a9a; --line: #3a3c40; --accent: #5fbfa9; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+    font-family: system-ui, "Microsoft JhengHei", "PingFang TC", sans-serif; }
+  header { padding: 16px; display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: center; }
+  h1 { font-size: 20px; margin: 0; }
+  .ctrl { display: flex; gap: 8px; align-items: center; font-size: 14px; }
+  button { font: inherit; padding: 4px 12px; border: 1px solid var(--line); background: var(--panel);
+    color: var(--ink); border-radius: 6px; cursor: pointer; }
+  button.on { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .wrap { overflow-x: auto; padding: 0 16px 16px; }
+  table { border-collapse: separate; border-spacing: 8px; margin: 0 auto; }
+  th { font-size: 14px; font-weight: 600; padding: 4px; }
+  th.row { text-align: right; white-space: nowrap; color: var(--muted); font-weight: 500; }
+  th.row b { display: block; color: var(--ink); font-size: 15px; }
+  td { padding: 0; }
+  .cell { width: 200px; height: 130px; border-radius: 10px; position: relative; overflow: hidden;
+    display: flex; align-items: center; justify-content: center; }
+  .cell.water { background: linear-gradient(#7cc6e0, #2f7fa8); }
+  .cell.land  { background: linear-gradient(#cfe6c4 0 62%, #8a6a45 62%); }
+  .cell.air   { background: linear-gradient(#eaf4fb, #c9e2f0); }
+  .cell.wood  { background: linear-gradient(#d9e8d2, #b9cfae); }
+  .cell.wood::after { content: ""; position: absolute; left: -10%; right: -10%; top: 46%; height: 26px;
+    background: #7a5634; border-radius: 13px; transform: rotate(-4deg); z-index: 0; }
+  .cell > * { position: relative; z-index: 1; }
+  .scaler { transform: scale(var(--s, 1)); transform-origin: center; display: flex; align-items: center; justify-content: center; }
+  canvas { display: block; }
+  .pix { image-rendering: pixelated; }
+  .paused * { animation-play-state: paused !important; }
+
+  /* ---------- Emoji ---------- */
+  .emo { font-size: 54px; line-height: 1; display: inline-block; }
+  .emo.swim { animation: swim 3s ease-in-out infinite; }
+  .emo.bob  { animation: bob 2.4s ease-in-out infinite; }
+  .emo.hop  { animation: hop 2.2s ease-in-out infinite; }
+  .emo.crawl{ animation: crawl 4s ease-in-out infinite; }
+  .emo.buzz { font-size: 34px; animation: buzz 1.3s linear infinite; }
+  .emo.wig  { font-size: 30px; animation: wig .8s ease-in-out infinite; }
+  .flipx { display: inline-block; transform: scaleX(-1); }
+  @keyframes swim { 0%,100% { transform: translate(-30px, 0) } 50% { transform: translate(30px, -8px) } }
+  @keyframes bob  { 0%,100% { transform: translate(-14px, 4px) rotate(-3deg) } 50% { transform: translate(14px,-4px) rotate(3deg) } }
+  @keyframes hop  { 0%,60%,100% { transform: translateY(0) } 75% { transform: translateY(-34px) } }
+  @keyframes crawl{ 0%,100% { transform: translateX(-40px) } 50% { transform: translateX(40px) } }
+  @keyframes buzz { 0% { transform: translate(0,0) } 20% { transform: translate(30px,-12px) } 40% { transform: translate(-10px,14px) }
+                    60% { transform: translate(-34px,-6px) } 80% { transform: translate(12px,10px) } 100% { transform: translate(0,0) } }
+  @keyframes wig  { 0%,100% { transform: rotate(-18deg) } 50% { transform: rotate(18deg) } }
+
+  /* ---------- SVG ---------- */
+  svg.c { width: 170px; height: 110px; overflow: visible; }
+  svg .tail   { transform-box: fill-box; transform-origin: 100% 50%; animation: tail .5s ease-in-out infinite alternate; }
+  svg .fin    { transform-box: fill-box; transform-origin: 50% 0%; animation: fin .7s ease-in-out infinite alternate; }
+  svg .swimg  { animation: swimg 3s ease-in-out infinite; }
+  svg .flipA  { transform-box: fill-box; transform-origin: 80% 20%; animation: flip 1.2s ease-in-out infinite alternate; }
+  svg .flipB  { transform-box: fill-box; transform-origin: 20% 20%; animation: flip 1.2s ease-in-out infinite alternate-reverse; }
+  svg .throat { transform-box: fill-box; transform-origin: 50% 0%; animation: throat 1.6s ease-in-out infinite; }
+  svg .lid    { transform-box: fill-box; transform-origin: 50% 0%; animation: blink 4s infinite; }
+  svg .wing   { transform-box: fill-box; transform-origin: 50% 100%; animation: flap .06s linear infinite alternate; }
+  svg .hover  { animation: hover 1.4s ease-in-out infinite; }
+  svg .legF   { transform-box: fill-box; transform-origin: 50% 0%; animation: leg .9s ease-in-out infinite alternate; }
+  svg .legB   { transform-box: fill-box; transform-origin: 50% 0%; animation: leg .9s ease-in-out infinite alternate-reverse; }
+  svg .gtail  { transform-box: fill-box; transform-origin: 100% 50%; animation: gtail 1.8s ease-in-out infinite alternate; }
+  svg .wiggle { transform-box: fill-box; transform-origin: 50% 0%; animation: wig .8s ease-in-out infinite; }
+  @keyframes tail  { from { transform: scaleX(1) rotate(-12deg) } to { transform: scaleX(.85) rotate(12deg) } }
+  @keyframes fin   { from { transform: rotate(-10deg) } to { transform: rotate(15deg) } }
+  @keyframes swimg { 0%,100% { transform: translate(-12px,0) } 50% { transform: translate(12px,-5px) } }
+  @keyframes flip  { from { transform: rotate(-20deg) } to { transform: rotate(25deg) } }
+  @keyframes throat{ 0%,100% { transform: scale(1) } 50% { transform: scale(1.35,1.6) } }
+  @keyframes blink { 0%,92%,100% { transform: scaleY(0) } 95% { transform: scaleY(1) } }
+  @keyframes flap  { from { transform: scaleY(1) } to { transform: scaleY(.25) } }
+  @keyframes hover { 0%,100% { transform: translate(0,0) } 25% { transform: translate(8px,-6px) } 50% { transform: translate(-4px,5px) } 75% { transform: translate(-9px,-3px) } }
+  @keyframes leg   { from { transform: rotate(-25deg) } to { transform: rotate(25deg) } }
+  @keyframes gtail { from { transform: rotate(-8deg) } to { transform: rotate(8deg) } }
+
+  /* ---------- Notes ---------- */
+  .notes { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 12px; padding: 0 16px 24px; max-width: 1000px; margin: 0 auto; }
+  .note { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; font-size: 14px; line-height: 1.6; }
+  .note h3 { margin: 0 0 6px; font-size: 15px; }
+  .note ul { margin: 0; padding-left: 18px; }
+  .good { color: #2e8b57; } .bad { color: #c0573e; }
+  @media (prefers-color-scheme: dark) { .good { color: #6fcf97; } .bad { color: #f08a6e; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>生物風格預覽</h1>
+  <div class="ctrl">大小
+    <button data-s="0.5">0.5x</button><button data-s="0.75">0.75x</button>
+    <button data-s="1" class="on">1x</button><button data-s="1.5">1.5x</button>
+  </div>
+  <div class="ctrl"><button id="pause">⏸ 暫停</button></div>
+  <div class="ctrl" style="color:var(--muted)">0.5x 大約是實際遊戲裡生物的大小</div>
+</header>
+
+<div class="wrap">
+<table id="grid">
+  <thead><tr><th></th><th>B. SVG 向量</th><th>C. Canvas 程式繪製</th><th>D. 像素風</th></tr></thead>
+  <tbody></tbody>
+</table>
+</div>
+
+<div class="notes">
+  <div class="note"><h3>B. SVG 向量</h3><ul>
+    <li class="good">清晰，放大不會糊</li>
+    <li class="good">換色、換部位容易（魚種變化）</li>
+    <li class="good">之後可用 Figma / Illustrator 畫好直接匯入</li>
+    <li class="bad">數量多（上百隻）時要先轉成圖片再畫到 Canvas</li>
+  </ul></div>
+  <div class="note"><h3>C. Canvas 程式繪製</h3><ul>
+    <li class="good">動作最自然（身體跟著波動、腳交替）</li>
+    <li class="good">效能最好，數百隻沒問題</li>
+    <li class="good">大小、顏色、胖瘦都能用參數隨機變化</li>
+    <li class="bad">造型受限於程式能畫出的形狀，細節較少</li>
+  </ul></div>
+  <div class="note"><h3>D. 像素風</h3><ul>
+    <li class="good">風格統一、復古可愛，檔案極小</li>
+    <li class="good">逐格動畫好做，美術外包也容易</li>
+    <li class="bad">要畫很多格才會順，格數少會顯得僵硬</li>
+    <li class="bad">需要整數倍縮放，手機上尺寸較難調</li>
+  </ul></div>
+</div>
+
+<script>
+// ================= 共用 =================
+let S = 1, paused = false, T = 0, last = performance.now();
+const DPR = Math.min(window.devicePixelRatio || 1, 2);
+const W = 200, H = 130;
+
+const CREATURES = [
+  { key: 'fish',     name: '小魚',   sub: '水中',       bg: 'water' },
+  { key: 'turtle',   name: '烏龜',   sub: '水中 / 陸地', bg: 'water' },
+  { key: 'frog',     name: '青蛙',   sub: '陸地 / 淺水', bg: 'land'  },
+  { key: 'gecko',    name: '壁虎',   sub: '陸地 / 牆面', bg: 'wood'  },
+  { key: 'mosquito', name: '蚊子',   sub: '空中',       bg: 'air'   },
+  { key: 'larva',    name: '孑孓',   sub: '水中淺層',    bg: 'water' },
+];
+
+// ================= B. SVG =================
+const SVG = {
+  fish: `<svg class="c" viewBox="0 0 170 110"><g class="swimg">
+    <path class="tail" d="M58 55 L28 36 Q34 55 28 74 Z" fill="#f08a3c" stroke="#a24f16" stroke-width="2"/>
+    <path class="fin" d="M90 34 Q100 18 116 30 L108 36 Z" fill="#f6a65c" stroke="#a24f16" stroke-width="2"/>
+    <ellipse cx="96" cy="55" rx="42" ry="22" fill="#f59a45" stroke="#a24f16" stroke-width="2.5"/>
+    <path d="M80 36 Q74 55 80 74" fill="none" stroke="#fff" stroke-width="5" opacity=".85"/>
+    <path d="M104 34 Q98 55 104 76" fill="none" stroke="#fff" stroke-width="5" opacity=".85"/>
+    <path class="fin" d="M96 66 Q92 80 104 82 L106 70 Z" fill="#f6a65c" stroke="#a24f16" stroke-width="2"/>
+    <circle cx="124" cy="50" r="6" fill="#fff" stroke="#a24f16" stroke-width="1.5"/><circle cx="125.5" cy="50" r="3" fill="#222"/>
+    <path d="M136 60 Q132 63 128 61" fill="none" stroke="#a24f16" stroke-width="2" stroke-linecap="round"/>
+  </g></svg>`,
+  turtle: `<svg class="c" viewBox="0 0 170 110"><g class="swimg">
+    <ellipse class="flipB" cx="58" cy="74" rx="16" ry="6" fill="#9cb26a" stroke="#4d5e2b" stroke-width="2"/>
+    <ellipse class="flipA" cx="112" cy="76" rx="18" ry="7" fill="#9cb26a" stroke="#4d5e2b" stroke-width="2"/>
+    <path d="M128 60 Q150 48 154 60 Q150 72 130 68 Z" fill="#a9bf75" stroke="#4d5e2b" stroke-width="2"/>
+    <circle cx="146" cy="58" r="2.6" fill="#222"/>
+    <path d="M40 66 L30 70 L40 72 Z" fill="#a9bf75" stroke="#4d5e2b" stroke-width="2"/>
+    <path d="M38 68 Q44 28 86 26 Q128 28 134 68 Z" fill="#5c8a3a" stroke="#2f4a1c" stroke-width="2.5"/>
+    <path d="M72 40 L86 34 L100 40 L100 54 L86 60 L72 54 Z" fill="#79a64e" stroke="#2f4a1c" stroke-width="1.5"/>
+    <path d="M52 52 L70 46 L72 60 L56 64 Z M102 46 L120 52 L118 64 L100 60 Z" fill="#79a64e" stroke="#2f4a1c" stroke-width="1.5"/>
+    <path d="M36 68 L136 68 Q132 76 86 76 Q40 76 36 68 Z" fill="#e3cf8a" stroke="#2f4a1c" stroke-width="2"/>
+  </g></svg>`,
+  frog: `<svg class="c" viewBox="0 0 170 110">
+    <ellipse cx="85" cy="98" rx="50" ry="5" fill="#000" opacity=".15"/>
+    <path d="M40 96 Q34 70 60 66 L66 96 Z M130 96 Q136 70 110 66 L104 96 Z" fill="#4f9a3c" stroke="#2c5a20" stroke-width="2"/>
+    <ellipse cx="85" cy="70" rx="42" ry="28" fill="#5cb048" stroke="#2c5a20" stroke-width="2.5"/>
+    <ellipse class="throat" cx="85" cy="80" rx="18" ry="9" fill="#e9e3a0" stroke="#b5ad5e" stroke-width="1.5"/>
+    <path d="M62 66 Q85 78 108 66" fill="none" stroke="#2c5a20" stroke-width="2" stroke-linecap="round"/>
+    <circle cx="62" cy="44" r="13" fill="#5cb048" stroke="#2c5a20" stroke-width="2.5"/>
+    <circle cx="108" cy="44" r="13" fill="#5cb048" stroke="#2c5a20" stroke-width="2.5"/>
+    <circle cx="62" cy="43" r="8" fill="#fff"/><circle cx="108" cy="43" r="8" fill="#fff"/>
+    <circle cx="63" cy="44" r="4.5" fill="#222"/><circle cx="107" cy="44" r="4.5" fill="#222"/>
+    <rect class="lid" x="53" y="34" width="18" height="18" rx="9" fill="#4f9a3c"/>
+    <rect class="lid" x="99" y="34" width="18" height="18" rx="9" fill="#4f9a3c"/>
+    <path d="M50 96 h10 M110 96 h10" stroke="#2c5a20" stroke-width="5" stroke-linecap="round"/>
+  </svg>`,
+  gecko: `<svg class="c" viewBox="0 0 170 110">
+    <path class="legF" d="M112 50 l6 -18 m-6 18" stroke="#c9a253" stroke-width="5" stroke-linecap="round"/>
+    <path class="legB" d="M112 62 l6 18" stroke="#c9a253" stroke-width="5" stroke-linecap="round"/>
+    <path class="legB" d="M68 50 l-6 -18" stroke="#c9a253" stroke-width="5" stroke-linecap="round"/>
+    <path class="legF" d="M68 62 l-6 18" stroke="#c9a253" stroke-width="5" stroke-linecap="round"/>
+    <path class="gtail" d="M60 56 Q36 50 22 60 Q12 66 6 58 Q14 70 30 66 Q46 62 60 60 Z" fill="#e2bd66" stroke="#8a6524" stroke-width="2"/>
+    <ellipse cx="90" cy="56" rx="34" ry="11" fill="#e8c56f" stroke="#8a6524" stroke-width="2.5"/>
+    <ellipse cx="134" cy="56" rx="16" ry="11" fill="#e8c56f" stroke="#8a6524" stroke-width="2.5"/>
+    <circle cx="76" cy="54" r="3" fill="#a87a32"/><circle cx="90" cy="58" r="3" fill="#a87a32"/><circle cx="104" cy="54" r="3" fill="#a87a32"/>
+    <circle cx="140" cy="48" r="4" fill="#222"/><circle cx="140" cy="64" r="4" fill="#222"/>
+    <circle cx="141" cy="47" r="1.3" fill="#fff"/><circle cx="141" cy="63" r="1.3" fill="#fff"/>
+  </svg>`,
+  mosquito: `<svg class="c" viewBox="0 0 170 110"><g class="hover">
+    <path d="M78 60 l-14 28 M88 60 l-6 30 M98 60 l6 30 M106 58 l18 26" stroke="#3b3b3b" stroke-width="1.5" fill="none"/>
+    <ellipse class="wing" cx="88" cy="38" rx="9" ry="20" fill="#cfe7ff" stroke="#7aa" stroke-width="1" opacity=".8"/>
+    <ellipse class="wing" cx="100" cy="40" rx="8" ry="17" fill="#cfe7ff" stroke="#7aa" stroke-width="1" opacity=".7"/>
+    <path d="M60 62 Q80 54 98 58" stroke="#3b3b3b" stroke-width="6" stroke-linecap="round" fill="none"/>
+    <path d="M62 62 l6 -2 M70 60 l6 -2 M78 58 l6 -1" stroke="#ddd" stroke-width="2"/>
+    <ellipse cx="104" cy="56" rx="7" ry="6" fill="#4a4a4a"/>
+    <circle cx="113" cy="54" r="4.5" fill="#3b3b3b"/><circle cx="114" cy="53" r="1.6" fill="#c33"/>
+    <path d="M116 56 L134 64" stroke="#3b3b3b" stroke-width="1.5"/>
+  </g></svg>`,
+  larva: `<svg class="c" viewBox="0 0 170 110">
+    <rect x="0" y="0" width="170" height="14" fill="#fff" opacity=".25"/>
+    <g class="wiggle">
+      <path d="M85 14 L85 24" stroke="#4a3b2a" stroke-width="2.5"/>
+      <path d="M85 24 Q78 40 85 56 Q92 72 85 88" stroke="#5a4a36" stroke-width="7" fill="none" stroke-linecap="round"/>
+      <ellipse cx="85" cy="92" rx="7" ry="6" fill="#4a3b2a"/>
+      <path d="M78 92 l-6 4 M92 92 l6 4" stroke="#4a3b2a" stroke-width="1.2"/>
+    </g>
+  </svg>`,
+};
+
+// ================= C. Canvas 程式繪製 =================
+const PROC = {
+  fish(ctx, t) {
+    const cx = 100 + Math.sin(t * .6) * 20, cy = 65 + Math.sin(t * 1.1) * 5;
+    const L = 90, N = 18, pts = [];
+    for (let i = 0; i <= N; i++) {
+      const s = i / N;                         // 0 = 頭, 1 = 尾
+      const x = cx + L / 2 - s * L;
+      const y = cy + Math.sin(t * 7 - s * 4) * 6 * s * s;
+      const w = 22 * Math.sin(Math.PI * Math.min(1, s * 1.15 + .08)) * (1 - s * .55);
+      pts.push({ x, y, w });
+    }
+    // 尾鰭
+    const e = pts[N], p = pts[N - 2], ang = Math.atan2(e.y - p.y, e.x - p.x);
+    ctx.save(); ctx.translate(e.x, e.y); ctx.rotate(ang);
+    ctx.fillStyle = '#3c7ad6'; ctx.beginPath(); ctx.moveTo(-4, 0);
+    ctx.quadraticCurveTo(14, -24, 26, -22); ctx.quadraticCurveTo(16, 0, 26, 22); ctx.quadraticCurveTo(14, 24, -4, 0); ctx.fill();
+    ctx.restore();
+    // 身體
+    const g = ctx.createLinearGradient(0, cy - 22, 0, cy + 22);
+    g.addColorStop(0, '#2c5fb0'); g.addColorStop(.5, '#4fa0f0'); g.addColorStop(1, '#d8ecff');
+    ctx.fillStyle = g; ctx.beginPath();
+    pts.forEach((q, i) => i ? ctx.lineTo(q.x, q.y - q.w) : ctx.moveTo(q.x, q.y - q.w));
+    for (let i = N; i >= 0; i--) ctx.lineTo(pts[i].x, pts[i].y + pts[i].w);
+    ctx.closePath(); ctx.fill();
+    // 霓虹線
+    ctx.strokeStyle = '#ff5a6e'; ctx.lineWidth = 3; ctx.beginPath();
+    pts.slice(3, 15).forEach((q, i) => i ? ctx.lineTo(q.x, q.y + 2) : ctx.moveTo(q.x, q.y + 2)); ctx.stroke();
+    // 眼
+    ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(pts[2].x, pts[2].y - 5, 5, 0, 7); ctx.fill();
+    ctx.fillStyle = '#111'; ctx.beginPath(); ctx.arc(pts[2].x + 1, pts[2].y - 5, 2.6, 0, 7); ctx.fill();
+  },
+  turtle(ctx, t) {
+    const cx = 100 + Math.sin(t * .5) * 14, cy = 64 + Math.sin(t * .9) * 4;
+    const fl = Math.sin(t * 2.4);
+    ctx.fillStyle = '#93ab62';
+    const flipper = (x, y, a, len) => { ctx.save(); ctx.translate(x, y); ctx.rotate(a);
+      ctx.beginPath(); ctx.ellipse(len / 2, 0, len / 2, 6, 0, 0, 7); ctx.fill(); ctx.restore(); };
+    flipper(cx + 20, cy + 6, 1.0 + fl * .6, 30);    // 前鰭
+    flipper(cx - 26, cy + 8, 2.4 - fl * .4, 18);    // 後鰭
+    // 頭
+    const hx = cx + 46, hy = cy - 2 + Math.sin(t * 1.3) * 2;
+    ctx.beginPath(); ctx.ellipse(hx, hy, 13, 9, 0, 0, 7); ctx.fill();
+    ctx.fillStyle = '#111'; ctx.beginPath(); ctx.arc(hx + 5, hy - 2, 2.2, 0, 7); ctx.fill();
+    // 殼
+    const g = ctx.createRadialGradient(cx - 6, cy - 20, 4, cx, cy, 50);
+    g.addColorStop(0, '#8cbc5a'); g.addColorStop(1, '#3f6b26');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.ellipse(cx, cy + 4, 40, 28, 0, Math.PI, 0); ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = 'rgba(30,50,15,.6)'; ctx.lineWidth = 1.5;
+    for (let i = -1; i <= 1; i++) { ctx.beginPath(); ctx.arc(cx + i * 22, cy - 6, 10, 0, 7); ctx.stroke(); }
+    ctx.fillStyle = '#e1cc86'; ctx.fillRect(cx - 40, cy + 3, 80, 6);
+    flipper(cx + 14, cy + 8, .6 - fl * .5, 26);     // 另一側前鰭
+  },
+  frog(ctx, t) {
+    const cx = 100, cy = 78;
+    const tongueT = (t % 3.2) / 3.2;                // 每 3.2 秒吐一次舌頭
+    const fly = { x: 168 + Math.sin(t * 5) * 6, y: 28 + Math.cos(t * 7) * 6 };
+    // 蚊子目標
+    if (tongueT < .8) { ctx.fillStyle = '#333'; ctx.beginPath(); ctx.arc(fly.x, fly.y, 3, 0, 7); ctx.fill(); }
+    ctx.fillStyle = '#3f8a30';
+    ctx.beginPath(); ctx.ellipse(cx - 34, cy + 14, 18, 10, -.3, 0, 7); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(cx + 34, cy + 14, 18, 10, .3, 0, 7); ctx.fill();
+    // 身體
+    const g = ctx.createRadialGradient(cx, cy - 16, 6, cx, cy, 46);
+    g.addColorStop(0, '#7fd067'); g.addColorStop(1, '#3c8a2c');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.ellipse(cx, cy, 40, 26, 0, 0, 7); ctx.fill();
+    // 鳴囊
+    const th = 1 + Math.max(0, Math.sin(t * 3)) * .5;
+    ctx.fillStyle = '#ecE6a8'; ctx.beginPath(); ctx.ellipse(cx, cy + 12, 16 * th, 8 * th, 0, 0, 7); ctx.fill();
+    // 眼
+    const blink = (t % 4) > 3.85;
+    for (const dx of [-20, 20]) {
+      ctx.fillStyle = '#5cb048'; ctx.beginPath(); ctx.arc(cx + dx, cy - 26, 12, 0, 7); ctx.fill();
+      if (blink) { ctx.strokeStyle = '#2c5a20'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(cx + dx - 7, cy - 26); ctx.lineTo(cx + dx + 7, cy - 26); ctx.stroke(); }
+      else { ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(cx + dx, cy - 27, 8, 0, 7); ctx.fill();
+             ctx.fillStyle = '#111'; ctx.beginPath(); ctx.arc(cx + dx + 2, cy - 28, 4.5, 0, 7); ctx.fill(); }
+    }
+    // 舌頭
+    if (tongueT > .8) {
+      const k = Math.sin((tongueT - .8) / .2 * Math.PI);
+      const mx = cx + 6, my = cy - 4;
+      ctx.strokeStyle = '#e05a7a'; ctx.lineWidth = 4; ctx.lineCap = 'round';
+      ctx.beginPath(); ctx.moveTo(mx, my); ctx.lineTo(mx + (fly.x - mx) * k, my + (fly.y - my) * k); ctx.stroke();
+    }
+  },
+  gecko(ctx, t) {
+    const N = 22, seg = 6.2, pts = [];
+    const hx = 40 + ((t * 18) % 150);               // 一直往右爬
+    for (let i = 0; i < N; i++) {
+      const s = i / N;
+      pts.push({ x: hx - i * seg + 60, y: 70 + Math.sin(t * 6 - i * .45) * (2 + s * 7) });
+    }
+    const width = i => i < 4 ? 9 - Math.abs(i - 1.5) * 1.5 : i < 11 ? 8.5 : Math.max(1.5, 8.5 - (i - 11) * .75);
+    // 腳（肩=3, 臀=9）
+    ctx.strokeStyle = '#b8903f'; ctx.lineWidth = 4; ctx.lineCap = 'round';
+    for (const [idx, ph] of [[4, 0], [10, Math.PI]]) {
+      const p = pts[idx];
+      for (const side of [-1, 1]) {
+        const sw = Math.sin(t * 6 + ph + (side > 0 ? Math.PI : 0)) * 8;
+        const fx = p.x + sw, fy = p.y + side * 20;
+        ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.quadraticCurveTo(p.x + sw * .3 + 4, p.y + side * 14, fx, fy); ctx.stroke();
+        ctx.fillStyle = '#b8903f'; for (let k = -1; k <= 1; k++) { ctx.beginPath(); ctx.arc(fx + k * 3.5, fy + side * 3, 2, 0, 7); ctx.fill(); }
+      }
+    }
+    // 身體
+    for (let i = N - 1; i >= 0; i--) {
+      ctx.fillStyle = i % 3 === 0 && i > 3 && i < 16 ? '#c29540' : '#e6c06a';
+      ctx.beginPath(); ctx.arc(pts[i].x, pts[i].y, width(i), 0, 7); ctx.fill();
+    }
+    ctx.fillStyle = '#111';
+    ctx.beginPath(); ctx.arc(pts[0].x + 2, pts[0].y - 5, 2.2, 0, 7); ctx.arc(pts[0].x + 2, pts[0].y + 5, 2.2, 0, 7); ctx.fill();
+  },
+  mosquito(ctx, t) {
+    const x = 100 + Math.sin(t * 1.3) * 40 + Math.sin(t * 4.7) * 6;
+    const y = 60 + Math.sin(t * 1.9) * 22 + Math.cos(t * 6.1) * 4;
+    const dir = Math.cos(t * 1.3) >= 0 ? 1 : -1;
+    ctx.save(); ctx.translate(x, y); ctx.scale(dir, 1);
+    ctx.strokeStyle = '#333'; ctx.lineWidth = 1;
+    for (const [a, b] of [[-6, -14], [0, -6], [5, 8]]) { ctx.beginPath(); ctx.moveTo(a, 2); ctx.lineTo(b, 20); ctx.stroke(); }
+    const flap = Math.abs(Math.sin(t * 60));
+    ctx.fillStyle = 'rgba(200,230,255,.65)';
+    ctx.beginPath(); ctx.ellipse(-2, -6 - 6 * flap, 4, 10 * flap + 2, -.3, 0, 7); ctx.fill();
+    ctx.strokeStyle = '#333'; ctx.lineWidth = 4; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(-18, 4); ctx.lineTo(0, 0); ctx.stroke();
+    ctx.fillStyle = '#333'; ctx.beginPath(); ctx.arc(5, -1, 4, 0, 7); ctx.fill();
+    ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(8, 0); ctx.lineTo(18, 5); ctx.stroke();
+    ctx.restore();
+  },
+  larva(ctx, t) {
+    ctx.fillStyle = 'rgba(255,255,255,.25)'; ctx.fillRect(0, 0, W, 14);
+    const N = 14; let x = 100, y = 14, a = Math.PI / 2;
+    ctx.strokeStyle = '#4e3f2c'; ctx.lineCap = 'round';
+    const pts = [{ x, y }];
+    for (let i = 1; i <= N; i++) {
+      a = Math.PI / 2 + Math.sin(t * 5 - i * .55) * .5 * (i / N);
+      x += Math.cos(a) * 5.5; y += Math.sin(a) * 5.5; pts.push({ x, y });
+    }
+    for (let i = 1; i < pts.length; i++) {
+      ctx.lineWidth = i < 3 ? 2 : i > N - 3 ? 9 : 6;
+      ctx.beginPath(); ctx.moveTo(pts[i - 1].x, pts[i - 1].y); ctx.lineTo(pts[i].x, pts[i].y); ctx.stroke();
+    }
+  },
+};
+
+// ================= D. 像素風 =================
+// 每個字元 = 一個像素；'.' 透明。兩格動畫。
+const PAL = {
+  k: '#2a1e14', o: '#f28a2e', y: '#ffd27a', w: '#ffffff', b: '#111111',
+  g: '#3e6e2a', G: '#6fa24a', h: '#a9bf6a', c: '#e3cf8a',
+  f: '#4fa83a', F: '#7fd067', t: '#ece6a0',
+  l: '#e6c06a', s: '#a87a32',
+  m: '#3a3a3a', v: '#cfe7ff',
+  r: '#5a4a36',
+};
+const SPR = {
+  fish: [[
+    "......kkkkk.....",
+    "k...kkoooookk...",
+    "kk.koowooooowk..",
+    "kokooowooooowbk.",
+    "kokoooowoooooook",
+    "kk.kyyywyyyyyk..",
+    "k...kkyyyyykk...",
+    "......kkkkk.....",
+  ], [
+    "......kkkkk.....",
+    "....kkoooookk...",
+    "kk.koowooooowk..",
+    ".kkooowooooowbk.",
+    ".kkoooowoooooook",
+    "kk.kyyywyyyyyk..",
+    "....kkyyyyykk...",
+    "......kkkkk.....",
+  ]],
+  turtle: [[
+    ".....kkkkkk.......",
+    "...kkgGgGgGkk.....",
+    "..kgGgGgGgGgGk.kk.",
+    ".kGgGgGgGgGgGgkhhk",
+    "kkccccccccccccckhbk",
+    ".khhk.....khhk.kkk",
+    "..kk.......kk.....",
+  ], [
+    ".....kkkkkk.......",
+    "...kkgGgGgGkk.....",
+    "..kgGgGgGgGgGk.kk.",
+    ".kGgGgGgGgGgGgkhhk",
+    "kkccccccccccccckhbk",
+    "khhk.......khhk.kk",
+    ".kk.........kk....",
+  ]],
+  frog: [[
+    "..kkk....kkk..",
+    ".kwwbk..kwwbk.",
+    ".kfffkkkkfffk.",
+    "kffFFFFFFFFffk",
+    "kfFFFFFFFFFFfk",
+    "kfFFkttttkFFfk",
+    ".kfFkttttkFfk.",
+    "kffkkkkkkkkffk",
+    "kfffk....kfffk",
+    ".kkk......kkk.",
+  ], [
+    "..kkk....kkk..",
+    ".kwwbk..kwwbk.",
+    ".kfffkkkkfffk.",
+    "kffFFFFFFFFffk",
+    "kfFFFkkkkFFFfk",
+    "kfFkttttttkFfk",
+    ".kfkttttttkfk.",
+    "kffkkttttkkffk",
+    "kfffkkkkkkfffk",
+    ".kkk......kkk.",
+  ]],
+  gecko: [[
+    "......k.......k.....",
+    ".....kl......kl.....",
+    "......kkkkkkkkkkk...",
+    "kk...klslslslslllbk.",
+    "lllkkllllllllllllllk",
+    "kk...klslslslslllbk.",
+    "......kkkkkkkkkkk...",
+    "........lk......lk..",
+    ".........k.......k..",
+  ], [
+    "........k.......k...",
+    "........lk......lk..",
+    "......kkkkkkkkkkk...",
+    "....kklslslslslllbk.",
+    "kllllllllllllllllllk",
+    "....kklslslslslllbk.",
+    "......kkkkkkkkkkk...",
+    ".....kl......kl.....",
+    "......k.......k.....",
+  ]],
+  mosquito: [[
+    "...vv.vv....",
+    "...vvvvv....",
+    "....vvv.....",
+    "mmmmmmmm.mm.",
+    "...m.m.mmbm.",
+    "..m..m..m..m",
+    ".m...m...m..",
+  ], [
+    "............",
+    "............",
+    "...vvvvvvv..",
+    "mmmmmmmm.mm.",
+    "...m.m.mmbm.",
+    "..m..m..m..m",
+    ".m...m...m..",
+  ]],
+  larva: [[
+    "..r..",
+    "..r..",
+    ".rrr.",
+    ".rr..",
+    "..rr.",
+    "...rr",
+    "..rr.",
+    ".rr..",
+    ".rrr.",
+    ".r.r.",
+  ], [
+    "..r..",
+    "..r..",
+    ".rrr.",
+    "..rr.",
+    ".rr..",
+    "rr...",
+    ".rr..",
+    "..rr.",
+    ".rrr.",
+    ".r.r.",
+  ]],
+};
+const PIX_MOVE = {
+  fish: t => [Math.sin(t * .8) * 20, Math.sin(t * 1.6) * 3],
+  turtle: t => [Math.sin(t * .5) * 14, Math.sin(t * 1.0) * 3],
+  frog: t => [0, (t % 2.2) > 1.6 ? -Math.sin(((t % 2.2) - 1.6) / .6 * Math.PI) * 26 : 0],
+  gecko: t => [Math.sin(t * .6) * 30, 0],
+  mosquito: t => [Math.sin(t * 1.3) * 40 + Math.sin(t * 4.7) * 4, Math.sin(t * 1.9) * 20],
+  larva: t => [0, 0],
+};
+function drawPixel(ctx, key, t) {
+  const fps = key === 'mosquito' ? 16 : key === 'larva' ? 3 : 4;
+  const frame = SPR[key][Math.floor(t * fps) % 2];
+  const px = Math.max(1, Math.round(4 * S));        // 整數倍放大
+  const w = Math.max(...frame.map(r => r.length)) * px, h = frame.length * px;
+  const [mx, my] = PIX_MOVE[key](t);
+  const ox = Math.round((W * S - w) / 2 + mx * S), oy = Math.round((H * S - h) / 2 + my * S) + (key === 'larva' ? -Math.round(30 * S) : 0);
+  if (key === 'larva') { ctx.fillStyle = 'rgba(255,255,255,.25)'; ctx.fillRect(0, 0, W * S, 14 * S); }
+  frame.forEach((row, y) => [...row].forEach((ch, x) => {
+    if (ch === '.' || !PAL[ch]) return;
+    ctx.fillStyle = PAL[ch]; ctx.fillRect(ox + x * px, oy + y * px, px, px);
+  }));
+}
+
+// ================= 建立表格 =================
+const tbody = document.querySelector('#grid tbody');
+const canvases = [];
+for (const c of CREATURES) {
+  const tr = document.createElement('tr');
+  tr.innerHTML = `<th class="row"><b>${c.name}</b>${c.sub}</th>
+    <td><div class="cell ${c.bg}"><div class="scaler">${SVG[c.key]}</div></div></td>
+    <td><div class="cell ${c.bg}"><canvas data-k="${c.key}" data-m="proc"></canvas></div></td>
+    <td><div class="cell ${c.bg}"><canvas class="pix" data-k="${c.key}" data-m="pix"></canvas></div></td>`;
+  tbody.appendChild(tr);
+}
+document.querySelectorAll('canvas').forEach(cv => {
+  cv.width = W * DPR; cv.height = H * DPR; cv.style.width = W + 'px'; cv.style.height = H + 'px';
+  canvases.push({ cv, ctx: cv.getContext('2d'), key: cv.dataset.k, mode: cv.dataset.m });
+});
+
+function frame(now) {
+  const dt = Math.min(.05, (now - last) / 1000); last = now;
+  if (!paused) T += dt;
+  for (const { cv, ctx, key, mode } of canvases) {
+    ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, cv.width, cv.height);
+    if (mode === 'proc') {
+      // 以中心為基準縮放
+      ctx.setTransform(DPR * S, 0, 0, DPR * S, DPR * (W / 2) * (1 - S), DPR * (H / 2) * (1 - S));
+      PROC[key](ctx, T);
+    } else {
+      ctx.setTransform(DPR, 0, 0, DPR, DPR * (W / 2) * (1 - S), DPR * (H / 2) * (1 - S));
+      ctx.imageSmoothingEnabled = false;
+      drawPixel(ctx, key, T);
+    }
+  }
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+
+// ================= 控制 =================
+document.querySelectorAll('[data-s]').forEach(b => b.onclick = () => {
+  S = +b.dataset.s;
+  document.querySelectorAll('[data-s]').forEach(x => x.classList.toggle('on', x === b));
+  document.documentElement.style.setProperty('--s', S);
+});
+document.getElementById('pause').onclick = e => {
+  paused = !paused; e.target.textContent = paused ? '▶ 播放' : '⏸ 暫停';
+  document.body.classList.toggle('paused', paused);
+};
+</script>
+</body>
+</html>

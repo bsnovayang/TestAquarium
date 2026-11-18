@@ -1,0 +1,725 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>魚與壁虎風格比較</title>
+<style>
+  :root { --bg:#f4f1ea; --panel:#fff; --ink:#2b2b2b; --muted:#777; --line:#ddd6c8; --accent:#2f7d6d; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#1c1d1f; --panel:#26282b; --ink:#e8e6e1; --muted:#9a9a9a; --line:#3a3c40; --accent:#5fbfa9; }
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink);
+    font-family: system-ui, "Microsoft JhengHei", "PingFang TC", sans-serif; }
+  header { padding:16px; display:flex; flex-wrap:wrap; gap:10px 22px; align-items:center; }
+  h1 { font-size:20px; margin:0; }
+  h2 { font-size:17px; margin:0; }
+  .ctrl { display:flex; flex-wrap:wrap; gap:6px; align-items:center; font-size:14px; }
+  .ctrl > span { color:var(--muted); margin-right:2px; }
+  button { font:inherit; font-size:14px; padding:4px 11px; border:1px solid var(--line); background:var(--panel);
+    color:var(--ink); border-radius:6px; cursor:pointer; touch-action:manipulation; }
+  button.on { background:var(--accent); color:#fff; border-color:var(--accent); }
+  section { padding:0 16px 20px; max-width:1240px; margin:0 auto; }
+  .sec-head { display:flex; flex-wrap:wrap; gap:8px 18px; align-items:center; margin:8px 0 10px; }
+  .sec-head small { color:var(--muted); }
+  .cells { display:grid; grid-template-columns:repeat(auto-fit, minmax(280px, 1fr)); gap:12px; }
+  figure { margin:0; }
+  figcaption { font-size:14px; font-weight:600; margin-bottom:6px; }
+  figcaption small { font-weight:400; color:var(--muted); }
+  .stage { position:relative; width:100%; aspect-ratio:360/210; border-radius:10px; overflow:hidden; }
+  .stage > canvas, .stage > svg { position:absolute; inset:0; width:100%; height:100%; display:block; }
+  .stage canvas.pix { image-rendering:pixelated; }
+  .water { background:linear-gradient(#8fd0e6, #2e7aa3); }
+  .water::after { content:""; position:absolute; left:0; right:0; bottom:0; height:9%;
+    background:linear-gradient(#c9b48a, #a38a5e); }
+  .terra { background:linear-gradient(#e3eedb 0 71.4%, #8c6a44 71.4%, #6e5233); }
+  .notes { display:grid; grid-template-columns:repeat(auto-fit, minmax(260px,1fr)); gap:12px; }
+  .note { background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:12px 14px; font-size:14px; line-height:1.65; }
+  .note h3 { margin:0 0 6px; font-size:15px; }
+  .note ul { margin:0; padding-left:18px; }
+  .good { color:#2e8b57; } .bad { color:#c0573e; }
+  @media (prefers-color-scheme: dark) { .good { color:#6fcf97; } .bad { color:#f08a6e; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>魚與壁虎：三種畫法比較</h1>
+  <div class="ctrl"><span>大小</span>
+    <button data-s="0.5">遊戲尺寸 0.5x</button><button data-s="1" class="on">1x</button><button data-s="1.6">1.6x</button></div>
+  <div class="ctrl"><span>速度</span>
+    <button data-sp="0">⏸</button><button data-sp="0.25">0.25x</button><button data-sp="0.5">0.5x</button><button data-sp="1" class="on">1x</button></div>
+  <div class="ctrl"><button id="bones">顯示骨架</button><button id="auto" class="on">自動行為</button></div>
+</header>
+
+<section>
+  <div class="sec-head">
+    <h2>🐟 孔雀魚（公）</h2>
+    <div class="ctrl" id="fishBtns">
+      <button data-a="cruise">巡游</button><button data-a="dash">衝刺</button>
+      <button data-a="hover">懸停</button><button data-a="turn">轉身</button>
+    </div>
+    <small>按鈕會暫時蓋過自動行為</small>
+  </div>
+  <div class="cells">
+    <figure><figcaption>B. SVG 向量 <small>剛體部件＋骨架轉動</small></figcaption>
+      <div class="stage water"><svg id="svgFish" viewBox="0 0 360 210"></svg><canvas class="ov"></canvas></div></figure>
+    <figure><figcaption>C. Canvas 程式繪製 <small>連續身體，跟著骨架變形</small></figcaption>
+      <div class="stage water"><canvas id="cvFish"></canvas><canvas class="ov"></canvas></div></figure>
+    <figure><figcaption>D. 像素風 <small>由骨架即時算出每一格</small></figcaption>
+      <div class="stage water"><canvas id="pxFish" class="pix"></canvas><canvas class="ov"></canvas></div></figure>
+  </div>
+</section>
+
+<section>
+  <div class="sec-head">
+    <h2>🦎 疣尾蝎虎（家壁虎）</h2>
+    <div class="ctrl" id="gkBtns">
+      <button data-a="walk">爬行</button><button data-a="ambush">埋伏</button>
+      <button data-a="lunge">撲咬</button><button data-a="turn">轉身</button>
+    </div>
+  </div>
+  <div class="cells">
+    <figure><figcaption>B. SVG 向量 <small>紙偶式部件（Cutout）</small></figcaption>
+      <div class="stage terra"><svg id="svgGk" viewBox="0 0 360 210"></svg><canvas class="ov"></canvas></div></figure>
+    <figure><figcaption>C. Canvas 程式繪製 <small>IK 腳步會踩實地面</small></figcaption>
+      <div class="stage terra"><canvas id="cvGk"></canvas><canvas class="ov"></canvas></div></figure>
+    <figure><figcaption>D. 像素風 <small>自動描邊</small></figcaption>
+      <div class="stage terra"><canvas id="pxGk" class="pix"></canvas><canvas class="ov"></canvas></div></figure>
+  </div>
+</section>
+
+<section>
+  <div class="notes">
+    <div class="note"><h3>側面視角的觀察</h3><ul>
+      <li>魚是<b>左右</b>擺尾，從側面看是「朝鏡頭／背鏡頭」，所以不是上下扭，而是<b>尾鰭寬度伸縮</b>（尾巴回到中間時最寬）。上下的小波動是為了好看加上去的</li>
+      <li>壁虎身體的 S 形扭動在側面也看不到，主要靠<b>四肢交替</b>和身體輕微起伏表現</li>
+      <li>轉身：側面視角要「壓扁再翻面」，像素風則直接換一張正面圖</li>
+    </ul></div>
+    <div class="note"><h3>B. SVG 向量</h3><ul>
+      <li class="good">輪廓乾淨，像卡通插畫</li>
+      <li class="good">部件可以直接拿 Figma／Illustrator 畫的圖替換</li>
+      <li class="bad">身體是剛體，關節處會看到接縫（壁虎尾巴分段）</li>
+      <li class="bad">每隻都是 DOM 元素，上百隻時要改畫到 Canvas</li>
+    </ul></div>
+    <div class="note"><h3>C. Canvas 程式繪製</h3><ul>
+      <li class="good">身體連續彎曲，動作最自然</li>
+      <li class="good">效能最好；體型、顏色都能用參數變化</li>
+      <li class="bad">細節（鱗片、花紋）要一筆一筆用程式畫</li>
+    </ul></div>
+    <div class="note"><h3>D. 像素風</h3><ul>
+      <li class="good">風格強烈，很有遊戲感</li>
+      <li class="good">這版不是逐格手繪，是骨架算好後再「點陣化」，所以動作和 C 一樣多</li>
+      <li class="bad">解析度低，小動物（蚊子、孑孓）會只剩幾個點</li>
+    </ul></div>
+  </div>
+</section>
+
+<script>
+// ===================================================================
+// 共用
+// ===================================================================
+const W = 360, H = 210, GROUND = 150, RES = 2;
+let S = 1, speed = 1, showBones = false, auto = true, T = 0;
+const rand = (a, b) => a + Math.random() * (b - a);
+const lerp = (a, b, t) => a + (b - a) * t;
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const ease = (dt, rate) => 1 - Math.exp(-dt * rate);
+const NS = 'http://www.w3.org/2000/svg';
+
+function setupCanvas(cv) { cv.width = W * RES; cv.height = H * RES; return cv.getContext('2d'); }
+function clear(ctx) { ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, W * RES, H * RES); }
+function place(ctx, x, y, sx) { ctx.setTransform(RES * S * sx, 0, 0, RES * S, RES * x, RES * y); }
+function smoothPath(ctx, pts) {
+  ctx.moveTo(pts[0].x, pts[0].y);
+  for (let i = 1; i < pts.length - 1; i++)
+    ctx.quadraticCurveTo(pts[i].x, pts[i].y, (pts[i].x + pts[i + 1].x) / 2, (pts[i].y + pts[i + 1].y) / 2);
+  const l = pts[pts.length - 1]; ctx.lineTo(l.x, l.y);
+}
+function smoothD(pts) {
+  let d = `M${pts[0].x.toFixed(1)},${pts[0].y.toFixed(1)}`;
+  for (let i = 1; i < pts.length - 1; i++)
+    d += ` Q${pts[i].x.toFixed(1)},${pts[i].y.toFixed(1)} ${((pts[i].x + pts[i + 1].x) / 2).toFixed(1)},${((pts[i].y + pts[i + 1].y) / 2).toFixed(1)}`;
+  const l = pts[pts.length - 1];
+  return d + ` L${l.x.toFixed(1)},${l.y.toFixed(1)} Z`;
+}
+function svgEl(tag, attrs, parent) {
+  const e = document.createElementNS(NS, tag);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  if (parent) parent.appendChild(e);
+  return e;
+}
+const deg = r => r * 180 / Math.PI;
+
+// 像素格子：繪製（可水平翻轉）
+function drawGrid(ctx, grid, pal, cx, cy, colC, rowC, px, flip) {
+  const GW = grid[0].length;
+  const c0 = flip ? (GW - 1 - colC) : colC;
+  const X0 = Math.round((cx - c0 * px - px / 2) / px) * px;
+  const Y0 = Math.round((cy - rowC * px) / px) * px;
+  ctx.setTransform(RES, 0, 0, RES, 0, 0);
+  for (let r = 0; r < grid.length; r++) for (let c = 0; c < GW; c++) {
+    const ch = grid[r][c]; if (!ch || !pal[ch]) continue;
+    ctx.fillStyle = pal[ch];
+    ctx.fillRect(X0 + (flip ? GW - 1 - c : c) * px, Y0 + r * px, px, px);
+  }
+}
+function makeGrid(w, h) { return Array.from({ length: h }, () => Array(w).fill(null)); }
+// 自動描邊：空格若緊鄰實心格就變成輪廓
+function outline(grid, edge = 'K') {
+  const h = grid.length, w = grid[0].length, out = grid.map(r => r.slice());
+  for (let r = 0; r < h; r++) for (let c = 0; c < w; c++) {
+    if (grid[r][c]) continue;
+    for (const [dr, dc] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      const v = grid[r + dr]?.[c + dc];
+      if (v && v !== edge) { out[r][c] = edge; break; }
+    }
+  }
+  return out;
+}
+
+// ===================================================================
+// 魚：行為模擬（三種畫法共用）
+// ===================================================================
+const fish = { x: 160, y: 95, ty: 95, dir: 1, turnT: 0, turning: false, mode: 'cruise', modeT: 0,
+  vx: 0, phase: 0, freq: 2, amp: .5, pec: 0, nextAuto: 3 };
+
+function fishAct(m) {
+  if (fish.turning) return;
+  if (m === 'turn') { fish.turning = true; fish.turnT = 0; return; }
+  fish.mode = m; fish.modeT = 0;
+}
+function fishUpdate(dt) {
+  const f = fish; f.modeT += dt;
+  let sp = 28, fr = 2.2, am = .55, acc = 2.5;
+  if (f.mode === 'dash') {
+    if (f.modeT < .7) { sp = 130; fr = 6; am = 1; acc = 8; }
+    else if (f.modeT < 1.6) { sp = 6; fr = .4; am = .12; acc = 1.6; }   // 滑行
+    else { f.mode = 'cruise'; f.modeT = 0; }
+  } else if (f.mode === 'hover') { sp = 0; fr = .8; am = .1; acc = 3; }
+  if (f.turning) {
+    sp *= .3; f.turnT += dt / .45;
+    if (f.turnT >= 1) { f.turnT = 0; f.turning = false; f.dir *= -1; }
+  }
+  f.vx = lerp(f.vx, sp, ease(dt, acc));
+  f.freq = lerp(f.freq, fr, ease(dt, 5));
+  f.amp = lerp(f.amp, am, ease(dt, 5));
+  f.phase += Math.PI * 2 * f.freq * dt;
+  f.pec += dt * (f.mode === 'hover' ? 15 : 7);
+  f.x += f.vx * f.dir * dt;
+  if (Math.abs(f.y - f.ty) < 3) f.ty = rand(55, 150);
+  f.y = lerp(f.y, f.ty, ease(dt, .5));
+  const m = 70;
+  if (!f.turning && ((f.dir > 0 && f.x > W - m) || (f.dir < 0 && f.x < m))) {
+    if (f.mode === 'dash') { f.mode = 'cruise'; f.modeT = 0; }
+    fishAct('turn');
+  }
+  f.x = clamp(f.x, 25, W - 25);
+  if (auto && (f.nextAuto -= dt) <= 0) {
+    const r = Math.random();
+    fishAct(r < .25 ? 'dash' : r < .45 ? 'hover' : r < .6 ? 'turn' : 'cruise');
+    f.nextAuto = rand(2.5, 5);
+  }
+}
+
+// 骨架：頭在 +x，尾在 -x（局部座標，單位 = 1x 時的像素）
+const FN = 9;
+const fishH = s => 2.5 + 13.5 * Math.pow(Math.max(0, Math.sin(Math.PI * Math.min(1, s * 1.05 + .1))), .75) * (1 - .6 * s);
+function fishRig(f, rest = false) {
+  const amp = rest ? 0 : f.amp, ph = rest ? 0 : f.phase;
+  const nodes = [];
+  for (let i = 0; i < FN; i++) {
+    const s = i / (FN - 1);
+    nodes.push({ x: 34 - s * 64, y: Math.sin(ph - s * 2.2) * amp * 4 * s * s, h: fishH(s) });
+  }
+  return {
+    nodes,
+    tailSx: rest ? 1 : lerp(1, .32, amp * Math.abs(Math.sin(ph))),   // 側面看：尾鰭寬度伸縮
+    tailRot: rest ? 0 : .22 * amp * Math.cos(ph),
+    pecRot: rest ? .3 : .35 + .5 * Math.sin(f.pec),
+    sx: rest ? 1 : f.dir * Math.cos(Math.PI * f.turnT),
+  };
+}
+function bodyOutline(nodes) {
+  const top = nodes.map(n => ({ x: n.x, y: n.y - n.h }));
+  const bot = nodes.map(n => ({ x: n.x, y: n.y + n.h })).reverse();
+  return [{ x: nodes[0].x + 5, y: nodes[0].y + 1 }, ...top, ...bot];
+}
+function finPts(nodes) {
+  const n = nodes;
+  return {
+    dorsal: [{ x: n[2].x, y: n[2].y - n[2].h + 1 }, { x: n[4].x, y: n[4].y - n[4].h - 9 },
+             { x: n[6].x - 8, y: n[6].y - n[6].h - 13 }, { x: n[5].x, y: n[5].y - n[5].h + 1 }],
+    anal:   [{ x: n[4].x, y: n[4].y + n[4].h - 1 }, { x: n[6].x - 2, y: n[6].y + n[6].h + 9 },
+             { x: n[6].x, y: n[6].y + n[6].h - 1 }],
+  };
+}
+const TAIL_D = 'M2,-3.5 C-10,-8 -26,-27 -41,-25 Q-48,0 -41,25 C-26,27 -10,8 2,3.5 Z';
+
+// ---------- C. Canvas 魚 ----------
+const cvFish = setupCanvas(document.getElementById('cvFish'));
+const tailPath = new Path2D(TAIL_D);
+function drawFishCanvas(ctx, f) {
+  const R = fishRig(f), n = R.nodes, tb = n[FN - 1];
+  place(ctx, f.x, f.y, R.sx);
+  // 尾鰭
+  ctx.save(); ctx.translate(tb.x, tb.y); ctx.rotate(R.tailRot); ctx.scale(R.tailSx, 1);
+  const tg = ctx.createLinearGradient(0, 0, -42, 0);
+  tg.addColorStop(0, '#ffc04d'); tg.addColorStop(.55, '#f2702e'); tg.addColorStop(1, '#d93a36');
+  ctx.globalAlpha = .92; ctx.fillStyle = tg; ctx.fill(tailPath);
+  ctx.strokeStyle = 'rgba(140,30,10,.35)'; ctx.lineWidth = .7;
+  for (let k = -4; k <= 4; k++) { ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(-40, k * 5.6); ctx.stroke(); }
+  ctx.fillStyle = 'rgba(30,30,90,.55)';
+  for (const [x, y, r] of [[-22, -9, 2.6], [-30, 6, 3], [-16, 4, 2], [-34, -16, 2.2], [-28, 17, 2]]) { ctx.beginPath(); ctx.arc(x, y, r, 0, 7); ctx.fill(); }
+  ctx.restore(); ctx.globalAlpha = 1;
+  // 背鰭、臀鰭
+  const F = finPts(n);
+  ctx.fillStyle = 'rgba(245,140,60,.85)';
+  ctx.beginPath(); smoothPath(ctx, F.dorsal); ctx.closePath(); ctx.fill();
+  ctx.beginPath(); smoothPath(ctx, F.anal); ctx.closePath(); ctx.fill();
+  // 身體
+  const ol = bodyOutline(n);
+  const g = ctx.createLinearGradient(0, -16, 0, 16);
+  g.addColorStop(0, '#5f7f99'); g.addColorStop(.45, '#b4c9d8'); g.addColorStop(1, '#f2f6f8');
+  ctx.beginPath(); smoothPath(ctx, ol); ctx.closePath();
+  ctx.fillStyle = g; ctx.fill();
+  ctx.save(); ctx.clip();
+  ctx.fillStyle = 'rgba(255,120,40,.75)';
+  for (const [i, dy, r] of [[3, -2, 5], [5, 3, 4], [6, -1, 3]]) { ctx.beginPath(); ctx.arc(n[i].x, n[i].y + dy, r, 0, 7); ctx.fill(); }
+  ctx.fillStyle = 'rgba(60,160,230,.7)';
+  for (const [i, dy, r] of [[4, -4, 3.5], [2, 4, 2.6]]) { ctx.beginPath(); ctx.arc(n[i].x, n[i].y + dy, r, 0, 7); ctx.fill(); }
+  ctx.restore();
+  ctx.strokeStyle = 'rgba(40,60,80,.35)'; ctx.lineWidth = 1;
+  ctx.beginPath(); smoothPath(ctx, ol); ctx.closePath(); ctx.stroke();
+  // 鰓、眼、嘴
+  ctx.strokeStyle = 'rgba(40,60,80,.4)'; ctx.lineWidth = 1.1;
+  ctx.beginPath(); ctx.arc(n[1].x + 6, n[1].y, 9, Math.PI * .65, Math.PI * 1.35); ctx.stroke();
+  ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(n[0].x - 1, n[0].y - 2.5, 4.3, 0, 7); ctx.fill();
+  ctx.fillStyle = '#111'; ctx.beginPath(); ctx.arc(n[0].x, n[0].y - 2.5, 2.5, 0, 7); ctx.fill();
+  ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(n[0].x + .8, n[0].y - 3.4, .8, 0, 7); ctx.fill();
+  // 胸鰭（半透明，在身體前面）
+  ctx.save(); ctx.translate(n[2].x + 4, n[2].y + 4); ctx.rotate(R.pecRot);
+  ctx.fillStyle = 'rgba(255,230,200,.6)'; ctx.beginPath(); ctx.ellipse(-6, 0, 7, 3, 0, 0, 7); ctx.fill();
+  ctx.restore();
+}
+
+// ---------- B. SVG 魚 ----------
+const svgFish = document.getElementById('svgFish');
+const SF = {};
+(function buildSvgFish() {
+  const R = fishRig(fish, true), n = R.nodes, F = finPts(n);
+  const defs = svgEl('defs', {}, svgFish);
+  const lg = svgEl('linearGradient', { id: 'sfTailG', x1: '1', x2: '0', y1: '0', y2: '0' }, defs);
+  svgEl('stop', { offset: '0', 'stop-color': '#ffc04d' }, lg); svgEl('stop', { offset: '1', 'stop-color': '#e84a2c' }, lg);
+  SF.root = svgEl('g', {}, svgFish);
+  SF.tail = svgEl('g', {}, SF.root);
+  svgEl('path', { d: TAIL_D, fill: 'url(#sfTailG)', stroke: '#8a2a12', 'stroke-width': 1.3, 'stroke-linejoin': 'round' }, SF.tail);
+  for (const [x, y, r] of [[-22, -9, 2.8], [-30, 6, 3.2], [-16, 4, 2.2], [-34, -16, 2.3], [-28, 17, 2.2]])
+    svgEl('circle', { cx: x, cy: y, r, fill: '#2b2f7a' }, SF.tail);
+  SF.dorsal = svgEl('path', { d: smoothD(F.dorsal), fill: '#f6913e', stroke: '#8a2a12', 'stroke-width': 1.3, 'stroke-linejoin': 'round' }, SF.root);
+  svgEl('path', { d: smoothD(F.anal), fill: '#f6913e', stroke: '#8a2a12', 'stroke-width': 1.3 }, SF.root);
+  const ol = bodyOutline(n);
+  svgEl('path', { d: smoothD(ol), fill: '#a9c2d3', stroke: '#33495c', 'stroke-width': 1.6, 'stroke-linejoin': 'round' }, SF.root);
+  // 肚子（較淺）
+  const belly = [{ x: n[0].x + 3, y: n[0].y + 2 }, ...n.slice(0, 7).map(q => ({ x: q.x, y: q.y + q.h * .25 })),
+    ...n.slice(0, 7).map(q => ({ x: q.x, y: q.y + q.h - 1 })).reverse()];
+  svgEl('path', { d: smoothD(belly), fill: '#eaf1f5' }, SF.root);
+  for (const [i, dy, r, c] of [[3, -2, 5, '#f7843a'], [5, 3, 4, '#f7843a'], [6, -1, 3, '#f7843a'], [4, -4, 3.5, '#3ea4e6'], [2, 4, 2.6, '#3ea4e6']])
+    svgEl('circle', { cx: n[i].x, cy: n[i].y + dy, r, fill: c }, SF.root);
+  svgEl('path', { d: `M${n[1].x + 2},${n[1].y - 8} Q${n[1].x - 4},${n[1].y} ${n[1].x + 2},${n[1].y + 8}`, fill: 'none', stroke: '#33495c', 'stroke-width': 1.3, 'stroke-linecap': 'round' }, SF.root);
+  svgEl('circle', { cx: n[0].x - 1, cy: n[0].y - 2.5, r: 4.6, fill: '#fff', stroke: '#33495c', 'stroke-width': 1.2 }, SF.root);
+  svgEl('circle', { cx: n[0].x, cy: n[0].y - 2.5, r: 2.5, fill: '#111' }, SF.root);
+  SF.pec = svgEl('g', {}, SF.root);
+  svgEl('ellipse', { cx: -6, cy: 0, rx: 7, ry: 3, fill: '#ffe2c4', stroke: '#8a2a12', 'stroke-width': 1 }, SF.pec);
+  SF.pecAt = { x: n[2].x + 4, y: n[2].y + 4 };
+})();
+function drawFishSvg(f) {
+  const R = fishRig(f), tb = R.nodes[FN - 1];
+  SF.root.setAttribute('transform', `translate(${f.x.toFixed(1)},${f.y.toFixed(1)}) scale(${(S * R.sx).toFixed(3)},${S})`);
+  SF.tail.setAttribute('transform', `translate(${tb.x.toFixed(1)},${tb.y.toFixed(1)}) rotate(${deg(R.tailRot).toFixed(1)}) scale(${R.tailSx.toFixed(3)},1)`);
+  SF.pec.setAttribute('transform', `translate(${SF.pecAt.x},${SF.pecAt.y}) rotate(${deg(R.pecRot).toFixed(1)})`);
+}
+
+// ---------- D. 像素魚 ----------
+const pxFish = setupCanvas(document.getElementById('pxFish'));
+const FPAL = { K: '#1d2633', B: '#a9c2d3', D: '#6f8aa0', L: '#eaf1f5', O: '#f7843a', W: '#ffffff', E: '#111111',
+  R: '#ef5a33', Y: '#ffc04d', N: '#ffe2c4' };
+const FISH_BODY = [
+  ".....KKK..........",
+  "....KRRRKK........",
+  "..KKKDDDDDKKKK....",
+  ".KDDDDDDDDDDDDKK..",
+  "KBBBOOBBBBBBBBWEK.",
+  "KBBOOBBBNNBBBBBBBK",
+  ".KLLLLLLLLLLLLLLK.",
+  "..KKKRRKKKKKKKKK..",
+  "....KRK...........",
+];
+const FISH_FRONT = [
+  "..KK..", ".KRRK.", "KDDDDK", "KWDDWK", "KEBBEK", "KBBBBK", "KLLLLK", ".KRRK.", "..KK..",
+];
+let pxFishCache = { key: -1 };
+function fishPixelGrid(R) {
+  const g = makeGrid(25, 11);
+  if (Math.abs(R.sx) < .35) {                              // 轉身中：正面
+    FISH_FRONT.forEach((row, r) => [...row].forEach((ch, c) => { if (ch !== '.') g[r + 1][13 + c] = ch; }));
+    return g;
+  }
+  const w = Math.max(2, Math.round(7 * R.tailSx));          // 尾鰭寬度伸縮 → 像素寬度
+  const shift = R.tailRot * 10;
+  for (let c = 0; c < w; c++) {
+    const col = 6 - c, hh = 1 + 4 * (c + 1) / w, off = Math.round(shift * (c + 1) / w);
+    for (let r = 0; r < 11; r++) {
+      const d = Math.abs(r - 5.5 - off);
+      if (d <= hh) g[r][col] = d > hh - 1 ? 'K' : ((r + c) % 3 === 0 ? 'Y' : 'R');
+    }
+  }
+  const pecOn = Math.sin(fish.pec) > 0;
+  FISH_BODY.forEach((row, r) => [...row].forEach((ch, c) => {
+    if (ch === '.') return;
+    g[r + 1][7 + c] = ch === 'N' ? (pecOn ? 'N' : 'B') : ch;
+  }));
+  return g;
+}
+function drawFishPixel(ctx, f) {
+  const key = Math.floor(T * 12);                           // 每秒 12 格
+  if (key !== pxFishCache.key) { pxFishCache = { key, R: fishRig(f) }; pxFishCache.grid = fishPixelGrid(pxFishCache.R); }
+  const px = 4 * S;
+  drawGrid(ctx, pxFishCache.grid, FPAL, f.x, f.y, 16, 5.5, px, pxFishCache.R.sx < 0);
+}
+
+// ---------- 魚骨架 ----------
+function drawFishBones(ctx, f) {
+  const R = fishRig(f), n = R.nodes, tb = n[FN - 1];
+  place(ctx, f.x, f.y, R.sx);
+  ctx.lineWidth = 1.5 / S; ctx.strokeStyle = '#ff2fb0'; ctx.fillStyle = '#ff2fb0';
+  ctx.beginPath(); n.forEach((p, i) => i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y));
+  const tipX = tb.x - 40 * R.tailSx * Math.cos(R.tailRot), tipY = tb.y - 40 * R.tailSx * Math.sin(R.tailRot);
+  ctx.lineTo(tipX, tipY); ctx.stroke();
+  for (const p of [...n, { x: tipX, y: tipY }]) { ctx.beginPath(); ctx.arc(p.x, p.y, 2.2 / S, 0, 7); ctx.fill(); }
+  ctx.beginPath(); ctx.moveTo(n[2].x + 4, n[2].y + 4);
+  ctx.lineTo(n[2].x + 4 - 12 * Math.cos(R.pecRot), n[2].y + 4 - 12 * Math.sin(R.pecRot)); ctx.stroke();
+}
+
+// ===================================================================
+// 壁虎：行為模擬
+// ===================================================================
+const gk = { x: 150, dir: 1, turnT: 0, turning: false, mode: 'walk', modeT: 0, v: 0, dist: 0,
+  lunge: 0, mouth: 0, nextAuto: 4 };
+const STRIDE = 20, STANCE = .65, CYCLE = STRIDE / STANCE;
+
+function gkAct(m) {
+  if (gk.turning) return;
+  if (m === 'turn') { gk.turning = true; gk.turnT = 0; return; }
+  gk.mode = m; gk.modeT = 0;
+}
+function gkUpdate(dt) {
+  const g = gk; g.modeT += dt;
+  let tv = 0, acc = 6;
+  if (g.mode === 'walk') tv = 30;
+  if (g.mode === 'lunge') {
+    const t = g.modeT;
+    tv = t < .14 ? 230 : 0; acc = 14;
+    g.lunge = t < .1 ? t / .1 : t < .45 ? 1 : t < .8 ? 1 - (t - .45) / .35 : 0;
+    g.mouth = t > .05 && t < .4 ? 1 : 0;
+    if (t > 1.1) { g.mode = 'ambush'; g.modeT = 0; }
+  } else { g.lunge = lerp(g.lunge, 0, ease(dt, 8)); g.mouth = 0; }
+  if (g.turning) { tv = 0; g.turnT += dt / .3; if (g.turnT >= 1) { g.turnT = 0; g.turning = false; g.dir *= -1; } }
+  g.v = lerp(g.v, tv, ease(dt, acc));
+  g.x += g.v * g.dir * dt; g.dist += g.v * dt;
+  if (!g.turning && ((g.dir > 0 && g.x > 265) || (g.dir < 0 && g.x < 95))) {
+    if (g.mode === 'lunge') { g.mode = 'ambush'; g.modeT = 0; }
+    gkAct('turn');
+  }
+  g.x = clamp(g.x, 80, 280);
+  if (auto && (g.nextAuto -= dt) <= 0) {
+    const r = Math.random();
+    if (g.mode === 'ambush') gkAct(r < .55 ? 'lunge' : 'walk');
+    else gkAct(r < .45 ? 'ambush' : r < .65 ? 'turn' : 'walk');
+    g.nextAuto = rand(2, 4.5);
+  }
+}
+
+// 骨架：原點 = 身體下方的地面；頭在 +x
+const G_BASE = [[54, -10], [42, -12], [26, -11], [12, -10], [-2, -10], [-14, -9], [-28, -6], [-42, -3], [-56, -2], [-68, -2], [-80, -3]];
+const G_THICK = [2.5, 5.5, 6.5, 7.5, 7.5, 7, 5, 3.8, 2.8, 1.8, .8];
+const LEG_A = 9, LEG_B = 10;
+function ik(h, f, a, b) {
+  const dx = f.x - h.x, dy = f.y - h.y;
+  const d = clamp(Math.hypot(dx, dy), Math.abs(a - b) + .01, a + b - .01);
+  const base = Math.atan2(dy, dx), off = Math.acos(clamp((a * a + d * d - b * b) / (2 * a * d), -1, 1));
+  const k1 = { x: h.x + a * Math.cos(base + off), y: h.y + a * Math.sin(base + off) };
+  const k2 = { x: h.x + a * Math.cos(base - off), y: h.y + a * Math.sin(base - off) };
+  const knee = k1.y < k2.y ? k1 : k2;                       // 膝蓋朝上：蜥蜴的外展姿勢
+  const ang = Math.atan2(f.y - knee.y, f.x - knee.x);
+  return { knee, foot: { x: knee.x + b * Math.cos(ang), y: knee.y + b * Math.sin(ang) } };
+}
+function gkRig(g, rest = false) {
+  const moving = !rest && g.v > 1;
+  const bob = rest ? 0 : moving ? Math.sin(g.dist / CYCLE * Math.PI * 4) * .8 : Math.sin(T * 2) * .3;
+  const L = rest ? 0 : g.lunge;
+  const tw = (!rest && g.mode === 'ambush' && Math.sin(g.modeT * 1.7) > .5) ? Math.sin(g.modeT * 30) * 2.5 : 0;
+  const nodes = G_BASE.map(([x, y], i) => {
+    let px = x, py = y;
+    if (i <= 5) py -= bob;
+    if (i <= 1) { px += L * 6; py -= L * 5; }
+    if (i === 2) { px += L * 3; py -= L * 2; }
+    if (i >= 6 && moving) py += Math.sin(g.dist * .25 - i) * 1;
+    if (i === 10) py += tw; if (i === 9) py += tw * .4;
+    return { x: px, y: py, t: G_THICK[i] };
+  });
+  const legs = [
+    { a: 2, front: true, near: true, ph: 0 }, { a: 2, front: true, near: false, ph: .5 },
+    { a: 5, front: false, near: true, ph: .5 }, { a: 5, front: false, near: false, ph: 0 },
+  ].map(L0 => {
+    const an = nodes[L0.a];
+    const hip = { x: an.x, y: an.y + 2 - (L0.near ? 0 : 1.5) };
+    const frac = rest ? STANCE / 2 : (((g.dist / CYCLE + L0.ph) % 1) + 1) % 1;
+    let rel, lift = 0;
+    if (frac < STANCE) rel = STRIDE * (.5 - frac / STANCE);
+    else { const t = (frac - STANCE) / (1 - STANCE); rel = STRIDE * (-.5 + t); lift = Math.sin(Math.PI * t) * 5; }
+    const target = { x: an.x + (L0.front ? 5 : -3) + rel, y: -lift - (L0.near ? 0 : 2.5) };
+    return { ...L0, hip, ...ik(hip, target, LEG_A, LEG_B), lift };
+  });
+  return { nodes, legs, mouth: rest ? 0 : g.mouth, L, bob, sx: rest ? 1 : g.dir * Math.cos(Math.PI * g.turnT) };
+}
+
+// ---------- C. Canvas 壁虎 ----------
+const cvGk = setupCanvas(document.getElementById('cvGk'));
+function drawToes(ctx, foot, front, lift, color) {
+  ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = 1.2;
+  const curl = lift > 1 ? .5 : 0;
+  for (const k of [-1.5, -.5, .5, 1.5]) {
+    const a = (front ? 0 : Math.PI) + k * .45 + (front ? curl : -curl);
+    const ex = foot.x + Math.cos(a) * 4.5 * (front ? 1 : -1) * (front ? 1 : -1), ey = foot.y + Math.abs(Math.sin(a)) * .6 - curl * 1.5;
+    const tx = foot.x + k * 2.6, ty = Math.min(ey, foot.y + .5);
+    ctx.beginPath(); ctx.moveTo(foot.x, foot.y); ctx.lineTo(tx, ty); ctx.stroke();
+    ctx.beginPath(); ctx.arc(tx, ty, 1.25, 0, 7); ctx.fill();
+  }
+}
+function drawGkLegCanvas(ctx, leg, col, edge) {
+  ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  for (const [w, c] of [[4.6, edge], [3, col]]) {
+    ctx.strokeStyle = c; ctx.lineWidth = w;
+    ctx.beginPath(); ctx.moveTo(leg.hip.x, leg.hip.y); ctx.lineTo(leg.knee.x, leg.knee.y); ctx.lineTo(leg.foot.x, leg.foot.y); ctx.stroke();
+  }
+  drawToes(ctx, leg.foot, leg.front, leg.lift, col);
+}
+function gkOutline(nodes) {
+  const top = [], bot = [];
+  nodes.forEach((p, i) => {
+    const a = nodes[Math.max(0, i - 1)], b = nodes[Math.min(nodes.length - 1, i + 1)];
+    let tx = b.x - a.x, ty = b.y - a.y; const l = Math.hypot(tx, ty) || 1; tx /= l; ty /= l;
+    const nx = -ty, ny = tx;                                  // 頭→尾方向 (-x) 的法線朝上
+    top.push({ x: p.x + nx * p.t, y: p.y + ny * p.t });
+    bot.push({ x: p.x - nx * p.t, y: p.y - ny * p.t });
+  });
+  return [{ x: nodes[0].x + 2, y: nodes[0].y + .5 }, ...top, ...bot.reverse()];
+}
+function drawGkCanvas(ctx, g) {
+  const R = gkRig(g), n = R.nodes;
+  place(ctx, g.x, GROUND, R.sx);
+  // 影子
+  ctx.fillStyle = 'rgba(0,0,0,.18)'; ctx.beginPath(); ctx.ellipse(10, 1, 48, 3, 0, 0, 7); ctx.fill();
+  R.legs.filter(l => !l.near).forEach(l => drawGkLegCanvas(ctx, l, '#b0926e', '#7d6447'));
+  const ol = gkOutline(n);
+  const gr = ctx.createLinearGradient(0, -20, 0, 0);
+  gr.addColorStop(0, '#c4a27a'); gr.addColorStop(.5, '#dfc6a2'); gr.addColorStop(1, '#f4e9d8');
+  ctx.beginPath(); smoothPath(ctx, ol); ctx.closePath();
+  ctx.fillStyle = gr; ctx.fill();
+  ctx.strokeStyle = 'rgba(90,65,40,.45)'; ctx.lineWidth = 1; ctx.stroke();
+  // 疣粒與尾環
+  ctx.fillStyle = 'rgba(140,105,70,.55)';
+  for (let i = 2; i <= 6; i++) for (const d of [.3, .7]) {
+    const p = { x: lerp(n[i].x, n[i + 1].x, d), y: lerp(n[i].y, n[i + 1].y, d) - lerp(n[i].t, n[i + 1].t, d) * .55 };
+    ctx.beginPath(); ctx.arc(p.x, p.y, 1.1, 0, 7); ctx.fill();
+  }
+  ctx.strokeStyle = 'rgba(140,105,70,.4)'; ctx.lineWidth = 1.2;
+  for (let i = 6; i <= 9; i++) { ctx.beginPath(); ctx.moveTo(n[i].x, n[i].y - n[i].t * .9); ctx.lineTo(n[i].x + 1, n[i].y + n[i].t * .6); ctx.stroke(); }
+  // 嘴
+  const h0 = n[0], h1 = n[1];
+  if (R.mouth) {
+    ctx.fillStyle = '#9b3d43';
+    ctx.beginPath(); ctx.moveTo(h0.x + 2, h0.y + .5); ctx.lineTo(h1.x - 2, h1.y + 3); ctx.lineTo(h0.x - 1, h0.y + 7); ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = 'rgba(90,65,40,.7)'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(h1.x - 2, h1.y + 3); ctx.lineTo(h0.x - 1, h0.y + 7); ctx.stroke();
+  } else {
+    ctx.strokeStyle = 'rgba(90,65,40,.6)'; ctx.lineWidth = .9;
+    ctx.beginPath(); ctx.moveTo(h0.x + 1.5, h0.y + 1); ctx.quadraticCurveTo(h1.x + 4, h1.y + 4, h1.x - 3, h1.y + 2.5); ctx.stroke();
+  }
+  // 眼（壁虎是直立瞳孔）
+  const ex = h1.x + 2, ey = h1.y - 2.5;
+  ctx.fillStyle = '#c9a04e'; ctx.beginPath(); ctx.arc(ex, ey, 3.3, 0, 7); ctx.fill();
+  ctx.strokeStyle = 'rgba(90,65,40,.7)'; ctx.lineWidth = .8; ctx.stroke();
+  ctx.fillStyle = '#1a1208'; ctx.beginPath(); ctx.ellipse(ex, ey, .8, 2.6, 0, 0, 7); ctx.fill();
+  R.legs.filter(l => l.near).forEach(l => drawGkLegCanvas(ctx, l, '#dcc29e', '#8a6d4c'));
+}
+
+// ---------- B. SVG 壁虎（紙偶部件） ----------
+const svgGk = document.getElementById('svgGk');
+const SG = {};
+function capsuleD(len, w0, w1) {
+  return `M0,${-w0} L${len},${-w1} A${w1},${w1} 0 0 1 ${len},${w1} L0,${w0} A${w0},${w0} 0 0 1 0,${-w0} Z`;
+}
+(function buildSvgGk() {
+  const R = gkRig(gk, true), n = R.nodes;
+  const ST = { stroke: '#5e4630', 'stroke-width': 1.2, 'stroke-linejoin': 'round' };
+  SG.root = svgEl('g', {}, svgGk);
+  svgEl('ellipse', { cx: 10, cy: 1, rx: 48, ry: 3, fill: 'rgba(0,0,0,.18)' }, SG.root);
+  const mkLeg = (near) => {
+    const col = near ? '#e2c7a0' : '#b39572';
+    const up = svgEl('path', { d: capsuleD(LEG_A, 2.4, 1.9), fill: col, ...ST }, SG.root);
+    const lo = svgEl('path', { d: capsuleD(LEG_B, 1.9, 1.5), fill: col, ...ST }, SG.root);
+    const toes = svgEl('g', {}, SG.root);
+    for (const k of [-1.5, -.5, .5, 1.5]) svgEl('circle', { cx: k * 2.6, cy: 0, r: 1.5, fill: col, ...ST, 'stroke-width': .8 }, toes);
+    return { up, lo, toes };
+  };
+  SG.far = [mkLeg(false), mkLeg(false)];
+  // 尾巴：3 段剛體
+  SG.tailDef = [[5, 7, 6.5, 3.8], [7, 9, 3.8, 1.8], [9, 10, 1.8, .7]];
+  SG.tail = SG.tailDef.slice().reverse().map(([a, b, w0, w1]) => {
+    const len = Math.hypot(n[b].x - n[a].x, n[b].y - n[a].y) + 2;
+    const p = svgEl('path', { d: capsuleD(len, w0, w1), fill: '#d8bb92', ...ST }, SG.root);
+    return { a, b, p };
+  }).reverse();
+  SG.torso = svgEl('g', {}, SG.root);
+  svgEl('path', { d: 'M-20,-9 C-16,-18 24,-20 36,-12 C30,-3 -12,-1.5 -20,-9 Z', fill: '#e0c39a', ...ST }, SG.torso);
+  svgEl('path', { d: 'M-16,-6 C-6,-3 20,-3 32,-7 C26,-2.5 -8,-1.5 -16,-6 Z', fill: '#f4e8d4' }, SG.torso);
+  for (const [x, y] of [[-8, -14], [2, -16], [12, -16], [22, -15], [-2, -12], [16, -13]])
+    svgEl('circle', { cx: x, cy: y, r: 1.3, fill: '#a7845c' }, SG.torso);
+  SG.head = svgEl('g', {}, SG.root);
+  SG.jaw = svgEl('g', {}, SG.head);
+  svgEl('path', { d: 'M-3,2 L17,1.5 C14,4.5 4,5.5 -3,4.5 Z', fill: '#efdcbf', ...ST }, SG.jaw);
+  svgEl('path', { d: 'M-8,-5 C0,-9 13,-6 18,-1 L18,1.5 C10,2.5 -2,3 -8,4 Z', fill: '#e0c39a', ...ST }, SG.head);
+  svgEl('circle', { cx: 4, cy: -2.5, r: 3.3, fill: '#c9a04e', ...ST, 'stroke-width': 1 }, SG.head);
+  svgEl('ellipse', { cx: 4, cy: -2.5, rx: .8, ry: 2.6, fill: '#1a1208' }, SG.head);
+  SG.near = [mkLeg(true), mkLeg(true)];
+})();
+function placeSeg(el, a, b) {
+  el.setAttribute('transform', `translate(${a.x.toFixed(1)},${a.y.toFixed(1)}) rotate(${deg(Math.atan2(b.y - a.y, b.x - a.x)).toFixed(1)})`);
+}
+function drawGkSvg(g) {
+  const R = gkRig(g), n = R.nodes;
+  SG.root.setAttribute('transform', `translate(${g.x.toFixed(1)},${GROUND}) scale(${(S * R.sx).toFixed(3)},${S})`);
+  const setLeg = (L, leg) => {
+    placeSeg(L.up, leg.hip, leg.knee); placeSeg(L.lo, leg.knee, leg.foot);
+    L.toes.setAttribute('transform', `translate(${leg.foot.x.toFixed(1)},${(leg.foot.y + .3).toFixed(1)})`);
+  };
+  const far = R.legs.filter(l => !l.near), near = R.legs.filter(l => l.near);
+  far.forEach((l, i) => setLeg(SG.far[i], l)); near.forEach((l, i) => setLeg(SG.near[i], l));
+  SG.tail.forEach(t => placeSeg(t.p, n[t.a], n[t.b]));
+  SG.torso.setAttribute('transform', `translate(0,${(-R.bob).toFixed(2)})`);
+  SG.head.setAttribute('transform', `translate(${(38 + R.L * 6).toFixed(1)},${(-11 - R.L * 5 - R.bob).toFixed(1)}) rotate(${(-R.L * 8).toFixed(1)})`);
+  SG.jaw.setAttribute('transform', `rotate(${R.mouth * 28} -3 2)`);
+}
+
+// ---------- D. 像素壁虎 ----------
+const pxGk = setupCanvas(document.getElementById('pxGk'));
+const GPAL = { K: '#4a3826', B: '#e0c49c', L: '#f5ead8', s: '#b08a5e', E: '#1a1208', D: '#b39572', R: '#a33a3a' };
+const GK_BODY = [
+  "................KKKK.....",
+  "......KKKKKKKKKKBBBBKK...",
+  "...KKKBBsBBBsBBBBBBEBBK..",
+  "KKKBBBBBBBBBBBBBBBBBBBBBK",
+  ".KLLLLLLLLLLLLLLLLLLLLLKK",
+  "..KKKKKKKKKKKKKKKKKKKKK..",
+];
+const GK_BODY_OPEN = [
+  "................KKKK.....",
+  "......KKKKKKKKKKBBBBKK...",
+  "...KKKBBsBBBsBBBBBBEBBK..",
+  "KKKBBBBBBBBBBBBBBBBBBBKKK",
+  ".KLLLLLLLLLLLLLLLLLLLKRRK",
+  "..KKKKKKKKKKKKKKKKKKKKKK.",
+];
+const GX0 = -96, GY0 = -30, GCELL = 3, GGW = 56, GGH = 11;
+let pxGkCache = { key: -1 };
+function gkPixelGrid(R) {
+  const g = makeGrid(GGW, GGH);
+  const put = (x, y, ch) => {
+    const c = Math.floor((x - GX0) / GCELL), r = Math.floor((Math.min(y, -.5) - GY0) / GCELL);
+    if (r >= 0 && r < GGH && c >= 0 && c < GGW) g[r][c] = ch;
+  };
+  const line = (a, b, ch, thick = 1) => {
+    const steps = Math.ceil(Math.hypot(b.x - a.x, b.y - a.y));
+    for (let i = 0; i <= steps; i++) {
+      const x = lerp(a.x, b.x, i / steps), y = lerp(a.y, b.y, i / steps);
+      put(x, y, ch); if (thick > 1) put(x, y - GCELL, ch);
+    }
+  };
+  const legPx = (l, ch) => { line(l.hip, l.knee, ch); line(l.knee, l.foot, ch); put(l.foot.x + (l.front ? 3 : -3), l.foot.y, ch); };
+  R.legs.filter(l => !l.near).forEach(l => legPx(l, 'D'));
+  const n = R.nodes;
+  line(n[5], n[7], 'B', 2); for (let i = 7; i < 10; i++) line(n[i], n[i + 1], 'B');
+  const spr = R.mouth ? GK_BODY_OPEN : GK_BODY;
+  spr.forEach((row, r) => [...row].forEach((ch, c) => { if (ch !== '.') put(-18 + c * 3 + R.L * 6 + 1, -20 + r * 3 - R.bob + 1, ch); }));
+  R.legs.filter(l => l.near).forEach(l => legPx(l, 'B'));
+  return outline(g);
+}
+function drawGkPixel(ctx, g) {
+  const key = Math.floor(T * 12);
+  if (key !== pxGkCache.key) { pxGkCache = { key, R: gkRig(g) }; pxGkCache.grid = gkPixelGrid(pxGkCache.R); }
+  const px = GCELL * S;
+  drawGrid(ctx, pxGkCache.grid, GPAL, g.x, GROUND, -GX0 / GCELL, -GY0 / GCELL, px, pxGkCache.R.sx < 0);
+}
+
+// ---------- 壁虎骨架 ----------
+function drawGkBones(ctx, g) {
+  const R = gkRig(g), n = R.nodes;
+  place(ctx, g.x, GROUND, R.sx);
+  ctx.lineWidth = 1.5 / S; ctx.strokeStyle = '#ff2fb0'; ctx.fillStyle = '#ff2fb0';
+  ctx.beginPath(); n.forEach((p, i) => i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)); ctx.stroke();
+  for (const p of n) { ctx.beginPath(); ctx.arc(p.x, p.y, 2 / S, 0, 7); ctx.fill(); }
+  for (const l of R.legs) {
+    ctx.strokeStyle = l.near ? '#ff2fb0' : '#b02fff';
+    ctx.beginPath(); ctx.moveTo(l.hip.x, l.hip.y); ctx.lineTo(l.knee.x, l.knee.y); ctx.lineTo(l.foot.x, l.foot.y); ctx.stroke();
+    ctx.fillStyle = l.lift > .5 ? '#ffd400' : '#00d2a0';   // 黃 = 抬腳中，綠 = 踩地
+    ctx.beginPath(); ctx.arc(l.foot.x, l.foot.y, 2.4 / S, 0, 7); ctx.fill();
+  }
+}
+
+// ===================================================================
+// 迴圈與控制
+// ===================================================================
+const overlays = [...document.querySelectorAll('canvas.ov')].map(setupCanvas);
+let last = performance.now();
+function loop(now) {
+  const raw = Math.min(.05, (now - last) / 1000); last = now;
+  const dt = raw * speed;
+  if (dt > 0) {
+    T += dt;
+    // 固定步長：加速時結果不變
+    let rem = dt; while (rem > 0) { const st = Math.min(rem, 1 / 120); fishUpdate(st); gkUpdate(st); rem -= st; }
+  }
+  clear(cvFish); drawFishCanvas(cvFish, fish);
+  drawFishSvg(fish);
+  clear(pxFish); drawFishPixel(pxFish, fish);
+  clear(cvGk); drawGkCanvas(cvGk, gk);
+  drawGkSvg(gk);
+  clear(pxGk); drawGkPixel(pxGk, gk);
+  overlays.forEach((ctx, i) => {
+    clear(ctx);
+    if (showBones) (i < 3 ? drawFishBones : drawGkBones)(ctx, i < 3 ? fish : gk);
+  });
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+
+const group = (sel, attr, fn) => document.querySelectorAll(sel).forEach(b => b.onclick = () => {
+  document.querySelectorAll(sel).forEach(x => x.classList.toggle('on', x === b)); fn(+b.dataset[attr]);
+});
+group('[data-s]', 's', v => { S = v; pxFishCache.key = pxGkCache.key = -1; });
+group('[data-sp]', 'sp', v => { speed = v; });
+document.getElementById('bones').onclick = e => { showBones = !showBones; e.target.classList.toggle('on', showBones); };
+document.getElementById('auto').onclick = e => { auto = !auto; e.target.classList.toggle('on', auto); };
+document.querySelectorAll('#fishBtns button').forEach(b => b.onclick = () => { fishAct(b.dataset.a); fish.nextAuto = 6; });
+document.querySelectorAll('#gkBtns button').forEach(b => b.onclick = () => { gkAct(b.dataset.a); gk.nextAuto = 6; });
+
+// 網址參數（測試用）：?s=1.6&bones=1&auto=0
+const QS = new URLSearchParams(location.search);
+if (QS.get('s')) document.querySelector(`[data-s="${QS.get('s')}"]`)?.click();
+if (QS.get('bones') === '1') document.getElementById('bones').click();
+if (QS.get('auto') === '0') document.getElementById('auto').click();
+</script>
+</body>
+</html>
