@@ -4,7 +4,7 @@
 // =====================================================================
 
 const DRAW = { fish: drawFish, turtle: drawTurtle, frog: drawFrog, gecko: drawGecko, mosquito: drawMosquito, larva: drawLarva,
-               tadpole: drawTadpole, whale: drawWhale, nest: drawNest };
+               tadpole: drawTadpole, whale: drawWhale, nest: drawNest, cricket: drawCricket, fly: drawFly };
 
 // ---------------------------------------------------------------------
 // 場景
@@ -71,6 +71,12 @@ function decorOutline(d, n = 28) {
 function drawDecor(d) {
   const wy = world.waterY;
   if (d.type === 'plant') return drawPlant(d);
+  if (d.type === 'bubbler') {                                  // 氣泡石
+    G.poly(ellipsePts(d.x, d.y - 5, d.w / 2, d.h / 2, 0, 18), { lin: [0, d.y - 12, 0, d.y, [[0, '#b9c2c6'], [1, '#6f7a80']]] }, '#4f585c', 1);
+    for (let i = -2; i <= 2; i++) G.circle(d.x + i * 5, d.y - 8, 1, '#4f585c');
+    G.line([P(d.x + d.w / 2 - 2, d.y - 6), P(d.x + d.w / 2 + 30, d.y - 2), P(TANK.right - 4, d.y - 2)], 2, 'rgba(60,70,60,.5)');   // 打氣管
+    return;
+  }
   if (d.type === 'wood') {
     const [a, b] = woodEnds(d), c = Math.cos(d.rot), s = Math.sin(d.rot), nx = -s * d.h / 2, ny = c * d.h / 2;
     const body = chaikin([P(a.x + nx, a.y + ny), P(a.x - nx, a.y - ny), P(b.x - nx, b.y - ny), P(b.x + nx, b.y + ny)], true, 1);
@@ -235,7 +241,7 @@ function drawFrog(e) {
   G.poly(FROG_BODY, { lin: [0, -24, 0, -3, [[0, '#3c8a34'], [1, '#6cbf4c']]] }, '#24511f', 1);
   G.poly(FROG_BELLY, '#e8572a');
   for (const [x, y, r] of [[-8, -15, 2.2], [0, -19, 1.8], [8, -20, 1.6], [-2, -12, 1.6], [-12, -10, 2], [4, -14, 1.3]]) G.circle(x, y, r, '#1d2a14');
-  const pulse = 1 + Math.max(0, Math.sin(world.t * 3 + e.id)) * .45;
+  const pulse = e.croakT > 0 ? 1 + Math.abs(Math.sin(world.t * 14)) * 1.3 : 1 + Math.max(0, Math.sin(world.t * 3 + e.id)) * .45;   // 鳴叫時鳴囊大幅鼓起
   G.poly(ellipsePts(15, -8, 5 * pulse, 2.6 * pulse, 0, 14), '#f3b07a');
   G.line([P(23, -14), P(13, -12.5)], 1, '#24511f');
   G.circle(12, -23, 4.6, '#4fa040', '#24511f', 1);
@@ -481,6 +487,39 @@ function drawWhale(e) {
   }
 }
 
+
+// ---------------------------------------------------------------------
+// 活餌：蟋蟀（側面，原點 = 腳下地面）、果蠅
+// ---------------------------------------------------------------------
+function drawCricket(e) {
+  const s = e.size * 1.2, air = e.mode === 'hop' || e.mode === 'fall', swim = e.mode === 'swim';
+  G.save(); G.tf(e.x, e.y, 0, e.dir * s, s);
+  if (e.dead) G.alpha(.5);
+  if (swim) G.tf(0, 2, Math.sin(e.phase) * .15);
+  const leg = '#5a3b1e';
+  // 後腳（跳躍用的大腿）：空中時伸直
+  const knee = air ? P(-12, -6) : P(-8, -10), foot = air ? P(-18, 1) : P(-13, 0);
+  G.line([P(-2, -4), knee, foot], 1.6, leg);
+  G.line([P(3, -3), P(5, 0)], 1, leg); G.line([P(6, -3), P(9, 0)], 1, leg);
+  G.poly(ellipsePts(-4, -4, 7.5, 3.4, -.08, 14), '#6b4423');
+  G.poly(ellipsePts(4, -4.6, 3.6, 3, 0, 12), '#4f311a');
+  G.circle(8.2, -4.4, 2.6, '#3e2614');
+  G.line([P(-11, -4), P(-15, -6)], .8, leg); G.line([P(-11, -3.5), P(-15, -2.5)], .8, leg);   // 尾毛
+  const tw = Math.sin(e.phase * .6) * 1.5;
+  G.line([P(9.5, -5.5), P(14, -10 + tw), P(19, -9 + tw)], .6, '#3e2614');                   // 觸角
+  G.line([P(9.5, -5), P(15, -8 - tw), P(20, -5 - tw)], .6, '#3e2614');
+  G.restore();
+}
+function drawFly(e) {
+  G.save(); G.tf(e.x, e.y, 0, e.dir, 1);
+  if (e.dead) G.alpha(.5);
+  const flap = Math.abs(Math.sin((e.phase + e.id) * 70));
+  G.save(); G.alpha(.5); G.poly(ellipsePts(-1, -2 - 2 * flap, 1.6, 3 * flap + .8, -.3, 8), '#e8f2ff'); G.restore();
+  G.poly(ellipsePts(-1, 0, 2.6, 1.4, 0, 8), '#b08a4a');
+  G.circle(1.8, -.2, 1.1, '#c0392b');
+  G.restore();
+}
+
 // ---------------------------------------------------------------------
 // 編輯用疊加層（選取框、除錯）
 // ---------------------------------------------------------------------
@@ -490,6 +529,7 @@ function entCenter(e) {
   if (e.kind === 'frog') return P(e.x, e.y - 13 * s);
   if (e.kind === 'larva') return P(e.x, e.y + 2);
   if (e.kind === 'nest') return P(e.x, e.y - 3);
+  if (e.kind === 'cricket') return P(e.x, e.y - 5);
   if (e.kind === 'gecko' && e.surface !== 'glass') return P(e.x, e.y - 10 * s);
   return P(e.x, e.y);
 }
@@ -540,15 +580,19 @@ function drawDebug(e, sel) {
 function render(selected) {
   drawBackground();
   drawWaterBack();
+  drawLightShafts();
   for (const e of world.ents) if (e.kind === 'gecko' && e.surface === 'glass') drawGecko(e);   // 背面玻璃上的壁虎
   for (const d of world.decor) if (d.type === 'plant') drawDecor(d);
   for (const d of world.decor) if (d.type !== 'plant') drawDecor(d);
   for (const f of world.food) drawFood(f);
-  const order = { nest: 0, larva: 0, tadpole: 1, whale: 1, fish: 2, turtle: 3, frog: 4, gecko: 5, mosquito: 6 };
+  const order = { nest: 0, larva: 0, tadpole: 1, whale: 1, fish: 2, cricket: 3, turtle: 3, frog: 4, gecko: 5, mosquito: 6, fly: 6 };
   const list = world.ents.filter(e => !(e.kind === 'gecko' && e.surface === 'glass')).sort((a, b) => order[a.kind] - order[b.kind]);
   for (const e of list) DRAW[e.kind](e);
   drawSubstrate();
+  drawCaustics();
   drawWaterFront();
+  drawParticles();
+  drawNightOverlay();
   drawFrame();
   drawFx();
   for (const e of world.ents) drawDebug(e, e === selected);

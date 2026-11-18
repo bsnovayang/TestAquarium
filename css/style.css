@@ -92,3 +92,19 @@ body.view #cv { border-radius: 0; box-shadow: none; cursor: pointer; }
 .ev time { color: var(--muted); margin-right: 6px; font-variant-numeric: tabular-nums; }
 
 .sizeSlider { width: 100%; margin: 0 0 4px; }
+
+/* 平衡面板 */
+#balance { position: absolute; top: 16px; right: 16px; bottom: 16px; width: min(420px, calc(100% - 32px)); z-index: 6;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 8px 30px rgba(0,0,0,.4);
+  display: flex; flex-direction: column; }
+#balance[hidden] { display: none; }
+.balhead { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; padding: 10px 12px; border-bottom: 1px solid var(--line); }
+.balhead small { color: var(--muted); }
+.balhead span { margin-left: auto; display: flex; gap: 4px; }
+#balBody { overflow-y: auto; padding: 6px 12px 12px; }
+#balBody summary { cursor: pointer; padding: 6px 0; font-weight: 600; }
+.balgrid { display: grid; grid-template-columns: 1fr auto; gap: 4px 10px; align-items: center; padding: 0 0 8px 12px; font-size: 13px; }
+.balgrid label { color: var(--muted); }
+.balv input { width: 64px; font: inherit; color: var(--ink); background: var(--panel2); border: 1px solid var(--line); border-radius: 5px; padding: 1px 4px; }
+.balv.changed input { border-color: var(--warn); }
+button:disabled { opacity: .4; cursor: default; }

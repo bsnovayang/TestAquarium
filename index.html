@@ -13,6 +13,12 @@
   <main id="stageWrap">
     <canvas id="cv"></canvas>
     <button id="toEdit" class="floating">✎ 編輯模式</button>
+    <div id="balance" hidden>
+      <div class="balhead"><b>平衡調整</b><small>改了立刻生效，並記在這個瀏覽器</small>
+        <span><button id="balExport">匯出</button><button id="balImport">匯入</button><button id="balReset">重設預設</button><button id="balClose">✕</button></span></div>
+      <div id="balBody"></div>
+      <input id="balFile" type="file" accept=".json,application/json" hidden>
+    </div>
   </main>
 
   <aside id="side">
@@ -32,11 +38,13 @@
     <div class="grp"><span>速度</span>
       <button data-speed="0">⏸</button><button data-speed="1" class="on">1x</button><button data-speed="2">2x</button>
       <button data-speed="5">5x</button><button data-speed="10">10x</button></div>
+    <div class="grp"><button id="undo" title="復原（Ctrl+Z）">↶ 復原</button><button id="redo" title="重做（Ctrl+Y）">↷ 重做</button></div>
     <div class="grp"><button id="feed">🍤 餵食</button></div>
     <div class="grp">
       <button id="save">存檔</button><button id="load">讀檔</button>
       <button id="export">匯出</button><button id="import">匯入</button>
       <button id="sample">範例場景</button><button id="clear">清空</button></div>
+    <div class="grp"><button id="openBal">⚙ 平衡</button></div>
     <div class="grp right"><button id="toView" class="primary">▶ 觀賞模式</button></div>
     <input id="file" type="file" accept=".json,application/json" hidden>
   </footer>
@@ -47,9 +55,11 @@
 <script src="js/core.js"></script>
 <script src="js/species.js"></script>
 <script src="js/world.js"></script>
+<script src="js/effects.js"></script>
 <script src="js/creatures.js"></script>
 <script src="js/draw.js"></script>
 <script src="js/ui.js"></script>
+<script src="js/balance.js"></script>
 <script src="js/main.js"></script>
 </body>
 </html>

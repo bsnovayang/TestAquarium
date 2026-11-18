@@ -5,7 +5,7 @@
 // =====================================================================
 
 const UPDATE = { fish: updFish, turtle: updTurtle, frog: updFrog, gecko: updGecko, mosquito: updMosquito, larva: updLarva,
-                 tadpole: updTadpole, whale: updWhale, nest: updNest };
+                 tadpole: updTadpole, whale: updWhale, nest: updNest, cricket: updCricket, fly: updFly };
 
 function startTurn(e) { if (!e.turning) { e.turning = true; e.turnT = 0; } }
 function tickTurn(e, dt, dur) {
@@ -37,6 +37,7 @@ function fishWander(e) {
     tx = rand(TANK.left + 40, TANK.right - 40);
     ty = rand(wy + 20, TANK.floor - 20);
     if (sp.bottom) ty = rand(Math.max(wy + 30, TANK.floor - 150), TANK.floor - 25);
+    if (isNight() && !sp.territorial) ty = rand(Math.max(wy + 30, TANK.floor - 110), TANK.floor - 15);   // 夜裡到底層睡覺
     if (sp.territorial && e.home) tx = clamp(e.home.x + rand(-220, 220), TANK.left + 40, TANK.right - 40);
     if (e.size < e.adult * .6 && Math.random() < .6) {        // 魚苗喜歡躲在水草附近
       const plants = world.decor.filter(d => d.type === 'plant');
@@ -45,7 +46,7 @@ function fishWander(e) {
     if (sp.school) { const c = schoolCenter(e); if (c) { tx = lerp(tx, c.x, .7); ty = lerp(ty, c.y, .7); } }
   } while (solidAt(tx, ty) && ++tries < 10);
   e.tx = tx; e.ty = ty; e.think = rand(2, 5);
-  e.mode = Math.random() < .2 ? 'hover' : 'cruise';
+  e.mode = Math.random() < (isNight() ? .75 : .2) ? 'hover' : 'cruise';
 }
 function updFish(e, dt) {
   const sp = SPECIES[e.type], wy = world.waterY, L = sp.len * e.size;
@@ -58,8 +59,10 @@ function updFish(e, dt) {
       if (world.settings.death) { e.hp -= dt * 12; if (e.hp <= 0) kill(e, '缺水死亡'); }
     }
     fishAnim(e, dt, 5, 1);
+    e.wasOut = true;
     return;
   }
+  if (e.wasOut) { e.wasOut = false; if (e.vy > 60) splash(e.x, wy, .4 * e.size * sp.len / 64); }
   if (e.vy > 0) { e.vy = lerp(e.vy, 0, ease(dt, 4)); e.y += e.vy * dt; }   // 掉進水裡的減速
 
   e.think -= dt;
@@ -81,8 +84,8 @@ function updFish(e, dt) {
   else if (prey) { e.tx = prey.x; e.ty = prey.y; e.mode = 'chase'; tgt = sp.dash * .8; e.state = '追' + entName(prey); }
   else {
     if (e.think <= 0 || e.mode === 'chase' || e.mode === 'flee' || (Math.abs(e.tx - e.x) < 15 && Math.abs(e.ty - e.y) < 15)) fishWander(e);
-    tgt = e.mode === 'hover' ? 0 : sp.speed;
-    e.state = e.mode === 'hover' ? '懸停' : '巡游';
+    tgt = e.mode === 'hover' ? 0 : sp.speed * (isNight() ? .5 : 1);
+    e.state = e.mode === 'hover' ? (isNight() ? '睡覺' : '懸停') : '巡游';
   }
   const dx = e.tx - e.x;
   if (Math.abs(dx) > 18 && Math.sign(dx) !== e.dir) startTurn(e);
@@ -157,9 +160,9 @@ function updTurtle(e, dt) {
     e.state = '掉落';
     e.vy = Math.min(e.vy + 600 * dt, 500);
     const prevY = e.y; e.y += e.vy * dt;
-    if (e.y > wy + 4 && deep) { e.mode = 'swim'; e.vy *= .3; return; }
+    if (e.y > wy + 4 && deep) { if (e.vy > 80) splash(e.x, wy, .5 * e.size); e.mode = 'swim'; e.vy *= .3; return; }
     const g = groundY(e.x, prevY - 2, 4);
-    if (e.y >= g) { e.y = g; e.vy = 0; e.mode = 'walk'; e.modeT = 0; }
+    if (e.y >= g) { if (e.vy > 120) dust(e.x, g, .5 * e.size); e.y = g; e.vy = 0; e.mode = 'walk'; e.modeT = 0; }
     return;
   }
   if (e.mode === 'swim') {
@@ -178,9 +181,10 @@ function updTurtle(e, dt) {
     } else {
       if (e.think <= 0 || Math.hypot(e.tx - e.x, e.ty - e.y) < 20 || e.tx === undefined) {
         e.tx = rand(TANK.left + 60, TANK.right - 60); e.ty = rand(wy + 30, TANK.floor - 30); e.think = rand(3, 7);
+        if (isNight()) { e.ty = TANK.floor - 12; e.think = rand(8, 15); }   // 夜裡在水底休息
       }
-      e.state = '游泳';
-      if (Math.random() < dt / 25) e.wantBask = true;
+      e.state = isNight() ? '在水底休息' : '游泳';
+      if (daylight() > .6 && Math.random() < dt / 25) e.wantBask = true;   // 只在白天曬背
     }
     if (Math.abs(e.tx - e.x) > 25 && Math.sign(e.tx - e.x) !== e.dir) startTurn(e);
     let spd = prey ? sp.speed * 1.6 : sp.speed;
@@ -207,7 +211,7 @@ function updTurtle(e, dt) {
   if (e.y > wy + 4 && deep) { e.mode = 'swim'; e.wantWater = false; e.modeT = 0; return; }
   if (e.mode === 'bask') {
     e.state = '曬背';
-    if (e.modeT > e.baskDur) { e.mode = 'walk'; e.modeT = 0; e.wantWater = true; }
+    if (e.modeT > e.baskDur || isNight()) { e.mode = 'walk'; e.modeT = 0; e.wantWater = true; }
     return;
   }
   e.mode = 'walk';
@@ -288,7 +292,9 @@ function updFrog(e, dt) {
     const t = frogJumpTarget(e);
     if (t) { frogLaunch(e, t); return; }
   }
-  e.state = e.tongue ? '吐舌頭捕食' : e.mode === 'float' ? '浮在水面' : '坐著';
+  if (e.croakT > 0) e.croakT -= dt;
+  else if (isNight() && !e.tongue && Math.random() < dt / 12) { e.croakT = 2.2; addFx(e.x, e.y - 30 * e.size, '呱', '#dff0ff'); }
+  e.state = e.tongue ? '吐舌頭捕食' : e.croakT > 0 ? '鳴叫' : e.mode === 'float' ? '浮在水面' : '坐著';
 }
 function frogJumpTarget(e) {
   const wy = world.waterY;
@@ -304,11 +310,14 @@ function frogJumpTarget(e) {
   return null;
 }
 function frogLaunch(e, t) {
+  if (e.mode === 'float') splash(e.x, world.waterY, .3 * e.size);
   const T = clamp(Math.abs(t.x - e.x) / 300, .45, .9);
   e.vx = (t.x - e.x) / T; e.vy = (t.y - e.y - .5 * FROG_G * T * T) / T;
   e.dir = Math.sign(e.vx) || e.dir; e.mode = 'jump'; e.modeT = 0;
 }
-function frogLand(e, m) { e.mode = m; e.vx = 0; e.vy = 0; e.modeT = 0; e.landT = .18; e.think = Math.max(e.think, rand(1.5, 3)); }
+function frogLand(e, m) {
+  if (m === 'float') splash(e.x, world.waterY, .45 * e.size); else dust(e.x, e.y, .3 * e.size);
+  e.mode = m; e.vx = 0; e.vy = 0; e.modeT = 0; e.landT = .18; e.think = Math.max(e.think, rand(1.5, 3)); }
 
 // =====================================================================
 // 壁虎：地面（側面圖）＋ 背面玻璃（俯視圖）
@@ -366,7 +375,8 @@ function chooseGlassGoal(e) {
   }
   e.goal = P(rand(TANK.left + 30, TANK.right - 30), rand(TANK.top + 30, Math.max(TANK.top + 40, wy - 40)));
   e.goToGround = false; e.think = rand(3, 7);
-  if (Math.random() < .35) e.pause = rand(1.5, 4);
+  const night = isNight();                                    // 壁虎夜行：白天常常停著不動
+  if (Math.random() < (night ? .2 : .6)) e.pause = night ? rand(1, 3) : rand(4, 10);
 }
 function updGeckoGlass(e, dt) {
   const sp = SPECIES.gecko, wy = world.waterY, airLimit = Math.max(TANK.top + 14, wy - 18);
@@ -394,8 +404,8 @@ function updGeckoGlass(e, dt) {
   } else {
     if (!e.goal || dist(e, e.goal) < 12 || e.think <= 0) chooseGlassGoal(e);
     if (e.pause > 0) e.pause -= dt;
-    spd = e.pause > 0 ? 0 : sp.speed;
-    e.state = spd ? (e.goToGround ? '爬向陸地' : '在玻璃上爬') : '靜止埋伏';
+    spd = e.pause > 0 ? 0 : sp.speed * (isNight() ? 1.2 : .7);
+    e.state = spd ? (e.goToGround ? '爬向陸地' : '在玻璃上爬') : (isNight() ? '靜止埋伏' : '白天休息');
   }
   if (e.goToGround && e.groundSpot && dist(e, e.goal) < 14) {    // 下到陸地，改成側面圖
     e.surface = 'ground'; e.y = e.groundSpot.y; e.x = e.groundSpot.x;
@@ -584,6 +594,8 @@ function updMosquito(e, dt) {
   if (Math.abs(e.vx) > 3) e.dir = Math.sign(e.vx);
   e.phase += dt;
   const onSurface = e.mode === 'surface' && near < 20;
+  if (onSurface && !e.onSurf) ripple(e.x, wy, .3);
+  e.onSurf = onSurface;
   if (onSurface && e.eggT <= 0) {
     e.surfT += dt;
     if (e.surfT > 1.5) { if (layEggs(e)) e.eggT = rand(...sp.eggCooldown); else e.eggT = 10; e.surfT = 0; e.think = 0; }
@@ -694,7 +706,13 @@ function updTadpole(e, dt) {
   const a = Math.atan2(e.ty - e.y, e.tx - e.x);
   let nx = e.x + Math.cos(a) * e.v * dt, ny = e.y + Math.sin(a) * e.v * dt;
   ny = clamp(ny, wy + 8, TANK.floor - 6); nx = clamp(nx, TANK.left + 8, TANK.right - 8);
-  if (solidAt(nx, ny)) { ny = e.y - 20 * dt; nx = e.x; e.think = 0; }
+  if (solidAt(nx, ny)) {                                      // 卡進地形：往左右找最近的開放水域
+    e.think = 0; nx = e.x; ny = clamp(e.y, wy + 8, TANK.floor - 6);
+    for (let d = 4; d <= 120; d += 4) {
+      if (!solidAt(e.x - d, ny)) { nx = e.x - Math.min(d, 40 * dt + 1); break; }
+      if (!solidAt(e.x + d, ny)) { nx = e.x + Math.min(d, 40 * dt + 1); break; }
+    }
+  }
   if (Math.abs(nx - e.x) > .05) e.dir = Math.sign(nx - e.x);
   e.x = nx; e.y = ny;
   if (food && dist(e, food) < 8) eat(e, food);
@@ -732,7 +750,7 @@ function updWhale(e, dt) {
     if (e.breathT <= 0) { e.wmode = 'ascend'; e.ty = wy + hh * .45; }
   } else if (e.wmode === 'ascend') {
     e.state = '上浮換氣';
-    if (Math.abs(e.y - e.ty) < 3) { e.wmode = 'spout'; e.spoutT = 0; }
+    if (Math.abs(e.y - e.ty) < 3) { e.wmode = 'spout'; e.spoutT = 0; ripple(e.x, wy, 1.6); ripple(e.x + e.dir * whaleL(e) * .3, wy, 1.2); }
   } else if (e.wmode === 'spout') {
     e.state = '噴水換氣';
     e.spoutT += dt; e.ty = wy + hh * .45;
@@ -762,4 +780,88 @@ function whaleRig(e) {                                        // 局部座標：
   }
   const a = nodes[N - 2], b = nodes[N - 1];
   return { nodes, flukeRot: Math.atan2(b.y - a.y, b.x - a.x) - Math.PI + Math.sin(e.phase - 2.9) * .25 * e.amp, sx: facing(e) };
+}
+
+
+// =====================================================================
+// 活餌：蟋蟀（陸地上爬、跳；落水會掙扎）、果蠅（在空中飛）
+// =====================================================================
+function cricketHop(e, dir) {
+  const wy = world.waterY;
+  const vx = rand(60, 120), vy = rand(160, 260), reach = vx * (2 * vy / 900) * 1.6;   // 估算跳多遠（含下坡多飛的距離）
+  const wet = d => [.35, .7, 1].some(f => highestTop(e.x + d * reach * f) > wy - 15);    // 路徑上有水（或太靠近水邊）嗎
+  if (wet(dir)) dir = -dir;
+  if (wet(dir)) { e.mode = 'crawl'; e.dir = -e.dir; return; }  // 兩邊都是水就不跳
+  e.mode = 'hop'; e.dir = dir; e.vx = dir * vx; e.vy = -vy;
+}
+function updCricket(e, dt) {
+  const wy = world.waterY;
+  if (world.settings.death && e.age > e.life) { kill(e, '壽命到了'); return; }
+  e.phase += dt * 8;
+  if (e.mode === 'fall' || e.mode === 'hop') {
+    const prevY = e.y;
+    e.vy += 900 * dt; e.x += e.vx * dt; e.y += e.vy * dt;
+    if (e.x < TANK.left + 6 || e.x > TANK.right - 6) { e.x = clamp(e.x, TANK.left + 6, TANK.right - 6); e.vx *= -.4; }
+    if (solidAt(e.x, e.y - 4) && solidAt(e.x, prevY - 4)) { e.x -= e.vx * dt; e.vx *= -.3; }
+    if (e.vy > 0 && e.y < wy + 2 && solidAt(e.x, e.y - 1)) {         // 落在陡坡上卡進地形：推回地表
+      e.y = groundY(e.x, e.y, 40); e.mode = 'idle'; e.vx = e.vy = 0; e.think = rand(.5, 2.5); e.state = '待著'; return;
+    }
+    if (e.vy > 0) {
+      const g = groundY(e.x, prevY - 1, 2);
+      if (e.y >= wy && g > wy + 1) { e.y = wy; e.mode = 'swim'; e.vx = e.vy = 0; e.swimT = 0; splash(e.x, wy, .35); }
+      else if (e.y >= g) { e.y = g; e.mode = 'idle'; e.vx = e.vy = 0; e.think = rand(.5, 2.5); }
+    }
+    e.state = '跳躍';
+    return;
+  }
+  if (e.mode === 'swim') {
+    e.swimT += dt; e.y = wy + 1; e.x += Math.sin(e.phase) * 6 * dt;
+    e.state = '落水掙扎';
+    if (groundY(e.x, wy - 2, 2) <= wy + 1) { e.mode = 'idle'; e.y = groundY(e.x, wy - 2, 2); return; }
+    if (Math.random() < dt * 1.5) ripple(e.x, wy, .2);
+    if (world.settings.death && e.swimT > 25) kill(e, '溺水');
+    return;
+  }
+  const g = groundY(e.x, e.y - 4, 8);
+  if (g > e.y + 3) { e.mode = 'fall'; e.vx = e.vy = 0; return; }
+  e.y = g;
+  if (e.y > wy + 1) { e.mode = 'swim'; e.swimT = 0; return; }
+  e.think -= dt;
+  let threat = null;
+  for (const o of world.ents) if ((o.kind === 'frog' || o.kind === 'gecko') && !o.dead && dist(o, e) < 70 && canEat(o, e)) threat = o;
+  if (threat && Math.random() < dt * 2) { cricketHop(e, Math.sign(e.x - threat.x) || 1); return; }
+  if (e.think <= 0) {
+    e.think = rand(1, 3.5);
+    if (Math.random() < .4) { cricketHop(e, Math.random() < .5 ? 1 : -1); return; }
+    e.mode = Math.random() < .5 ? 'crawl' : 'idle'; e.dir = Math.random() < .5 ? 1 : -1;
+  }
+  if (e.mode === 'crawl') {
+    const nx = e.x + e.dir * 12 * dt, ng = groundY(nx, e.y - 4, 6);
+    if (solidAt(nx + e.dir * 6, e.y - 6) || nx < TANK.left + 6 || nx > TANK.right - 6 || ng > wy - 1 || ng - e.y > 10) e.dir *= -1;
+    else { e.x = nx; e.y = ng; }
+  }
+  e.state = e.mode === 'crawl' ? '爬行' : (isNight() ? '鳴叫' : '待著');
+}
+function updFly(e, dt) {
+  const sp = SPECIES.fly, wy = world.waterY;
+  if (world.settings.death && e.age > e.life) { kill(e, '壽命到了'); return; }
+  e.think -= dt;
+  const top = TANK.top + 12, bot = Math.max(top + 10, wy - 6);
+  if (!e.goal || e.think <= 0 || dist(e, e.goal) < 6) {
+    if (Math.random() < .15 && wy < TANK.floor - 5) { e.goal = P(rand(TANK.left + 30, TANK.right - 30), wy - 5); e.think = rand(1.5, 3); }
+    else {
+      let g, tr = 0;
+      do { g = P(rand(TANK.left + 20, TANK.right - 20), rand(top, bot)); } while (solidAt(g.x, g.y) && ++tr < 8);
+      e.goal = g; e.think = rand(1, 3);
+    }
+  }
+  const a = Math.atan2(e.goal.y - e.y, e.goal.x - e.x);
+  e.vx = lerp(e.vx, Math.cos(a) * sp.speed + Math.sin(world.t * 13 + e.id) * 30, ease(dt, 4));
+  e.vy = lerp(e.vy, Math.sin(a) * sp.speed + Math.cos(world.t * 15 + e.id * 2) * 30, ease(dt, 4));
+  e.x = clamp(e.x + e.vx * dt, TANK.left + 6, TANK.right - 6);
+  e.y = clamp(e.y + e.vy * dt, top - 6, bot + 2);
+  if (solidAt(e.x, e.y)) e.y -= 60 * dt;
+  if (Math.abs(e.vx) > 3) e.dir = Math.sign(e.vx);
+  e.phase += dt;
+  e.state = '飛行';
 }

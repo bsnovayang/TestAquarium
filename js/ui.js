@@ -5,10 +5,10 @@
 
 const UI = { sel: null, drag: null, mode: 'edit', speed: 1 };
 const PALETTE = [
-  { cat: '造景', items: ['mound', 'boulder', 'rock', 'wood', 'plant'] },
+  { cat: '造景', items: ['mound', 'boulder', 'rock', 'wood', 'plant', 'bubbler'] },
   { cat: '生物', items: ['guppy', 'neon', 'redtail', 'turtle', 'frog', 'tadpole', 'gecko', 'mosquito', 'larva'] },
   { cat: '迷你版', items: ['whale'] },
-  { cat: '工具', items: ['food'] },
+  { cat: '餵食', items: ['food', 'cricket', 'fly'] },
 ];
 const $ = id => document.getElementById(id);
 const nameOf = t => SPECIES[t]?.name || DECOR_TYPES[t]?.name || (t === 'food' ? '飼料' : t);
@@ -35,7 +35,7 @@ function drawThumb(cv, type) {
     const e = makeEnt(type, 0, 0, false);
     e.size = 1; e.dir = 1; e.amp = .3; e.mode = type === 'turtle' ? 'walk' : 'sit';
     const conf = { guppy: [36, 22, .55], neon: [32, 22, .75], redtail: [37, 22, .17], turtle: [30, 38, .45], frog: [32, 38, .7], tadpole: [34, 22, 1.5],
-                   gecko: [38, 34, .38], mosquito: [32, 22, 2], larva: [32, 24, 2], whale: [32, 22, .036] }[type];
+                   gecko: [38, 34, .38], mosquito: [32, 22, 2], larva: [32, 24, 2], whale: [32, 22, .036], cricket: [30, 30, 1.6], fly: [32, 22, 4] }[type];
     if (type === 'larva') e.phase = 1;
     if (type === 'tadpole') { e.size = 1; e.meta = .3; }
     if (type === 'whale') { e.amp = .4; e.wmode = 'cruise'; }
@@ -90,6 +90,7 @@ function defaultSpot(type) {
   if (k === 'fish' || k === 'turtle') return [x, lerp(wy, TANK.floor, .5)];
   if (k === 'larva') return [x, wy + 8];
   if (k === 'tadpole') return [x, lerp(wy, TANK.floor, .7)];
+  if (k === 'cricket' || k === 'fly') return [x, rand(TANK.top + 40, Math.max(TANK.top + 50, wy - 40))];
   if (k === 'whale') return [clamp(viewCenterX(), TANK.left + SPECIES.whale.len / 2, TANK.right - SPECIES.whale.len / 2), lerp(wy, TANK.floor, .5)];
   if (k === 'mosquito' || k === 'gecko') return [x, rand(TANK.top + 40, Math.max(TANK.top + 50, wy - 40))];
   if (k === 'frog') {
@@ -101,6 +102,8 @@ function defaultSpot(type) {
 }
 function placeObject(type, x, y) {
   if (type === 'food') return dropFood(x);
+  if (type === 'cricket' || type === 'fly') return dropLive(type, x, y);
+  pushUndo();
   if (DECOR_TYPES[type]) { const d = makeDecor(type, x, y); settle(d); select(d); return; }
   const e = makeEnt(type, x, y);
   select(e);
@@ -140,7 +143,8 @@ const pointers = new Map();
 let pinch = null;
 function endObjectDrag() {
   if (!UI.drag) return;
-  const o = UI.drag.obj; UI.drag = null;
+  const o = UI.drag.obj, moved = UI.drag.moved, snap = UI.drag.snap; UI.drag = null;
+  if (moved) { UNDO.stack.push(snap); if (UNDO.stack.length > 50) UNDO.stack.shift(); UNDO.redo = []; syncUndoUI(); }   // 真的拖動了才記一步
   if (o.kind) { o.held = false; if (!o.dead) afterDrop(o); }
   else settle(o);
 }
@@ -160,7 +164,7 @@ function bindCanvas() {
     const hit = UI.mode === 'edit' ? hitTest(p) : null;
     if (hit) {
       select(hit);
-      UI.drag = { obj: hit, dx: hit.x - p.x, dy: hit.y - p.y };
+      UI.drag = { obj: hit, dx: hit.x - p.x, dy: hit.y - p.y, sx: p.x, sy: p.y, moved: false, snap: JSON.stringify(serialize()) };
       if (hit.kind) hit.held = true;
     } else {
       const v = toView(ev);
@@ -179,6 +183,7 @@ function bindCanvas() {
     }
     if (UI.drag) {
       const p = toWorld(ev), o = UI.drag.obj;
+      if (Math.hypot(p.x - UI.drag.sx, p.y - UI.drag.sy) > 3) UI.drag.moved = true;
       o.x = clamp(p.x + UI.drag.dx, TANK.left + 10, TANK.right - 10);
       o.y = clamp(p.y + UI.drag.dy, TANK.top + 6, TANK.floor + (o.kind ? 0 : 20));
     } else if (UI.pan) {
@@ -201,18 +206,25 @@ function bindCanvas() {
   cv.addEventListener('pointercancel', end);
   cv.addEventListener('wheel', ev => {
     ev.preventDefault();
-    if (UI.sel && UI.sel.type === 'wood' && !ev.ctrlKey) { UI.sel.rot = clamp(UI.sel.rot + Math.sign(ev.deltaY) * .05, -1.2, 1.2); return; }
+    if (UI.sel && UI.sel.type === 'wood' && !ev.ctrlKey) {
+      if (performance.now() - UNDO.wheelT > 800) pushUndo();   // 連續滾動只算一步
+      UNDO.wheelT = performance.now();
+      UI.sel.rot = clamp(UI.sel.rot + Math.sign(ev.deltaY) * .05, -1.2, 1.2); return;
+    }
     const v = toView(ev);
     camZoomAt(ev.deltaY < 0 ? 1.15 : 1 / 1.15, v.x, v.y);
   }, { passive: false });
   document.addEventListener('keydown', ev => {
     if (ev.target.tagName === 'INPUT') return;
+    if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === 'z') { ev.shiftKey ? redo() : undo(); ev.preventDefault(); return; }
+    if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === 'y') { redo(); ev.preventDefault(); return; }
     if ((ev.key === 'Delete' || ev.key === 'Backspace') && UI.sel) { deleteSel(); ev.preventDefault(); }
     if (ev.key === ' ') { setSpeed(UI.speed ? 0 : 1); ev.preventDefault(); }
   });
 }
 function deleteSel() {
   const o = UI.sel; if (!o) return;
+  pushUndo();
   if (o.kind) o.removed = true; else world.decor = world.decor.filter(d => d !== o);
   world.ents = world.ents.filter(e => !e.removed);
   select(null);
@@ -285,12 +297,13 @@ function updatePop() {
   $('eventPanel').innerHTML = ev.length ? ev.map(e => `<div class="ev"><time>${fmtTime(e.t)}</time>${e.text}</div>`).join('') : '<p class="muted">還沒有事件</p>';
   drawChart();
   const t = Math.floor(world.t);
-  $('clock').textContent = `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`;
+  $('clock').textContent = `${todText()}　經過 ${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`;
 }
 function bindSidePanel() {
   $('selPanel').addEventListener('input', ev => {             // 體型滑桿：即時變大變小
     const o = UI.sel;
     if (!o || !o.kind || ev.target.dataset.f !== 'sizeSlider') return;
+    if (!UNDO.sliding) { pushUndo(); UNDO.sliding = true; }   // 一次拖動只存一步
     const ratio = o.size / o.adult;                           // 幼體保持成長比例
     o.adult = +ev.target.value * (SPECIES[o.type].scale || 1); o.size = o.adult * ratio;
     if (o.kind === 'gecko' && o.surface === 'glass') updChain(o);
@@ -301,6 +314,7 @@ function bindSidePanel() {
     if (act === 'del') return deleteSel();
     if (act === 'feedsel') { o.hunger = 100; o.hp = Math.min(100, o.hp + 20); }
     if (act === 'size1') { const r = o.size / o.adult; o.adult = SPECIES[o.type].scale || 1; o.size = o.adult * r; if (o.kind === 'gecko' && o.surface === 'glass') initChain(o, o.ang); }
+    if (['bigger', 'smaller', 'rotl', 'rotr', 'size1'].includes(act)) pushUndo();
     if (act === 'bigger' || act === 'smaller') {
       const f = act === 'bigger' ? 1.15 : 1 / 1.15;
       o.w = clamp(o.w * f, 30, 900);
@@ -319,6 +333,8 @@ function bindSidePanel() {
     ${RULES.map(r => `<label><input type="checkbox" data-rule="${r.id}"> ${r.label}</label>`).join('')}
     <div class="sub">缸外飛進來的蚊子</div>
     <select id="mosqRate"><option value="off">不出現</option><option value="low">少</option><option value="mid">中</option><option value="high">多</option></select>
+    <div class="sub">日夜循環</div>
+    <select id="dayCycle"><option value="off">關閉（固定白天）</option><option value="fast">快速（4 分鐘一天）</option><option value="normal">一般（12 分鐘一天）</option><option value="real">跟現實時間同步</option></select>
     <div class="sub">行為</div>
     <label><input type="checkbox" data-set="breed"> 生物會繁殖</label>
     <label><input type="checkbox" data-set="sizeCheck"> 依體型判斷能不能吃</label>
@@ -332,6 +348,7 @@ function bindSidePanel() {
     if (t.dataset.set) s[t.dataset.set] = t.checked;
     if (t.dataset.rule) s.rules[t.dataset.rule] = t.checked;
     if (t.id === 'mosqRate') { s.mosqRate = t.value; world.spawnT = 1; }
+    if (t.id === 'dayCycle') s.dayCycle = t.value;
   });
 }
 function syncSettings() {
@@ -339,6 +356,7 @@ function syncSettings() {
   document.querySelectorAll('[data-set]').forEach(c => c.checked = !!s[c.dataset.set]);
   document.querySelectorAll('[data-rule]').forEach(c => c.checked = !!s.rules[c.dataset.rule]);
   $('mosqRate').value = s.mosqRate;
+  $('dayCycle').value = s.dayCycle;
   syncTankUI();
   $('water').value = Math.round(world.level * 100); $('waterVal').textContent = $('water').value + '%';
 }
@@ -357,6 +375,8 @@ function setMode(m) {
   requestAnimationFrame(resize);
 }
 function bindBar() {
+  $('water').addEventListener('pointerdown', () => pushUndo());
+  $('water').addEventListener('keydown', () => pushUndo());
   $('water').addEventListener('input', ev => { world.level = ev.target.value / 100; $('waterVal').textContent = ev.target.value + '%'; updateWaterY(); });
   document.querySelectorAll('[data-speed]').forEach(b => b.onclick = () => setSpeed(+b.dataset.speed));
   $('feed').onclick = () => { for (let i = 0; i < 4; i++) dropFood(viewRandX(.4), 3); };
@@ -364,6 +384,7 @@ function bindBar() {
   syncTankUI();
   $('tank').onchange = ev => {
     const from = TANK_PRESETS[world.tank], to = TANK_PRESETS[ev.target.value];
+    pushUndo();
     setTankSize(ev.target.value);
     toast(to.w * to.h < from.w * from.h ? `${to.name}：缸變小了，造景可能會擠壓到生物的空間` : to.name);
   };
@@ -374,7 +395,7 @@ function bindBar() {
   $('load').onclick = () => {
     let raw = null; try { raw = localStorage.getItem('aquarium.save'); } catch { }
     if (!raw) return toast('沒有存檔');
-    deserialize(JSON.parse(raw)); syncSettings(); select(null); toast('已讀檔');
+    pushUndo(); deserialize(JSON.parse(raw)); syncSettings(); select(null); toast('已讀檔');
   };
   $('export').onclick = () => {
     const a = document.createElement('a');
@@ -384,11 +405,13 @@ function bindBar() {
   $('import').onclick = () => $('file').click();
   $('file').onchange = async ev => {
     const f = ev.target.files[0]; if (!f) return;
-    try { deserialize(JSON.parse(await f.text())); syncSettings(); select(null); toast('已匯入'); } catch { toast('檔案格式不正確'); }
+    try { const data = JSON.parse(await f.text()); pushUndo(); deserialize(data); syncSettings(); select(null); toast('已匯入'); } catch { toast('檔案格式不正確'); }
     ev.target.value = '';
   };
-  $('clear').onclick = () => { if (confirm('清空整個水族箱？')) { world.decor = []; world.ents = []; world.food = []; resetLogs(); select(null); } };
-  $('sample').onclick = () => { loadSampleScene(); syncSettings(); select(null); };
+  $('clear').onclick = () => { if (confirm('清空整個水族箱？（可以按「復原」救回來）')) { pushUndo(); world.decor = []; world.ents = []; world.food = []; resetLogs(); select(null); } };
+  $('sample').onclick = () => { pushUndo(); loadSampleScene(); syncSettings(); select(null); };
+  $('undo').onclick = undo; $('redo').onclick = redo;
+  document.addEventListener('pointerup', () => { UNDO.sliding = false; });
   $('toView').onclick = () => setMode('view');
   $('toEdit').onclick = () => setMode('edit');
 }
@@ -452,8 +475,40 @@ function bindChart() {
   cv.addEventListener('pointerleave', () => { chartHover = null; drawChart(); });
 }
 
+// ---------------------------------------------------------------------
+// 復原 / 重做：編輯前先存一份快照（最多 50 步）
+// ---------------------------------------------------------------------
+const UNDO = { stack: [], redo: [], wheelT: 0 };
+function pushUndo() {
+  UNDO.stack.push(JSON.stringify(serialize()));
+  if (UNDO.stack.length > 50) UNDO.stack.shift();
+  UNDO.redo = [];
+  syncUndoUI();
+}
+function restoreSnapshot(json) {
+  deserialize(JSON.parse(json), true);                        // 保留事件紀錄和族群圖
+  syncSettings(); select(null); syncUndoUI();
+}
+function undo() {
+  if (!UNDO.stack.length) return toast('沒有可以復原的步驟');
+  UNDO.redo.push(JSON.stringify(serialize()));
+  restoreSnapshot(UNDO.stack.pop()); toast('已復原');
+}
+function redo() {
+  if (!UNDO.redo.length) return toast('沒有可以重做的步驟');
+  UNDO.stack.push(JSON.stringify(serialize()));
+  restoreSnapshot(UNDO.redo.pop()); toast('已重做');
+}
+function syncUndoUI() {
+  const u = $('undo'), r = $('redo');
+  if (u) u.disabled = !UNDO.stack.length;
+  if (r) r.disabled = !UNDO.redo.length;
+}
+
 function initUI() {
   bindChart();
+  bindBalance();
+  syncUndoUI();
   buildPalette(); bindCanvas(); bindSidePanel(); bindBar();
   setInterval(() => updatePanels(false), 250);
   updatePanels(true);

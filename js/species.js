@@ -53,6 +53,9 @@ const SPECIES = {
            fear: 70,                   // 魚靠近多少距離會下潛逃跑
            escape: .55 },              // 正在下潛時，魚撲空的機率
   nest: { name: '卵', kind: 'nest', len: 12, hit: 14 },             // 青蛙卵、烏龜蛋、壁虎蛋（共用）
+  // 活餌：玩家投放，不繁殖；給青蛙、壁虎吃
+  cricket: { name: '蟋蟀', kind: 'cricket', len: 30, hit: 12, life: [240, 360], drop: 5 },
+  fly:     { name: '果蠅', kind: 'fly', len: 6, speed: 45, hit: 8, life: [90, 140], drop: 8 },
 };
 
 // 族群上限（以標準缸為準，大缸依面積放大）
@@ -64,10 +67,11 @@ const DECOR_TYPES = {
   mound:   { name: '土坡',   w: 440, h: 400, solid: true },
   wood:    { name: '漂流木', w: 250, h: 20,  solid: true },
   plant:   { name: '水草',   w: 60,  h: 180, solid: false },
+  bubbler: { name: '氣泡石', w: 36,  h: 14,  solid: false },
 };
 
 // 吃到能恢復多少飽食度
-const FOOD_VALUE = { food: 10, mosquito: 15, fish: 40, larva: 6, tadpole: 12 };
+const FOOD_VALUE = { food: 10, mosquito: 15, fish: 40, larva: 6, tadpole: 12, cricket: 25, fly: 6 };
 
 // 捕食規則：每一條都可以在設定面板單獨開關
 //   juvenileOnly：只吃幼體（大魚吃魚苗）
@@ -82,6 +86,12 @@ const RULES = [
   { id: 'turtle_tadpole', pred: 'turtle',  prey: 'tadpole',  label: '烏龜吃蝌蚪' },
   { id: 'whale_larva',    pred: 'whale',   prey: 'larva',    label: '藍鯨濾食孑孓' },
   { id: 'whale_food',     pred: 'whale',   prey: 'food',     label: '藍鯨濾食飼料' },
+  { id: 'frog_cricket',   pred: 'frog',    prey: 'cricket',  label: '青蛙吃蟋蟀' },
+  { id: 'gecko_cricket',  pred: 'gecko',   prey: 'cricket',  label: '壁虎吃蟋蟀' },
+  { id: 'frog_fly',       pred: 'frog',    prey: 'fly',      label: '青蛙吃果蠅' },
+  { id: 'gecko_fly',      pred: 'gecko',   prey: 'fly',      label: '壁虎吃果蠅' },
+  { id: 'fish_cricket',   pred: 'fish',    prey: 'cricket',  label: '魚吃落水的蟋蟀' },
+  { id: 'turtle_cricket', pred: 'turtle',  prey: 'cricket',  label: '烏龜吃落水的蟋蟀' },
   { id: 'fish_food',      pred: 'fish',    prey: 'food',     label: '魚吃飼料' },
   { id: 'turtle_food',    pred: 'turtle',  prey: 'food',     label: '烏龜吃飼料' },
   { id: 'tadpole_food',   pred: 'tadpole', prey: 'food',     label: '蝌蚪吃飼料' },

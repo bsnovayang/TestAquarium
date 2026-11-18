@@ -20,6 +20,8 @@ const world = {
   events: [],          // 事件紀錄（誰吃了誰、產卵、羽化、死亡）
   fx: [],              // 純視覺效果（不影響模擬）
   hist: [], histT: 0,  // 族群數量歷史（折線圖用）
+  particles: [],       // 水花、漣漪、氣泡（純視覺）
+  tod: .375,           // 一天中的時間（0 = 午夜；預設早上 9 點）
   settings: {
     death: true,
     rules: Object.fromEntries(RULES.map(r => [r.id, true])),
@@ -29,6 +31,7 @@ const world = {
     sizeCheck: true,     // 依體型判斷能不能吃（獵物要小於掠食者的一半）
     breed: true,         // 生物會繁殖
     sharkChase: true,    // 紅尾黑鯊驅趕其他魚
+    dayCycle: 'normal',  // 日夜循環：off / fast / normal / real
   },
 };
 
@@ -148,6 +151,7 @@ function makeEnt(type, x, y, push = true) {
   if (sp.kind === 'tadpole') { e.meta = 0; e.adult = 1; e.size = .4; }
   if (sp.kind === 'nest') { e.adult = e.size = 1; e.t = 0; e.hatch = 30; e.count = 1; e.of = 'frog'; e.medium = 'water'; }
   if (sp.kind === 'whale') { e.breathT = rand(...sp.breath) * .5; e.wmode = 'cruise'; }
+  if (sp.kind === 'cricket' || sp.kind === 'fly') { e.life = rand(...sp.life); e.adult = e.size = rand(.9, 1.1); }
   if (push) { world.ents.push(e); afterDrop(e); }
   return e;
 }
@@ -161,6 +165,21 @@ function afterDrop(e) {
   if (e.kind === 'gecko') { if (e.y > wy - 24) e.y = Math.max(TANK.top + 20, wy - 30); initChain(e, -Math.PI / 2); }
   if (e.kind === 'mosquito') e.goal = null;
   if (e.kind === 'larva') { e.dive = 0; if (e.y < wy + 6) e.y = wy + 6; }
+}
+// 活餌：蟋蟀放在陸地上，果蠅放在空中
+function dropLive(type, x, y) {
+  const sp = SPECIES[type], wy = world.waterY;
+  let spots = landSpots().filter(s => s.y < wy - 30);          // 離水面遠一點，免得一跳就落水
+  const near = spots.filter(s => Math.abs(s.x - x) < 300);
+  if (near.length) spots = near;
+  for (let i = 0; i < sp.drop; i++) {
+    if (type === 'cricket') {
+      const s = spots.length ? pick(spots) : P(x + rand(-40, 40), TANK.top + 20);
+      const c = makeEnt('cricket', s.x + rand(-15, 15), TANK.top + 10);
+      c.mode = 'fall'; c.vy = 0;
+    } else makeEnt('fly', clamp(x + rand(-50, 50), TANK.left + 10, TANK.right - 10), clamp((y ?? TANK.top + 40) + rand(-30, 30), TANK.top + 12, Math.max(TANK.top + 14, wy - 10)));
+  }
+  logEvent(type === 'cricket' ? `🦗 投放了 ${sp.drop} 隻蟋蟀` : `🪰 投放了 ${sp.drop} 隻果蠅`);
 }
 function dropFood(x, n = 5) {
   for (let i = 0; i < n; i++)
@@ -218,6 +237,7 @@ function eat(e, t) {
   e.eaten++;
   addFx(t.x, t.y, '+' + v, t.kind === 'food' ? '#c08a4f' : '#ffb020');
   if (t.kind !== 'food') logEvent(`${entName(e)} 吃掉 ${entName(t)}`);
+  if (t.y > world.waterY + 6 && Math.random() < .6) bubbles(t.x, t.y, 2);      // 水中進食冒小氣泡
 }
 
 // ---------------------------------------------------------------------
@@ -226,6 +246,7 @@ function eat(e, t) {
 function step(dt) {
   world.t += dt;
   updateWaterY();
+  tickDayNight(dt);
   spawnMosquitoes(dt);
   for (const e of world.ents) {
     if (e.held || e.removed) continue;
@@ -236,8 +257,17 @@ function step(dt) {
     if (!e.removed && !e.dead) { growTick(e, dt); tickBreed(e, dt); }
   }
   for (const f of world.food) updFood(f, dt);
+  // 安全網：座標壞掉（NaN）就移除，超出魚缸就拉回來
+  for (const e of world.ents) {
+    if (!Number.isFinite(e.x) || !Number.isFinite(e.y)) { e.removed = true; console.warn('移除座標異常的生物', e.type, e.state); continue; }
+    if (e.x < TANK.left || e.x > TANK.right || e.y < TANK.top - 30 || e.y > TANK.floor + 2) {
+      if (!world.oobWarned) { console.warn('生物超出魚缸，已拉回', e.type, e.state, e.mode, Math.round(e.x), Math.round(e.y)); world.oobWarned = true; }
+      e.x = clamp(e.x, TANK.left + 4, TANK.right - 4); e.y = clamp(e.y, TANK.top - 30, TANK.floor);
+    }
+  }
   world.ents = world.ents.filter(e => !e.removed);
   world.food = world.food.filter(f => !f.removed);
+  tickParticles(dt);
   for (const f of world.fx) { f.t += dt; f.y -= 18 * dt; }
   world.fx = world.fx.filter(f => f.t < 1.2);
   world.histT -= dt;
@@ -284,7 +314,7 @@ function updDead(e, dt) {
 function updFood(f, dt) {
   f.t += dt;
   const wy = world.waterY, g = groundY(f.x, f.y - 2, 4) - 2;
-  if (f.y < wy) f.vy = Math.min(f.vy + 500 * dt, 300);
+  if (f.y < wy) { f.vy = Math.min(f.vy + 500 * dt, 300); if (f.y + f.vy * dt >= wy && wy < TANK.floor - 4) ripple(f.x, wy, .2); }
   else { f.vy = lerp(f.vy, 16, ease(dt, 6)); f.x += Math.sin(world.t * 2 + f.id) * 4 * dt; }
   f.y = Math.min(f.y + f.vy * dt, g);
   if (f.t > 90) f.removed = true;
@@ -294,7 +324,7 @@ function spawnMosquitoes(dt) {
   if (!interval) return;
   world.spawnT -= dt;
   if (world.spawnT > 0) return;
-  world.spawnT = interval;
+  world.spawnT = interval * (isNight() ? .6 : 1.4);           // 蚊子傍晚和夜裡比較多
   if (world.ents.filter(e => e.kind === 'mosquito' && !e.dead).length < max) {
     makeEnt('mosquito', rand(TANK.left + 40, TANK.right - 40), TANK.top + 8);
     logEvent('🦟 一隻蚊子從缸外飛進來');
@@ -306,14 +336,16 @@ function spawnMosquitoes(dt) {
 // ---------------------------------------------------------------------
 function serialize() {
   return {
-    v: 1, tank: world.tank, level: world.level, settings: world.settings,
+    v: 1, tank: world.tank, level: world.level, tod: world.tod, settings: world.settings,
     decor: world.decor.map(({ type, x, y, w, h, rot, seed }) => ({ type, x, y, w, h, rot, seed })),
     ents: world.ents.filter(e => !e.dead).map(({ type, x, y, dir, hunger, hp, size, adult, stage, grow, count, meta, of, medium, t, hatch }) =>
       ({ type, x, y, dir, hunger, hp, size, adult, stage, grow, count, meta, of, medium, t, hatch })),
   };
 }
-function deserialize(data) {
-  world.decor = []; world.ents = []; world.food = []; resetLogs();
+function deserialize(data, keepLogs = false) {
+  world.decor = []; world.ents = []; world.food = []; world.particles = [];
+  if (!keepLogs) resetLogs();
+  if (data.tod !== undefined) world.tod = data.tod;
   applyTankDims(data.tank || 'standard');
   if (typeof onTankResize === 'function') onTankResize();
   world.level = data.level ?? .55;
@@ -330,7 +362,7 @@ function deserialize(data) {
     afterDrop(e);
   }
 }
-function resetLogs() { world.events = []; world.fx = []; world.hist = []; world.histT = 0; }
+function resetLogs() { world.events = []; world.fx = []; world.hist = []; world.histT = 0; world.particles = []; }
 function loadSampleScene() {
   world.decor = []; world.ents = []; world.food = []; resetLogs();
   world.level = .55; updateWaterY();
@@ -343,6 +375,7 @@ function loadSampleScene() {
   makeDecor('rock', X(830), TANK.floor + 8, { w: 100, h: 55 });
   makeDecor('wood', X(200) + 145, Y(330), { rot: .24 });
   for (const [x, h] of [[560, 170], [740, 220], [960, 150], [1010, 200]]) makeDecor('plant', X(x), TANK.floor, { h: h * sy });
+  makeDecor('bubbler', X(880), TANK.floor);
   const wy = world.waterY, n = Math.max(1, Math.round(sx));
   for (let i = 0; i < 4 * n; i++) makeEnt('guppy', X(rand(500, 1000)), rand(wy + 60, TANK.floor - 80));
   for (let i = 0; i < 6 * n; i++) makeEnt('neon', X(rand(600, 900)), rand(wy + 80, TANK.floor - 100));
