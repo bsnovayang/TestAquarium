@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>青蛙細畫</title>
+<style>
+  :root { --bg:#1d2124; --panel:#262b2f; --ink:#e8e6e1; --muted:#9aa0a4; --line:#3a4146; --accent:#4fb89f; }
+  @media (prefers-color-scheme: light) { :root:not([data-theme="dark"]) { --bg:#e9e6df; --panel:#fbfaf7; --ink:#2b2b2b; --muted:#6f6f6f; --line:#d8d2c5; --accent:#2f8f78; } }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.6 system-ui, "Microsoft JhengHei", "PingFang TC", sans-serif; }
+  main { max-width: 1200px; margin: 0 auto; padding: 16px; }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  h2 { font-size: 16px; margin: 22px 0 8px; }
+  p.lead { color: var(--muted); margin: 0 0 12px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
+  figure { margin: 0; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 8px; }
+  figcaption { font-weight: 600; margin-bottom: 4px; }
+  figcaption small { font-weight: 400; color: var(--muted); }
+  canvas { display: block; width: 100%; border-radius: 6px; }
+  .land { background: linear-gradient(#e3eedb 0 78%, #8c6a44 78%); }
+  .water { background: linear-gradient(#e3eedb 0 55%, #7cc2da 55%, #2f6f92); }
+  ul { margin: 6px 0; padding-left: 20px; }
+  .src a { color: var(--accent); }
+</style>
+</head>
+<body>
+<main>
+  <h1>青蛙細畫：東方鈴蟾</h1>
+  <p class="lead">依真實東方鈴蟾的結構重畫。下方的圖直接使用遊戲裡的繪圖程式，看到的就是遊戲中的樣子。</p>
+
+  <h2>舊版 vs 新版</h2>
+  <div class="grid">
+    <figure><figcaption>舊版</figcaption><canvas id="old" class="land" width="520" height="300"></canvas></figure>
+    <figure><figcaption>新版</figcaption><canvas id="new" class="land" width="520" height="300"></canvas></figure>
+  </div>
+
+  <h2>結構標示</h2>
+  <figure><canvas id="anatomy" class="land" width="1100" height="560"></canvas></figure>
+
+  <h2>姿勢與動作</h2>
+  <div class="grid">
+    <figure><figcaption>坐著 <small>身體扁平、緩慢呼吸</small></figcaption><canvas id="sit" class="land" width="420" height="260"></canvas></figure>
+    <figure><figcaption>跳躍 <small>後腳四段完全伸直、前腳往前伸</small></figcaption><canvas id="jump" class="land" width="420" height="260"></canvas></figure>
+    <figure><figcaption>浮在水面 <small>身體大半泡水、四肢攤開，偶爾蹬腳</small></figcaption><canvas id="float" class="water" width="420" height="260"></canvas></figure>
+    <figure><figcaption>鳴叫 <small>沒有鳴囊，身體起伏（吸氣發聲）</small></figcaption><canvas id="croak" class="land" width="420" height="260"></canvas></figure>
+    <figure><figcaption>鈴蟾反射 <small>受威脅：背部下凹、抬起四肢露出紅色</small></figcaption><canvas id="unken" class="land" width="420" height="260"></canvas></figure>
+    <figure><figcaption>小青蛙 <small>剛變態完成，顏色偏橄欖褐（已放大顯示）</small></figcaption><canvas id="juv" class="land" width="420" height="260"></canvas></figure>
+  </div>
+
+  <h2>金線蛙（皮膚光滑的蛙）</h2>
+  <div class="grid">
+    <figure><figcaption>坐著 <small>背中線＋金褐色背側褶、鼓膜、橫瞳孔</small></figcaption><canvas id="g_sit" class="land" width="420" height="260"></canvas></figure>
+    <figure><figcaption>泡在水中 <small>只露出頭部</small></figcaption><canvas id="g_float" class="water" width="420" height="260"></canvas></figure>
+    <figure><figcaption>跳躍 <small>受驚時跳進水裡</small></figcaption><canvas id="g_jump" class="land" width="420" height="260"></canvas></figure>
+  </div>
+  <p class="src">金線蛙特徵：皮膚光滑，綠色（少數褐色）；背中央淺綠色背中線，兩側金褐色背側褶粗大明顯；鼓膜大、棕黃色；腹面乳白到黃白色；雄蛙沒有鳴囊，叫聲短促「啾」；喜歡泡在水中只露出頭部，機警、受干擾即躲入水中。台灣 2008 年列為保育類。
+    資料來源：<a href="https://collections.culture.tw/ntm_collectionsweb/collection.aspx?GID=M8MSMFMHMA">國立臺灣博物館</a>、
+    <a href="https://pedia.cloud.edu.tw/Entry/Detail/?title=%E9%87%91%E7%B7%9A%E8%9B%99&search=%E7%9E%AC">教育百科</a>、
+    <a href="https://metadata.froghome.org/page.php?namecode=418420">台灣兩棲類物種描述資料</a>、
+    <a href="https://zh.wikipedia.org/zh-tw/%E9%87%91%E7%B7%9A%E8%9B%99">維基百科</a></p>
+
+  <h2>參考的真實特徵（東方鈴蟾）</h2>
+  <ul>
+    <li><b>身體</b>：扁平，不像一般青蛙坐得挺直；背部鮮綠色（也有褐色個體），帶不規則黑斑</li>
+    <li><b>皮膚</b>：背部佈滿尖刺狀疣粒，摸起來粗糙；皮膚會分泌刺激性的乳白色毒液</li>
+    <li><b>腹部</b>：紅色或橘色，帶黑色斑紋（警告色）</li>
+    <li><b>眼睛</b>：瞳孔呈三角形（也有人描述為心形）；<b>沒有外耳鼓膜</b></li>
+    <li><b>鳴叫</b>：雄蛙<b>沒有鳴囊</b>，以吸氣方式發出輕柔的叫聲</li>
+    <li><b>後腳</b>：蛙類後腳是四段——大腿、小腿（脛腓骨癒合）、拉長的跗骨、腳掌；腳趾間有蹼。拉長的腳讓起跳時接觸地面更久，跳得更遠</li>
+    <li><b>鈴蟾反射</b>：受威脅時背部下凹、抬起四肢和頭，露出紅色腹部和腳底；被攻擊時甚至會翻身</li>
+  </ul>
+  <p class="src">資料來源：
+    <a href="https://amphibiaweb.org/species/2045">AmphibiaWeb</a>、
+    <a href="https://nationalzoo.si.edu/node/6866">Smithsonian National Zoo</a>、
+    <a href="https://seaworld.org/animals/facts/amphibians/oriental-fire-bellied-toad">SeaWorld</a>、
+    <a href="https://encyclopedia.com/environment/encyclopedias-almanacs-transcripts-and-maps/fire-bellied-toads-and-barbourulas-bombinatoridae">Encyclopedia.com（鈴蟾科）</a>、
+    <a href="https://tetzoo.com/blog/2022/9/2/the-remarkably-weird-skeletons-of-frogs">Tetrapod Zoology（蛙類骨骼）</a>、
+    <a href="https://pubmed.ncbi.nlm.nih.gov/12042328/">PubMed（蛙類跳躍的腳部功能）</a>
+  </p>
+</main>
+
+<script src="js/core.js"></script>
+<script src="js/species.js"></script>
+<script src="js/world.js"></script>
+<script src="js/effects.js"></script>
+<script src="js/creatures.js"></script>
+<script src="js/draw.js"></script>
+<script>
+// ---------------- 舊版（保留做比較） ----------------
+const OLD_BODY = chaikin([P(-18, -6), P(-16, -15), P(-6, -21), P(6, -24), P(16, -22), P(23, -15), P(22, -10), P(14, -6), P(0, -3), P(-12, -3)], true, 2);
+const OLD_BELLY = chaikin([P(-14, -4), P(0, -3), P(14, -6), P(21, -10), P(16, -8.5), P(2, -6), P(-12, -6.5)], true, 1);
+function drawFrogOld() {
+  const k = 0;
+  const hind = (dx, dy, col) => {
+    const hip = P(-12 + dx, -9 + dy), knee = P(4, -5), ankle = P(-14, -1), toe = P(0, 0);
+    G.line([hip, P(knee.x + dx, knee.y + dy)], 7, col); G.line([P(knee.x + dx, knee.y + dy), P(ankle.x + dx, ankle.y + dy)], 5, col);
+    G.line([P(ankle.x + dx, ankle.y + dy), P(toe.x + dx, toe.y + dy)], 3.2, col);
+    G.poly([P(toe.x + dx, toe.y + dy), P(toe.x + dx + 5, toe.y + dy - 2), P(toe.x + dx + 5, toe.y + dy + 2)], col);
+  };
+  hind(3, -2, '#2f6a2a');
+  G.poly(OLD_BODY, { lin: [0, -24, 0, -3, [[0, '#3c8a34'], [1, '#6cbf4c']]] }, '#24511f', 1);
+  G.poly(OLD_BELLY, '#e8572a');
+  for (const [x, y, r] of [[-8, -15, 2.2], [0, -19, 1.8], [8, -20, 1.6], [-2, -12, 1.6], [-12, -10, 2], [4, -14, 1.3]]) G.circle(x, y, r, '#1d2a14');
+  const pulse = 1 + Math.max(0, Math.sin(world.t * 3)) * .45;
+  G.poly(ellipsePts(15, -8, 5 * pulse, 2.6 * pulse, 0, 14), '#f3b07a');
+  G.line([P(23, -14), P(13, -12.5)], 1, '#24511f');
+  G.circle(12, -23, 4.6, '#4fa040', '#24511f', 1); G.circle(12.5, -23.5, 3, '#c9a43a');
+  G.poly(ellipsePts(12.8, -23.5, 1.8, 1.1, 0, 10), '#111');
+  G.line([P(12, -9), P(14, 0)], 3.6, '#4fa040');
+  hind(0, 0, '#3f8a34');
+}
+
+// ---------------- 場景 ----------------
+world.waterY = 99999;
+function makeF(mode, extra = {}) {
+  const e = makeEnt('frog', 0, 0, false);
+  Object.assign(e, { size: 1, adult: 1, dir: 1, mode, id: 2, vx: 0, vy: 0, landT: 0, croakT: 0, unkenT: 0 }, extra);
+  return e;
+}
+const views = [
+  { id: 'old', e: makeF('sit'), sc: 4.6, gy: .8, old: true },
+  { id: 'new', e: makeF('sit'), sc: 4.6, gy: .8 },
+  { id: 'sit', e: makeF('sit'), sc: 3.4, gy: .8 },
+  { id: 'jump', e: makeF('jump', { vx: 220 }), sc: 2.9, gy: .62, jump: true },
+  { id: 'float', e: makeF('float'), sc: 3.4, gy: .55 },
+  { id: 'croak', e: makeF('sit', { croakT: 99 }), sc: 3.4, gy: .8 },
+  { id: 'unken', e: makeF('sit', { unkenT: 99, unkenV: 1 }), sc: 3.4, gy: .8 },
+  { id: 'juv', e: makeF('sit', { size: .45, adult: 1 }), sc: 7.5, gy: .8 },
+  { id: 'anatomy', e: makeF('jump', { vx: 200, vy: 0 }), sc: 9, gy: .74, label: true },
+  { id: 'g_sit', e: makeF('sit', { type: 'goldfrog' }), sc: 3.4, gy: .8 },
+  { id: 'g_float', e: makeF('float', { type: 'goldfrog' }), sc: 3.4, gy: .55 },
+  { id: 'g_jump', e: makeF('jump', { type: 'goldfrog', vx: 220 }), sc: 2.9, gy: .62, jump: true },
+].map(v => ({ ...v, ctx: document.getElementById(v.id).getContext('2d') }));
+
+const LABELS = [
+  ['黑色斑塊', -9, -11, -40, -40],
+  ['尖刺狀疣粒', 2, -12.6, 6, -46],
+  ['濕潤的反光', 5, -13.2, 22, -62],
+  ['三角形瞳孔（沒有鼓膜）', 12.4, -14.6, 50, -30],
+  ['紅橘色腹部＋黑斑', 6, -4.6, 30, 32],
+  ['前腳四指（無蹼）', 24, -4.5, 36, 18],
+  ['① 大腿', -16, -6.8, -10, -36],
+  ['② 小腿（脛腓骨）', -26, -5.8, -16, -30],
+  ['③ 拉長的跗骨', -34.5, -4.4, -24, 26],
+  ['④ 腳掌（有蹼）', -43, -3, -10, 34],
+];
+
+let last = performance.now();
+function frame(now) {
+  const dt = Math.min(.05, (now - last) / 1000); last = now;
+  world.t += dt;
+  for (const v of views) {
+    const c = v.ctx, cw = c.canvas.width, ch = c.canvas.height;
+    c.setTransform(1, 0, 0, 1, 0, 0); c.clearRect(0, 0, cw, ch);
+    if (v.jump) v.e.vy = Math.sin(world.t * 1.6) * 420;
+    c.setTransform(v.sc, 0, 0, v.sc, cw / 2 + (v.label || v.jump ? 10 * v.sc : 0), ch * v.gy);
+    G.begin(c);
+    if (v.old) drawFrogOld(); else drawFrog(v.e);
+    if (v.label) {
+      c.setTransform(1, 0, 0, 1, 0, 0);
+      const ox = cw / 2 + 10 * v.sc, oy = ch * v.gy;
+      c.font = '15px system-ui, "Microsoft JhengHei", sans-serif'; c.textBaseline = 'middle';
+      const R = frogRig(v.e);
+      for (const [text, lx, ly, dx, dy] of LABELS) {
+        const px = ox + lx * v.sc, py = oy + ly * v.sc, tx = px + dx * 2.2, ty = py + dy * 2.2;
+        c.strokeStyle = 'rgba(20,20,20,.75)'; c.lineWidth = 1.2; c.beginPath(); c.moveTo(px, py); c.lineTo(tx, ty); c.stroke();
+        c.fillStyle = '#ff9f1c'; c.beginPath(); c.arc(px, py, 3.5, 0, 7); c.fill();
+        const w = c.measureText(text).width;
+        c.fillStyle = 'rgba(255,255,255,.92)'; c.fillRect(tx - (dx < 0 ? w + 10 : 0), ty - 11, w + 10, 22);
+        c.fillStyle = '#222'; c.textAlign = 'left'; c.fillText(text, tx - (dx < 0 ? w + 5 : -5), ty);
+      }
+    }
+  }
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

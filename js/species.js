@@ -34,7 +34,13 @@ const SPECIES = {
   turtle: { name: '麝香龜', kind: 'turtle', len: 90, scale: 2, speed: 26, walk: 14, sight: 190, hungerTime: 1200, huntBelow: 60, hit: 22,
             growTime: 400, birth: .35, breed: { how: 'eggs', cool: [300, 420], count: [2, 3], hatch: 60 } },
   frog:   { name: '東方鈴蟾', kind: 'frog', len: 50, scale: 1.6, tongue: 150, sight: 150, hungerTime: 900, huntBelow: 80, hit: 17,
-            growTime: 220, birth: .45, breed: { how: 'spawn', cool: [180, 280], count: [6, 10], hatch: 20 } },
+            growTime: 220, birth: .45, breed: { how: 'spawn', cool: [180, 280], count: [6, 10], hatch: 20 },
+            unken: true, sink: 7, call: '咕～',                  // 有疣、受威脅時鈴蟾反射；沒有鳴囊，叫聲輕柔
+            look: { warty: true, green: ['#4caa38', '#86c95a'], belly: '#e8572a', bellySpots: true, pupil: 'tri', legBands: true } },
+  goldfrog: { name: '金線蛙', kind: 'frog', len: 50, scale: 2, tongue: 150, sight: 150, hungerTime: 900, huntBelow: 80, hit: 17,
+            growTime: 240, birth: .4, breed: { how: 'spawn', cool: [200, 300], count: [8, 14], hatch: 20 },
+            wary: true, sink: 10, call: '啾',                     // 皮膚光滑、機警，受威脅就跳進水裡；泡水時只露出頭；叫聲短促
+            look: { warty: false, green: ['#4e9e36', '#8cc860'], belly: '#eee8cc', pupil: 'h', tympanum: true, goldBands: true, ranid: true } },
   tadpole: { name: '蝌蚪', kind: 'tadpole', len: 30, speed: 26, sight: 110, hungerTime: 600, huntBelow: 85, hit: 14,
              metaTime: 100 },                                       // 幾秒變成小青蛙
   gecko:  { name: '疣尾蝎虎', kind: 'gecko', len: 110, scale: 1.6, speed: 34, sight: 230, hungerTime: 900, huntBelow: 80, hit: 19,
@@ -76,7 +82,7 @@ const FOOD_VALUE = { food: 10, mosquito: 15, fish: 40, larva: 6, tadpole: 12, cr
 // 捕食規則：每一條都可以在設定面板單獨開關
 //   juvenileOnly：只吃幼體（大魚吃魚苗）
 const RULES = [
-  { id: 'frog_mosquito',  pred: 'frog',    prey: 'mosquito', label: '青蛙吃蚊子' },
+  { id: 'frog_mosquito',  pred: 'frog',    prey: 'mosquito', label: '蛙類吃蚊子' },
   { id: 'gecko_mosquito', pred: 'gecko',   prey: 'mosquito', label: '壁虎吃蚊子' },
   { id: 'fish_mosquito',  pred: 'fish',    prey: 'mosquito', label: '魚吃水面的蚊子' },
   { id: 'fish_larva',     pred: 'fish',    prey: 'larva',    label: '魚吃孑孓和蛹' },
@@ -86,9 +92,9 @@ const RULES = [
   { id: 'turtle_tadpole', pred: 'turtle',  prey: 'tadpole',  label: '烏龜吃蝌蚪' },
   { id: 'whale_larva',    pred: 'whale',   prey: 'larva',    label: '藍鯨濾食孑孓' },
   { id: 'whale_food',     pred: 'whale',   prey: 'food',     label: '藍鯨濾食飼料' },
-  { id: 'frog_cricket',   pred: 'frog',    prey: 'cricket',  label: '青蛙吃蟋蟀' },
+  { id: 'frog_cricket',   pred: 'frog',    prey: 'cricket',  label: '蛙類吃蟋蟀' },
   { id: 'gecko_cricket',  pred: 'gecko',   prey: 'cricket',  label: '壁虎吃蟋蟀' },
-  { id: 'frog_fly',       pred: 'frog',    prey: 'fly',      label: '青蛙吃果蠅' },
+  { id: 'frog_fly',       pred: 'frog',    prey: 'fly',      label: '蛙類吃果蠅' },
   { id: 'gecko_fly',      pred: 'gecko',   prey: 'fly',      label: '壁虎吃果蠅' },
   { id: 'fish_cricket',   pred: 'fish',    prey: 'cricket',  label: '魚吃落水的蟋蟀' },
   { id: 'turtle_cricket', pred: 'turtle',  prey: 'cricket',  label: '烏龜吃落水的蟋蟀' },

@@ -152,6 +152,57 @@ function fishRig(e) {
 // 烏龜
 // =====================================================================
 function turtleHead(e) { return P(e.x + e.dir * 50 * e.size, e.y - 16 * e.size); }
+
+// 烏龜骨架（側面，局部座標：原點 = 殼下方地面，頭在 +x）
+//   走路：對角線兩隻腳一起動（近側前腳＋遠側後腳），腳掌踩實地面
+//   游泳：用有蹼的腳划水（麝香龜不是鰭狀肢）
+//   曬背：脖子伸長、頭抬高、後腳往後伸直
+//   縮殼：被拿起來或掉落時，頭和腳收進殼裡
+const TT_STRIDE = 12, TT_STANCE = .7, TT_CYCLE = TT_STRIDE / TT_STANCE;
+function turtleRig(e) {
+  const wy = world.waterY, s = e.size;
+  const swim = e.mode === 'swim' || (e.mode === 'fall' && e.y > wy);
+  const tuckNow = !!e.held || (e.mode === 'fall' && !swim);
+  e.tuckV = lerp(e.tuckV || 0, tuckNow ? 1 : 0, .12);          // 純視覺的平滑
+  const k = e.tuckV, bask = e.mode === 'bask' && k < .5;
+  const d = (e.dist || 0) / s, lim = e.limb || 0;
+  const moving = e.mode === 'walk' && k < .5;
+  const bob = moving ? Math.abs(Math.sin(d / TT_CYCLE * Math.PI * 2)) * .7 : 0;
+  const pitch = swim ? clamp(((e.ty ?? e.y) - e.y) * .003, -.22, .22) : 0;
+  const legs = [];
+  for (const L of [{ front: true, near: true, ph: 0 }, { front: false, near: false, ph: 0 }, { front: true, near: false, ph: .5 }, { front: false, near: true, ph: .5 }]) {
+    const hip = P(L.front ? 22 : -21, -13.5 - bob - (L.near ? 0 : 1.5));
+    const a = 8, b = L.front ? 8 : 8.5;
+    if (swim && k < .5) {
+      const ph = lim + (L.near ? 0 : Math.PI) + (L.front ? 0 : Math.PI * .5);
+      const ang = L.front ? .9 + Math.sin(ph) * 1.0 : Math.PI - .75 + Math.sin(ph) * .55;
+      const knee = P(hip.x + Math.cos(ang) * a, hip.y + Math.sin(ang) * a);
+      const ang2 = ang + (L.front ? .5 : -.45);
+      legs.push({ ...L, hip, knee, foot: P(knee.x + Math.cos(ang2) * b, knee.y + Math.sin(ang2) * b), footAng: ang2, spread: Math.cos(ph) > 0 });
+      continue;
+    }
+    let target, lift = 0;
+    if (bask && !L.front) target = P(hip.x - 15, -1.5);
+    else if (bask) target = P(hip.x + 4, 0);
+    else {
+      const frac = (((d / TT_CYCLE + L.ph) % 1) + 1) % 1;
+      let rel = 0;
+      if (moving) {
+        if (frac < TT_STANCE) rel = TT_STRIDE * (.5 - frac / TT_STANCE);
+        else { const t = (frac - TT_STANCE) / (1 - TT_STANCE); rel = TT_STRIDE * (-.5 + t); lift = Math.sin(Math.PI * t) * 4; }
+      }
+      target = P(hip.x + (L.front ? 3 : -2) + rel, -lift - (L.near ? 0 : 1.5));
+    }
+    target = P(lerp(target.x, hip.x + (L.front ? -3 : 3), k), lerp(target.y, -9, k));
+    const r = ik2(hip, target, a, b, (p1, p2) => (L.front ? (p1.x < p2.x ? p1 : p2) : (p1.x > p2.x ? p1 : p2)));   // 前腳手肘朝後、後腳膝蓋朝前
+    legs.push({ ...L, hip, knee: r.knee, foot: r.foot, footAng: bask && !L.front ? Math.PI : L.front ? .1 : Math.PI - .1, lift });
+  }
+  const ext = lerp(bask ? 1 : swim ? .75 : .55, 0, k);
+  const up = swim && (e.ty ?? e.y) < e.y - 10;
+  const headPitch = bask ? -.38 : up ? -.22 : Math.sin(world.t * .7 + e.id) * .05;
+  return { swim, bask, tuck: k, legs, bob, pitch, ext, headPitch, sx: facing(e), juvenile: e.size < e.adult * .6 };
+}
+
 function updTurtle(e, dt) {
   const sp = SPECIES.turtle, wy = world.waterY, L = sp.len * e.size;
   e.modeT += dt; e.think -= dt;
@@ -228,7 +279,7 @@ function updTurtle(e, dt) {
   if (front < TANK.left + 5 || front > TANK.right - 5 || solidAt(front, e.y - 10)) e.dir *= -1;
   else {
     const ng = groundY(nx, e.y - 4, 12);
-    e.x = nx;
+    e.x = nx; e.dist += sp.walk * dt;
     if (ng - e.y > 20) { e.mode = 'fall'; e.vy = 0; } else e.y = ng;
   }
   e.limb += dt * 3;
@@ -238,9 +289,49 @@ function updTurtle(e, dt) {
 // 青蛙
 // =====================================================================
 const FROG_G = 900;
-function frogMouth(e) { return P(e.x + e.dir * 22 * e.size, e.y - 15 * e.size); }
+function frogMouth(e) { return P(e.x + e.dir * 22 * e.size, e.y + (e.mode === 'float' ? -1 : -8) * e.size); }
+// 青蛙骨架（東方鈴蟾，側面，原點 = 腳下地面）
+//   後腳四段：大腿、小腿（脛腓骨）、拉長的跗骨、腳掌（有蹼）；前腳三段（無蹼）
+//   姿勢以關鍵影格混合：坐、跳、浮水（划水）、鈴蟾反射
+const FROG_HIND = {
+  sit:   [P(-11, -7), P(4, -5.5), P(-9, -2), P(-2, -.4), P(6, 0)],
+  jump:  [P(-11, -7), P(-21, -6.5), P(-31, -5), P(-38, -3.8), P(-47, -2.5)],
+  fext:  [P(-11, -7), P(-20, -5), P(-28, -6), P(-34, -5.5), P(-42, -5)],
+  ffold: [P(-11, -7), P(-3, -3), P(-12, -1), P(-8, 1), P(-2, 1.5)],
+  unken: [P(-11, -7), P(-5, -14), P(-13, -17), P(-10, -20.5), P(-5, -23)],
+};
+const FROG_FRONT = {
+  sit:   [P(10, -6), P(8, -2.5), P(12, 0), P(15.5, 0)],
+  jump:  [P(10, -6), P(16, -5), P(22, -4.5), P(26, -4)],
+  float: [P(10, -6), P(15, -3.5), P(19, -5), P(22, -5)],
+  unken: [P(10, -6), P(13, -11), P(16, -14.5), P(18, -17)],
+};
+const lerpPts = (a, b, t) => a.map((p, i) => P(lerp(p.x, b[i].x, t), lerp(p.y, b[i].y, t)));
+function frogRig(e) {
+  let jump = 0;
+  if (e.mode === 'jump') jump = e.vy < 0 ? 1 : clamp(1 - e.vy / 500, .25, 1);
+  const flt = e.mode === 'float' ? 1 : 0;
+  e.unkenV = lerp(e.unkenV || 0, ((e.held && SPECIES[e.type].unken) || e.unkenT > 0) && e.mode !== 'jump' ? 1 : 0, .15);   // 純視覺的平滑；只有鈴蟾會鈴蟾反射
+  const u = e.unkenV;
+  const kick = flt ? Math.pow(Math.sin(world.t * 3 + e.id) * .5 + .5, 2) : 0;   // 浮水時偶爾蹬一下
+  let hind = lerpPts(FROG_HIND.sit, FROG_HIND.jump, jump);
+  hind = lerpPts(hind, lerpPts(FROG_HIND.ffold, FROG_HIND.fext, kick), flt);
+  hind = lerpPts(hind, FROG_HIND.unken, u);
+  let front = lerpPts(FROG_FRONT.sit, FROG_FRONT.jump, jump);
+  front = lerpPts(front, FROG_FRONT.float, flt);
+  front = lerpPts(front, FROG_FRONT.unken, u);
+  const warp = p => P(p.x, p.y - u * Math.pow(p.x / 18, 2) * 5);               // 鈴蟾反射：背部下凹、頭尾翹起
+  const shift = (pts) => { const a = pts[0], w = warp(a), dx = w.x - a.x, dy = w.y - a.y; return pts.map(p => P(p.x + dx, p.y + dy)); };
+  return {
+    hind: shift(hind), front: shift(front), warp, u, jump, flt, kick,
+    tilt: e.mode === 'jump' ? clamp(Math.atan2(e.vy, Math.abs(e.vx) + 1) * .5, -.6, .6) : 0,
+    squash: e.landT > 0 ? 1 - e.landT * 1.1 : 1, sink: flt ? (SPECIES[e.type].sink || 7) : 0, croak: e.croakT > 0,
+    juvenile: e.size < e.adult * .6,
+  };
+}
+
 function updFrog(e, dt) {
-  const sp = SPECIES.frog, wy = world.waterY;
+  const sp = SPECIES[e.type], wy = world.waterY;
   e.modeT += dt; e.think -= dt;
   if (e.landT > 0) e.landT -= dt;
   if (e.tongue) {
@@ -287,16 +378,25 @@ function updFrog(e, dt) {
     const m = findPrey(e, sp.tongue * e.size / sp.scale, null, frogMouth(e));
     if (m) { e.dir = Math.sign(m.x - e.x) || e.dir; e.tongue = { target: m, t: 0, tx: m.x, ty: m.y }; }
   }
-  if (!e.tongue && e.think <= 0) {
+  if (!e.tongue && e.think <= 0 && !(e.unkenT > 0)) {
     e.think = rand(2.5, 6);
     const t = frogJumpTarget(e);
     if (t) { frogLaunch(e, t); return; }
   }
   if (e.croakT > 0) e.croakT -= dt;
-  else if (isNight() && !e.tongue && Math.random() < dt / 12) { e.croakT = 2.2; addFx(e.x, e.y - 30 * e.size, '呱', '#dff0ff'); }
-  e.state = e.tongue ? '吐舌頭捕食' : e.croakT > 0 ? '鳴叫' : e.mode === 'float' ? '浮在水面' : '坐著';
+  else if (isNight() && !e.tongue && Math.random() < dt / 12) { e.croakT = sp.call === '啾' ? .6 : 2.2; addFx(e.x, e.y - 22 * e.size, sp.call, '#dff0ff'); }
+  // 鈴蟾反射：烏龜靠近時背部下凹、露出紅色警告色
+  const threatened = e.mode === 'sit' && world.ents.some(o => o.kind === 'turtle' && !o.dead && dist(o, e) < 45 * o.size);
+  if (e.unkenT > 0) e.unkenT -= dt;
+  else if (threatened && sp.unken) e.unkenT = 2.5;
+  if (e.scareCD > 0) e.scareCD -= dt;
+  else if (threatened && sp.wary && !e.tongue) {             // 金線蛙：機警，受威脅就跳進水裡（8 秒冷卻）
+    const t = frogJumpTarget(e, true);
+    if (t) { e.scareCD = 8; frogLaunch(e, t); logEvent(`💦 ${sp.name}受驚跳進水裡`); return; }
+  }
+  e.state = e.unkenT > 0 ? '鈴蟾反射（警告色）' : e.tongue ? '吐舌頭捕食' : e.croakT > 0 ? '鳴叫' : e.mode === 'float' ? '浮在水面' : '坐著';
 }
-function frogJumpTarget(e) {
+function frogJumpTarget(e, wantWater = false) {
   const wy = world.waterY;
   for (let i = 0; i < 10; i++) {
     const tx = clamp(e.x + rand(-260, 260), TANK.left + 30, TANK.right - 30);
@@ -304,6 +404,7 @@ function frogJumpTarget(e) {
     const top = highestTop(tx), land = top < wy;
     const ly = land ? top : wy;
     if (ly < TANK.top + 60 || e.y - ly > 180) continue;
+    if (wantWater) { if (land) continue; return P(tx, ly); }
     if (e.mode === 'float' && !land && Math.random() < .7) continue;   // 浮在水面時比較想上岸
     return P(tx, ly);
   }
@@ -660,12 +761,12 @@ function updNest(e, dt) {
   e.state = `${e.count} 顆，${left} 秒後孵化`;
   if (e.t < e.hatch) return;
   const sp = SPECIES[e.of];
-  const capKey = e.of === 'frog' ? 'tadpole' : sp.kind;               // 孵化時也檢查族群上限
+  const capKey = sp.kind === 'frog' ? 'tadpole' : sp.kind;               // 孵化時也檢查族群上限
   e.count = Math.min(e.count, capFor(capKey) - countKind(capKey));
   if (e.count <= 0) { logEvent(`🥚 ${entName(e)}沒有孵化（缸內太擠了）`); e.removed = true; return; }
   for (let i = 0; i < e.count; i++) {
-    if (e.of === 'frog') {
-      const t = makeEnt('tadpole', e.x + rand(-16, 16), e.y + rand(-6, 10)); t.size = .4; t.hunger = 80;
+    if (SPECIES[e.of].kind === 'frog') {
+      const t = makeEnt('tadpole', e.x + rand(-16, 16), e.y + rand(-6, 10)); t.size = .4; t.hunger = 80; t.of = e.of;
     } else {
       const c = makeEnt(e.of, e.x + rand(-12, 12), e.y - 4);
       c.size = c.adult * sp.birth; c.hunger = 80;
@@ -673,7 +774,7 @@ function updNest(e, dt) {
       if (c.kind === 'turtle') { c.mode = 'walk'; c.y = e.y; c.wantWater = true; }
     }
   }
-  logEvent(e.of === 'frog' ? `🐸 青蛙卵孵出 ${e.count} 隻蝌蚪` : `🐣 ${sp.name}的蛋孵化了（${e.count} 隻）`);
+  logEvent(sp.kind === 'frog' ? `🐸 ${sp.name}的卵孵出 ${e.count} 隻蝌蚪` : `🐣 ${sp.name}的蛋孵化了（${e.count} 隻）`);
   e.removed = true;
 }
 
@@ -718,9 +819,9 @@ function updTadpole(e, dt) {
   if (food && dist(e, food) < 8) eat(e, food);
   if (e.meta >= 1) {                                          // 變態完成：變成小青蛙浮到水面
     if (countKind('frog') < capFor('frog')) {
-      const f = makeEnt('frog', e.x, wy);
-      f.size = f.adult * SPECIES.frog.birth; f.mode = 'float'; f.y = wy; f.hunger = 80;
-      logEvent('🐸 蝌蚪變成小青蛙了');
+      const of = e.of || 'frog', f = makeEnt(of, e.x, wy);
+      f.size = f.adult * SPECIES[of].birth; f.mode = 'float'; f.y = wy; f.hunger = 80;
+      logEvent(`🐸 蝌蚪變成小${SPECIES[of].name}了`);
       addFx(e.x, wy - 10, '變態', '#7fd067');
     }
     e.removed = true;

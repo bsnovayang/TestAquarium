@@ -14,7 +14,7 @@ const BALANCE_FIELDS = [
   ['eggTime', '卵塊孵化（秒）'], ['raft', '一個卵塊幾隻'], ['larvaTime', '孑孓化蛹（秒）'], ['pupaTime', '蛹羽化（秒）'],
   ['fear', '察覺魚的距離（px）'], ['escape', '下潛時躲開的機率（0～1）'], ['drop', '一次投放幾隻'],
 ];
-const CAP_LABEL = { mosquito: '蚊子成蟲', larva: '孑孓（含蛹、卵）', fish: '魚', frog: '青蛙', tadpole: '蝌蚪', turtle: '烏龜', gecko: '壁虎' };
+const CAP_LABEL = { mosquito: '蚊子成蟲', larva: '孑孓（含蛹、卵）', fish: '魚', frog: '蛙類', tadpole: '蝌蚪', turtle: '烏龜', gecko: '壁虎' };
 const FOOD_LABEL = { food: '飼料', mosquito: '蚊子', fish: '魚', larva: '孑孓', tadpole: '蝌蚪', cricket: '蟋蟀', fly: '果蠅' };
 
 const getPath = (o, p) => p.split('.').reduce((a, k) => a?.[k], o);

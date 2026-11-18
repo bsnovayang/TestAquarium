@@ -4,9 +4,12 @@
 // =====================================================================
 
 const UI = { sel: null, drag: null, mode: 'edit', speed: 1 };
+// 物件面板：用頁籤分類（物件變多時比較好找）
 const PALETTE = [
   { cat: '造景', items: ['mound', 'boulder', 'rock', 'wood', 'plant', 'bubbler'] },
-  { cat: '生物', items: ['guppy', 'neon', 'redtail', 'turtle', 'frog', 'tadpole', 'gecko', 'mosquito', 'larva'] },
+  { cat: '魚類', items: ['guppy', 'neon', 'redtail'] },
+  { cat: '兩棲爬蟲', items: ['frog', 'goldfrog', 'tadpole', 'turtle', 'gecko'] },
+  { cat: '昆蟲', items: ['mosquito', 'larva'] },
   { cat: '迷你版', items: ['whale'] },
   { cat: '餵食', items: ['food', 'cricket', 'fly'] },
 ];
@@ -33,8 +36,8 @@ function drawThumb(cv, type) {
     for (const [x, y] of [[26, 18], [34, 22], [30, 28], [38, 15], [22, 26]]) drawFood({ x, y });
   } else {
     const e = makeEnt(type, 0, 0, false);
-    e.size = 1; e.dir = 1; e.amp = .3; e.mode = type === 'turtle' ? 'walk' : 'sit';
-    const conf = { guppy: [36, 22, .55], neon: [32, 22, .75], redtail: [37, 22, .17], turtle: [30, 38, .45], frog: [32, 38, .7], tadpole: [34, 22, 1.5],
+    e.size = e.adult = 1; e.dir = 1; e.amp = .3; e.mode = type === 'turtle' ? 'walk' : 'sit';
+    const conf = { guppy: [36, 22, .55], neon: [32, 22, .75], redtail: [37, 22, .17], turtle: [30, 38, .45], frog: [32, 38, .7], goldfrog: [31, 38, .66], tadpole: [34, 22, 1.5],
                    gecko: [38, 34, .38], mosquito: [32, 22, 2], larva: [32, 24, 2], whale: [32, 22, .036], cricket: [30, 30, 1.6], fly: [32, 22, 4] }[type];
     if (type === 'larva') e.phase = 1;
     if (type === 'tadpole') { e.size = 1; e.meta = .3; }
@@ -48,9 +51,19 @@ function drawThumb(cv, type) {
 }
 function buildPalette() {
   const root = $('palette'); root.innerHTML = '';
-  for (const g of PALETTE) {
-    const h = document.createElement('h3'); h.textContent = g.cat; root.appendChild(h);
-    const box = document.createElement('div'); box.className = 'items'; root.appendChild(box);
+  const tabs = document.createElement('div'); tabs.className = 'tabs'; root.appendChild(tabs);
+  let current = 0;
+  try { current = clamp(+localStorage.getItem('aquarium.paletteTab') || 0, 0, PALETTE.length - 1); } catch { }
+  const panes = [];
+  const show = i => {
+    current = i;
+    tabs.querySelectorAll('button').forEach((b, j) => b.classList.toggle('on', j === i));
+    panes.forEach((p, j) => p.hidden = j !== i);
+    try { localStorage.setItem('aquarium.paletteTab', i); } catch { }
+  };
+  PALETTE.forEach((g, i) => {
+    const b = document.createElement('button'); b.textContent = g.cat; b.onclick = () => show(i); tabs.appendChild(b);
+    const box = document.createElement('div'); box.className = 'items'; root.appendChild(box); panes.push(box);
     for (const type of g.items) {
       const it = document.createElement('div'); it.className = 'pitem'; it.dataset.type = type;
       const cv = document.createElement('canvas'); it.appendChild(cv);
@@ -59,7 +72,8 @@ function buildPalette() {
       drawThumb(cv, type);
       it.addEventListener('pointerdown', ev => startPaletteDrag(ev, type, cv));
     }
-  }
+  });
+  show(current);
 }
 function startPaletteDrag(ev, type, cv) {
   ev.preventDefault();

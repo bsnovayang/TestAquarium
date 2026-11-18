@@ -108,3 +108,9 @@ body.view #cv { border-radius: 0; box-shadow: none; cursor: pointer; }
 .balv input { width: 64px; font: inherit; color: var(--ink); background: var(--panel2); border: 1px solid var(--line); border-radius: 5px; padding: 1px 4px; }
 .balv.changed input { border-color: var(--warn); }
 button:disabled { opacity: .4; cursor: default; }
+
+/* 物件面板頁籤 */
+.tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; margin: 2px 0 10px; }
+.tabs button { padding: 4px 2px; font-size: 13px; }
+.items[hidden] { display: none; }
+@media (max-width: 1000px), (max-height: 520px) { .tabs { grid-template-columns: 1fr; } }

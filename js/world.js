@@ -383,6 +383,7 @@ function loadSampleScene() {
   makeEnt('turtle', X(560), wy + 160);
   makeEnt('redtail', X(740), TANK.floor - 70);
   for (const fx of [X(130), X(260)]) { const fr = makeEnt('frog', fx, TANK.top + 60); fr.y = highestTop(fx) - 1; }
+  for (const fx of [X(1110), X(1170)]) { const fr = makeEnt('goldfrog', fx, TANK.top + 60); fr.y = highestTop(fx) - 1; }
   makeEnt('gecko', X(640), Y(150));
   makeEnt('gecko', X(900), Y(200));
   for (let i = 0; i < 5 * n; i++) makeEnt('mosquito', X(rand(300, 1000)), rand(TANK.top + 40, wy - 40));

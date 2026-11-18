@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>烏龜細畫</title>
+<style>
+  :root { --bg:#1d2124; --panel:#262b2f; --ink:#e8e6e1; --muted:#9aa0a4; --line:#3a4146; --accent:#4fb89f; }
+  @media (prefers-color-scheme: light) { :root:not([data-theme="dark"]) { --bg:#e9e6df; --panel:#fbfaf7; --ink:#2b2b2b; --muted:#6f6f6f; --line:#d8d2c5; --accent:#2f8f78; } }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.6 system-ui, "Microsoft JhengHei", "PingFang TC", sans-serif; }
+  main { max-width: 1200px; margin: 0 auto; padding: 16px; }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  h2 { font-size: 16px; margin: 22px 0 8px; }
+  p.lead { color: var(--muted); margin: 0 0 12px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
+  figure { margin: 0; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 8px; }
+  figcaption { font-weight: 600; margin-bottom: 4px; }
+  figcaption small { font-weight: 400; color: var(--muted); }
+  canvas { display: block; width: 100%; border-radius: 6px; }
+  .land { background: linear-gradient(#e3eedb 0 78%, #8c6a44 78%); }
+  .water { background: linear-gradient(#8fd0e6, #2e7aa3); }
+  ul { margin: 6px 0; padding-left: 20px; }
+  .src a { color: var(--accent); }
+</style>
+</head>
+<body>
+<main>
+  <h1>烏龜細畫：麝香龜</h1>
+  <p class="lead">依真實麝香龜的結構重畫。下方的圖直接使用遊戲裡的繪圖程式，看到的就是遊戲中的樣子。</p>
+
+  <h2>舊版 vs 新版</h2>
+  <div class="grid">
+    <figure><figcaption>舊版</figcaption><canvas id="old" class="land" width="520" height="300"></canvas></figure>
+    <figure><figcaption>新版</figcaption><canvas id="new" class="land" width="520" height="300"></canvas></figure>
+  </div>
+
+  <h2>結構標示</h2>
+  <figure><canvas id="anatomy" class="land" width="1100" height="520"></canvas></figure>
+
+  <h2>姿勢與動作</h2>
+  <div class="grid">
+    <figure><figcaption>走路 <small>對角線兩隻腳一起動，腳掌踩實地面</small></figcaption><canvas id="walk" class="land" width="420" height="260"></canvas></figure>
+    <figure><figcaption>游泳 <small>用有蹼的腳划水，不是鰭</small></figcaption><canvas id="swim" class="water" width="420" height="260"></canvas></figure>
+    <figure><figcaption>曬背 <small>脖子伸長、頭抬高、後腳往後伸直</small></figcaption><canvas id="bask" class="land" width="420" height="260"></canvas></figure>
+    <figure><figcaption>縮殼 <small>被拿起來或掉落時</small></figcaption><canvas id="tuck" class="land" width="420" height="260"></canvas></figure>
+    <figure><figcaption>幼體 <small>背甲有縱稜、顏色更深（已放大顯示）</small></figcaption><canvas id="juv" class="land" width="420" height="260"></canvas></figure>
+  </div>
+
+  <h2>參考的真實特徵</h2>
+  <ul>
+    <li><b>背甲</b>：高聳的圓頂，表面光滑，深棕到近黑色，常有深色斑點；成體背上常長藻類</li>
+    <li><b>鱗甲排列</b>：背部中央 5 片椎盾、兩側各 4 片肋盾、邊緣一圈緣盾（側面看到 11 片）；每片鱗甲有生長紋，中央較亮</li>
+    <li><b>腹甲</b>：非常小、淡黃色，鉸鏈幾乎不能動；側面只看得到中間的甲橋</li>
+    <li><b>頭部</b>：吻端尖、兩側各兩條淡色條紋（眼睛上方一條、下方一條），下巴和喉嚨有小觸鬚</li>
+    <li><b>四肢</b>：粗壯、有蹼、帶爪；前腳有大片鱗片</li>
+    <li><b>幼體</b>：背甲粗糙、有明顯縱稜，隨年齡變平</li>
+  </ul>
+  <p class="src">資料來源：
+    <a href="https://dwr.virginia.gov/wildlife/information/stinkpot/">Virginia DWR</a>、
+    <a href="https://portal.ct.gov/deep/wildlife/fact-sheets/common-musk-turtle">CT DEEP</a>、
+    <a href="https://herpetology.inhs.illinois.edu/resources/species-lists/ilspecies/eastern-musk-turtle/">Illinois Natural History Survey</a>、
+    <a href="https://srelherp.uga.edu/turtles/common-musk-turtle">UGA SREL</a>、
+    <a href="https://allturtles.com/turtle-anatomy/">AllTurtles（鱗甲名稱）</a>
+  </p>
+</main>
+
+<script src="js/core.js"></script>
+<script src="js/species.js"></script>
+<script src="js/world.js"></script>
+<script src="js/effects.js"></script>
+<script src="js/creatures.js"></script>
+<script src="js/draw.js"></script>
+<script>
+// ---------------- 舊版（保留做比較） ----------------
+const OLD_SHELL = (() => { const t = []; for (let i = 0; i <= 20; i++) { const x = -40 + 80 * i / 20; t.push(P(x, -10 - 30 * Math.pow(Math.max(0, 1 - (x / 40) ** 2), .55))); } return t; })();
+function drawTurtleOld(e) {
+  const lim = e.limb || 0, skin = '#6e6c52', skinD = '#4d4b39';
+  const leg = (px, py, ang, len, w, col) => { const ex = px + Math.cos(ang) * len, ey = py + Math.sin(ang) * len; G.line([P(px, py), P(ex, ey)], w, col); G.circle(ex, ey, w * .45, col); };
+  const legs = (col, ph) => { leg(24, -12, Math.PI / 2 + Math.sin(lim * 2 + ph) * .45, 12, 6.5, col); leg(-20, -12, Math.PI / 2 + Math.sin(lim * 2 + ph + Math.PI) * .45, 12, 6.5, col); };
+  legs(skinD, Math.PI);
+  G.poly([P(-38, -13), P(-50, -9), P(-38, -8)], skin);
+  const hx = 45, hy = -17;
+  G.line([P(30, -15), P(hx - 6, hy)], 9, skin);
+  G.poly(ellipsePts(hx, hy, 11, 7.5, 0, 18), skin, skinD, 1);
+  G.line([P(hx - 9, hy - 3), P(hx + 6, hy - 4.5)], 1.6, '#e8d27a'); G.line([P(hx - 9, hy + 2), P(hx + 8, hy + 1.5)], 1.6, '#e8d27a');
+  G.circle(hx + 5, hy - 1.5, 1.9, '#111');
+  G.poly([...OLD_SHELL, P(40, -9), P(-40, -9)], { lin: [0, -40, 0, -9, [[0, '#5a5440'], [1, '#2f2b20']]] }, '#24211a', 1.5);
+  for (const x of [-22, 0, 22]) { const t = OLD_SHELL[Math.round((x + 40) / 4)]; G.line([P(t.x, t.y + 1), P(x * 1.08, -14)], 1.2, 'rgba(20,18,12,.6)'); }
+  G.line([P(-38, -14), P(38, -14)], 1.3, 'rgba(20,18,12,.55)');
+  G.poly([P(-36, -9), P(36, -9), P(32, -5.5), P(-32, -5.5)], '#c9b06a');
+  legs(skin, 0);
+}
+
+// ---------------- 場景 ----------------
+world.waterY = 99999;
+function makeT(mode, extra = {}) {
+  const e = makeEnt('turtle', 0, 0, false);
+  Object.assign(e, { size: 1, adult: 1, dir: 1, mode, dist: 0, limb: 0, id: 3, ty: 0, tuckV: extra.held ? 1 : 0 }, extra);
+  return e;
+}
+const views = [
+  { id: 'old', e: makeT('walk'), sc: 3.3, gy: .78, old: true, walk: true },
+  { id: 'new', e: makeT('walk'), sc: 3.3, gy: .78, walk: true },
+  { id: 'walk', e: makeT('walk'), sc: 2.6, gy: .78, walk: true },
+  { id: 'swim', e: makeT('swim'), sc: 2.6, gy: .62, swim: true },
+  { id: 'bask', e: makeT('bask'), sc: 2.6, gy: .78 },
+  { id: 'tuck', e: makeT('walk', { held: true }), sc: 2.6, gy: .78 },
+  { id: 'juv', e: makeT('walk', { size: .5, adult: 1 }), sc: 5.2, gy: .78, walk: true },
+  { id: 'anatomy', e: makeT('walk'), sc: 6.2, gy: .78, label: true },
+].map(v => ({ ...v, ctx: document.getElementById(v.id).getContext('2d') }));
+
+const LABELS = [
+  ['椎盾（5 片）', 0, () => shellTop(0) + 3, 0, -40],
+  ['肋盾（4 對）', -13, () => -24, -60, -30],
+  ['緣盾（11 對）', 22, () => shellBase(22) - 2.5, 40, 10],
+  ['甲橋（腹甲很小）', 2, () => -8.5, 10, 30],
+  ['生長紋、盾心', -1, () => -26, 30, -46],
+  ['頭部兩條淡色條紋', 52, () => -21, 30, -30],
+  ['下巴觸鬚', 50, () => -12.5, 40, 18],
+  ['頸部皺褶', 43, () => -18, -6, -46],
+  ['有蹼的腳＋爪', 28, () => -1, 40, 30],
+  ['短尾巴', -43, () => -9.5, -30, 26],
+  ['背上的藻類', -12, () => shellTop(-12) + 2.5, -40, -30],
+];
+
+let last = performance.now();
+function frame(now) {
+  const dt = Math.min(.05, (now - last) / 1000); last = now;
+  world.t += dt;
+  for (const v of views) {
+    const c = v.ctx, cw = c.canvas.width, ch = c.canvas.height;
+    c.setTransform(1, 0, 0, 1, 0, 0); c.clearRect(0, 0, cw, ch);
+    if (v.walk) v.e.dist += 14 * dt * v.e.size;
+    if (v.swim) { v.e.limb += dt * 3.2; v.e.ty = Math.sin(world.t * .4) * 30; }
+    const s = v.sc / v.e.size * (v.id === 'juv' ? .5 : 1);
+    c.setTransform(v.sc, 0, 0, v.sc, cw / 2 - 4 * v.sc, ch * v.gy);
+    G.begin(c);
+    if (v.old) drawTurtleOld(v.e); else drawTurtle(v.e);
+    if (v.label) {
+      c.setTransform(1, 0, 0, 1, 0, 0);
+      const ox = cw / 2 - 4 * v.sc, oy = ch * v.gy;
+      c.font = '15px system-ui, "Microsoft JhengHei", sans-serif'; c.textBaseline = 'middle';
+      for (const [text, lx, ly, dx, dy] of LABELS) {
+        const px = ox + lx * v.sc, py = oy + ly() * v.sc, tx = px + dx * 2.4, ty = py + dy * 2.4;
+        c.strokeStyle = 'rgba(20,20,20,.75)'; c.lineWidth = 1.2; c.beginPath(); c.moveTo(px, py); c.lineTo(tx, ty); c.stroke();
+        c.fillStyle = '#ff9f1c'; c.beginPath(); c.arc(px, py, 3.5, 0, 7); c.fill();
+        const w = c.measureText(text).width;
+        c.fillStyle = 'rgba(255,255,255,.92)'; c.fillRect(tx - (dx < 0 ? w + 10 : 0), ty - 11, w + 10, 22);
+        c.fillStyle = '#222'; c.textAlign = 'left'; c.fillText(text, tx - (dx < 0 ? w + 5 : -5), ty);
+      }
+    }
+  }
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

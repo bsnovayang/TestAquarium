@@ -170,86 +170,215 @@ function drawFish(e) {
 }
 
 // ---------------------------------------------------------------------
-// 烏龜（側面，原點 = 腳下地面）
+// 烏龜（麝香龜，側面，原點 = 腳下地面）
+//   參考特徵：高圓頂背甲、5 片椎盾＋4 對肋盾＋11 對緣盾、極小的淡黃色腹甲、
+//   頭側兩條淡色條紋、下巴與喉嚨的觸鬚、有蹼帶爪的腳；幼體背甲有縱稜
 // ---------------------------------------------------------------------
-const TURTLE_SHELL = (() => {
-  const top = [];
-  for (let i = 0; i <= 20; i++) { const x = -40 + 80 * i / 20; top.push(P(x, -10 - 30 * Math.pow(Math.max(0, 1 - (x / 40) ** 2), .55))); }
-  return top;
+const shellBase = x => { const u = x / 38; return x > 0 ? -10 - 3 * u * u : -10 + 1.2 * u * u; };
+const shellTop = x => { const a = x + 3 > 0 ? 41 : 35, u = (x + 3) / a; return shellBase(x) - 31 * Math.pow(Math.max(0, 1 - u * u), .55); };
+const shellVert = x => shellTop(x) + 6;                                     // 椎盾下緣
+const shellMarg = x => shellBase(x) - Math.min(5.5, (shellBase(x) - shellTop(x)) * .45);   // 緣盾上緣
+const TURTLE_GEO = (() => {
+  const span = (f, x0, x1, n = 8) => Array.from({ length: n + 1 }, (_, i) => { const x = lerp(x0, x1, i / n); return P(x, f(x)); });
+  const outline = [...span(shellTop, -38, 38, 30), ...span(shellBase, 38, -38, 30)];
+  const vSeams = [33, 19, 6, -7, -20, -33];                                  // 椎盾分界（前→後）
+  const vertebrals = [];
+  for (let i = 0; i < 5; i++) vertebrals.push([...span(shellTop, vSeams[i + 1], vSeams[i], 6), ...span(shellVert, vSeams[i], vSeams[i + 1], 6)]);
+  const cTop = [30, 6, -7, -20, -30], cBot = [35, 9, -6, -23, -35];         // 肋盾分界：上端接在椎盾分界上
+  const costals = [];
+  for (let i = 0; i < 4; i++) costals.push([...span(shellVert, cTop[i + 1], cTop[i], 6), ...span(shellMarg, cBot[i], cBot[i + 1], 6)]);
+  const seams = cTop.slice(1, 4).map((t, i) => { const b = cBot[i + 1]; return chaikin([P(t, shellVert(t)), P((t + b) / 2 + 1.2, (shellVert(t) + shellMarg(b)) / 2), P(b, shellMarg(b))], false, 1); });
+  const marg = Array.from({ length: 12 }, (_, i) => lerp(-37, 37, i / 11));  // 11 片緣盾
+  const center = pts => P(pts.reduce((a, p) => a + p.x, 0) / pts.length, pts.reduce((a, p) => a + p.y, 0) / pts.length);
+  return { outline, vertebrals, costals, seams, marg, center, vSeams, span };
 })();
+const inset = (pts, c, f) => pts.map(p => P(c.x + (p.x - c.x) * f, c.y + (p.y - c.y) * f));
+const TURTLE_HEAD = chaikin([P(-1, -4), P(4, -5.6), P(9, -5), P(13.5, -3.4), P(16.6, -1.5), P(16.2, .5), P(13, 1.7), P(7, 3.4), P(1, 4.6), P(-1.5, 2)], true, 2);
+
+function drawTurtleLeg(L, skin, dark, swim) {
+  const wU = L.front ? 5 : 6.2, wL = L.front ? 4.2 : 4.8;
+  G.line([L.hip, L.knee], wU + 1.6, dark); G.line([L.knee, L.foot], wL + 1.6, dark);
+  G.line([L.hip, L.knee], wU, skin); G.line([L.knee, L.foot], wL, skin);
+  if (L.front) for (let t = .25; t < 1; t += .25) {                          // 前腳的大鱗片
+    const p = P(lerp(L.knee.x, L.foot.x, t), lerp(L.knee.y, L.foot.y, t));
+    G.line(arcPts(p.x, p.y, 2, -2.2, -.9, 4), .6, 'rgba(30,28,20,.55)');
+  }
+  // 腳掌（有蹼）＋爪
+  const a = L.footAng, c = Math.cos(a), s = Math.sin(a), nx = -s, ny = c, len = L.front ? 5 : 6;
+  const wide = swim && L.spread ? 3.2 : 2;
+  const f = L.foot, tip = P(f.x + c * len, f.y + s * len);
+  G.poly([P(f.x + nx * 1.6, f.y + ny * 1.6), P(tip.x + nx * wide, tip.y + ny * wide), P(tip.x - nx * wide, tip.y - ny * wide), P(f.x - nx * 1.6, f.y - ny * 1.6)], skin, dark, .6);
+  for (let i = -1.5; i <= 1.5; i += 1) {
+    const b = P(tip.x + nx * wide * i / 1.6, tip.y + ny * wide * i / 1.6);
+    G.line([b, P(b.x + c * 2.2 + (swim ? 0 : .4), b.y + s * 2.2 + (swim ? 0 : 1))], .7, '#262219');
+  }
+}
 function drawTurtle(e) {
-  const s = e.size, sx = facing(e), wy = world.waterY;
-  const swim = e.mode === 'swim' || (e.mode === 'fall' && e.y > wy), bask = e.mode === 'bask';
-  const lim = e.limb || 0, skin = '#6e6c52', skinD = '#4d4b39';
-  G.save(); G.tf(e.x, e.y, 0, sx * s, s);
-  if (swim) G.tf(0, 0, -.04 * Math.sin(lim * .5));
+  const R = turtleRig(e), s = e.size, juv = R.juvenile;
+  const skin = juv ? '#4f4d40' : '#5d5b4a', dark = '#34322a', far = '#46443a';
+  const shellA = juv ? '#3a3628' : '#4a4431', shellB = juv ? '#4c4634' : '#625a41', shellC = juv ? '#5a5240' : '#7a6f4f';
+  G.save(); G.tf(e.x, e.y, 0, R.sx * s, s);
   if (e.dead) G.alpha(.6);
-  const leg = (px, py, ang, len, w, col) => {
-    const ex = px + Math.cos(ang) * len, ey = py + Math.sin(ang) * len;
-    G.line([P(px, py), P(ex, ey)], w, col);
-    G.circle(ex, ey, w * .45, col);
-  };
-  const legs = (col, ph) => {
-    if (swim) { leg(24, -14, .5 + Math.sin(lim + ph) * .9, 18, 7, col); leg(-22, -12, Math.PI - .5 + Math.sin(lim + ph + Math.PI) * .4, 13, 6, col); }
-    else if (bask) { leg(26, -11, Math.PI / 2 - .5, 12, 6.5, col); leg(-24, -11, Math.PI / 2 + .6, 12, 6.5, col); }
-    else { leg(24, -12, Math.PI / 2 + Math.sin(lim * 2 + ph) * .45, 12, 6.5, col); leg(-20, -12, Math.PI / 2 + Math.sin(lim * 2 + ph + Math.PI) * .45, 12, 6.5, col); }
-  };
-  legs(skinD, Math.PI);
-  G.poly([P(-38, -13), P(-50, -9), P(-38, -8)], skin);
-  // 頭和脖子
-  const ext = bask ? 1 : swim ? .6 : .4;
-  const hx = 40 + ext * 12, hy = (bask ? -26 : -17) + Math.sin(world.t * 1.3 + e.id) * 1;
-  G.line([P(30, -15), P(hx - 6, hy)], 9, skin);
-  G.poly(ellipsePts(hx, hy, 11, 7.5, bask ? -.2 : 0, 18), skin, skinD, 1);
-  G.line([P(hx - 9, hy - 3), P(hx + 6, hy - 4.5)], 1.6, '#e8d27a');            // 麝香龜頭上的兩條淡色線
-  G.line([P(hx - 9, hy + 2), P(hx + 8, hy + 1.5)], 1.6, '#e8d27a');
-  G.circle(hx + 5, hy - 1.5, 1.9, e.dead ? '#666' : '#111');
-  // 殼
-  G.poly([...TURTLE_SHELL, P(40, -9), P(-40, -9)], { lin: [0, -40, 0, -9, [[0, '#5a5440'], [1, '#2f2b20']]] }, '#24211a', 1.5);
-  for (const x of [-22, 0, 22]) { const t = TURTLE_SHELL[Math.round((x + 40) / 4)]; G.line([P(t.x, t.y + 1), P(x * 1.08, -14)], 1.2, 'rgba(20,18,12,.6)'); }
-  G.line([P(-38, -14), P(38, -14)], 1.3, 'rgba(20,18,12,.55)');
-  G.poly([P(-36, -9), P(36, -9), P(32, -5.5), P(-32, -5.5)], '#c9b06a');
-  legs(skin, 0);
+  if (!R.swim) { G.save(); G.alpha(.2); G.poly(ellipsePts(0, .6, 34, 2.6, 0, 18), '#000'); G.restore(); }   // 接觸陰影
+  G.tf(0, 0, R.pitch);
+  // 遠側的腳
+  R.legs.filter(l => !l.near).forEach(l => drawTurtleLeg(l, far, dark, R.swim));
+  // 尾巴
+  const tw = Math.sin(world.t * 2 + e.id) * .8;
+  G.poly([P(-34, -12.5 - R.bob), P(-45 + R.tuck * 6, -9 + tw), P(-34, -8.5 - R.bob)], skin, dark, .6);
+  // 脖子和頭（畫在殼後面，讓殼蓋住脖子根部）
+  const base = P(31, -15.5 - R.bob), L = 4 + R.ext * 13;
+  const joint = P(base.x + L, base.y - 1 - R.ext * 2 + Math.sin(world.t * 1.3 + e.id) * .5 * R.ext);
+  const mid = P((base.x + joint.x) / 2, (base.y + joint.y) / 2 + 1.5);
+  G.line([base, mid, joint], 11, dark); G.line([base, mid, joint], 9, skin);
+  for (const t of [.3, .55, .8]) { const p = P(lerp(base.x, joint.x, t), lerp(base.y, joint.y, t)); G.line(arcPts(p.x - 1, p.y, 4, -1.1, 1.1, 5), .6, 'rgba(30,28,20,.5)'); }   // 頸部皺褶
+  G.save(); G.tf(joint.x, joint.y, R.headPitch);
+  G.poly(TURTLE_HEAD, { lin: [0, -6, 0, 5, [[0, '#4e4c3e'], [1, '#77745c']]] }, dark, .8);
+  G.line([P(15.6, -2.4), P(12, -3.7), P(8, -4), P(3, -3.5), P(-1, -2.9), P(-5, -2.4)], 1.25, '#e0cd70');   // 上條紋
+  G.line([P(15.4, .2), P(12, .7), P(8, 1.3), P(4, 2), P(0, 2.7), P(-5, 3.1)], 1.25, '#e0cd70');            // 下條紋
+  G.line([P(16, .3), P(12, 1.2), P(7.5, 1.8)], .7, '#1e1c16');                                              // 嘴（角質喙）
+  G.circle(15.5, -1.6, .35, '#1e1c16');                                                                      // 鼻孔
+  G.circle(8.6, -1.6, 1.8, e.dead ? '#666' : '#2a2016', '#c9b56a', .4);
+  if (!e.dead) G.circle(9.1, -2.1, .5, '#fff');
+  for (const [x, y] of [[11.5, 2.3], [8.4, 3.2]]) G.poly([P(x - .6, y), P(x - .2, y + 1.7), P(x + .5, y)], '#8a8566');   // 下巴觸鬚
+  G.restore();
+  // 甲橋（麝香龜的腹甲很小，側面只看得到中間一小段）
+  const bridge = [...TURTLE_GEO.span(x => shellBase(x) - .5, -12, 14, 6), ...TURTLE_GEO.span(x => shellBase(x) + 3.2, 14, -12, 6)];
+  G.poly(bridge, '#b39a5c', dark, .6);
+  // 背甲
+  G.save(); G.tf(0, -R.bob);
+  G.poly(TURTLE_GEO.outline, shellA, '#221f16', 1.4);
+  for (const sc of TURTLE_GEO.vertebrals) {                                 // 椎盾很窄：只畫中央亮塊
+    const c = TURTLE_GEO.center(sc);
+    G.poly(sc, shellA, 'rgba(25,22,15,.85)', .9);
+    G.poly(inset(sc, c, .6), shellB);
+  }
+  for (const sc of TURTLE_GEO.costals) {
+    const c = TURTLE_GEO.center(sc);
+    G.poly(sc, shellA, 'rgba(25,22,15,.85)', .9);
+    G.poly(inset(sc, c, .78), shellB);                                       // 每片鱗甲中央較亮（盾心）
+    G.poly(inset(sc, c, .45), shellC);
+    for (const f of [.9, .64]) G.poly(inset(sc, c, f), null, 'rgba(25,22,15,.35)', .5);   // 生長紋
+    if (!juv) for (let i = 0; i < 3; i++) {                                  // 深色放射斑紋
+      const a = i * 2.1 + c.x * .3, r = 4;
+      G.line([P(c.x + Math.cos(a) * 1.5, c.y + Math.sin(a) * 1.5), P(c.x + Math.cos(a) * r, c.y + Math.sin(a) * r * .7)], .7, 'rgba(25,20,12,.45)');
+    }
+  }
+  // 緣盾
+  const mBand = [...TURTLE_GEO.span(shellMarg, -37, 37, 24), ...TURTLE_GEO.span(shellBase, 37, -37, 24)];
+  G.poly(mBand, { lin: [0, -16, 0, -8, [[0, shellB], [1, '#2e2a1f']]] }, 'rgba(25,22,15,.85)', .8);
+  for (const x of TURTLE_GEO.marg.slice(1, -1)) G.line([P(x, shellMarg(x)), P(x + (x < 0 ? -.6 : .6), shellBase(x))], .7, 'rgba(25,22,15,.8)');
+  for (const sm of TURTLE_GEO.seams) G.line(sm, .9, 'rgba(25,22,15,.9)');
+  if (juv) {                                                                 // 幼體：背甲上的縱稜
+    G.line(TURTLE_GEO.span(x => shellTop(x) + 1.5, -28, 28, 16), 1.6, '#2a2619');
+    G.line(TURTLE_GEO.span(x => lerp(shellVert(x), shellMarg(x), .35), -26, 26, 16), 1.2, '#2a2619');
+    for (let i = 0; i < 14; i++) G.circle(-26 + i * 4, lerp(shellVert(-26 + i * 4), shellMarg(-26 + i * 4), .6), .5, 'rgba(220,210,170,.35)');
+  } else {                                                                   // 成體：背上一點藻類
+    G.save(); G.alpha(.28);
+    for (const [x, r] of [[-12, 3.5], [-2, 2.6], [8, 3], [-20, 2]]) G.poly(ellipsePts(x, shellTop(x) + 2.5, r, r * .5, 0, 10), '#6f8a3a');
+    G.restore();
+  }
+  G.save(); G.alpha(.13);                                                   // 左上方來的光：背甲頂部高光
+  G.poly([...TURTLE_GEO.span(x => shellTop(x) + .8, -16, 26, 10), ...TURTLE_GEO.span(x => shellTop(x) + 5, 26, -16, 10)], '#ffffff');
+  G.restore();
+  G.restore();
+  // 近側的腳
+  R.legs.filter(l => l.near).forEach(l => drawTurtleLeg(l, skin, dark, R.swim));
   G.restore();
 }
 
 // ---------------------------------------------------------------------
-// 青蛙（側面，原點 = 腳下地面）
+// 青蛙（東方鈴蟾，側面，原點 = 腳下地面）
+//   參考特徵：身體扁平；背部鮮綠帶黑斑、佈滿尖刺疣粒；腹部紅橘帶黑斑；
+//   三角形瞳孔、沒有外耳鼓膜、沒有鳴囊（吸氣發聲）；後腳有蹼、前腳無蹼；
+//   受威脅時「鈴蟾反射」：背部下凹、抬起四肢露出紅色警告色
 // ---------------------------------------------------------------------
-const FROG_BODY = chaikin([P(-18, -6), P(-16, -15), P(-6, -21), P(6, -24), P(16, -22), P(23, -15), P(22, -10), P(14, -6), P(0, -3), P(-12, -3)], true, 2);
-const FROG_BELLY = chaikin([P(-14, -4), P(0, -3), P(14, -6), P(21, -10), P(16, -8.5), P(2, -6), P(-12, -6.5)], true, 1);
+const FROG_BODY = chaikin([P(-15, -7.5), P(-14, -11.5), P(-8, -13.6), P(0, -14.2), P(8, -13.6), P(11, -14.8), P(14, -14), P(19, -11.5), P(22.5, -8.5),
+                           P(21.5, -6.6), P(16, -5), P(8, -3.6), P(-2, -3.2), P(-10, -4)], true, 2);
+// 赤蛙類（金線蛙）：身形稍高、吻端較尖
+const FROG_BODY_RANID = chaikin([P(-15, -8), P(-13, -12.5), P(-6, -15), P(2, -15.8), P(9, -15.2), P(12, -16.2), P(15, -15), P(20, -12.2), P(24.5, -8.6),
+                                 P(23, -6.8), P(16, -5), P(8, -3.6), P(-2, -3.2), P(-10, -4.2)], true, 2);
+const FROG_BELLY = chaikin([P(-13, -4.6), P(-2, -3.4), P(8, -3.8), P(16, -5.2), P(20, -7), P(15, -6.6), P(8, -6), P(-2, -5.8), P(-12, -7.2)], true, 1);
+const FROG_BLOTCH = [[-9, -11, 3, 1.8], [-1, -12.6, 2.4, 1.3], [6, -12, 2.8, 1.5], [-5, -8.2, 2, 1.2], [2, -7.6, 1.6, 1], [13, -12.4, 1.5, .9], [-12, -8.4, 1.6, 1.1], [17, -10, 1.2, .8]]
+  .map(([x, y, rx, ry], i) => chaikin(ellipsePts(x, y, rx, ry, i * .7, 8).map((p, j) => P(p.x + Math.sin(j * 2.3 + i) * .3, p.y + Math.cos(j * 1.7 + i) * .25)), true, 2));
+const FROG_TUB = []; for (let x = -12; x <= 16; x += 2.6) for (const f of [.15, .5]) FROG_TUB.push(P(x + f * 3, -13.2 + f * 5 + Math.abs(x - 2) * .03 + (x > 9 ? 1 : 0)));
 function lp(a, b, t) { return P(lerp(a.x, b.x, t), lerp(a.y, b.y, t)); }
+function mixColor(a, b, t) {
+  const pa = [1, 3, 5].map(i => parseInt(a.slice(i, i + 2), 16)), pb = [1, 3, 5].map(i => parseInt(b.slice(i, i + 2), 16));
+  return '#' + pa.map((v, i) => Math.round(lerp(v, pb[i], t)).toString(16).padStart(2, '0')).join('');
+}
+function drawFrogHind(pts, col, dark, webbed, u, bands = true) {
+  const [hip, knee, ankle, heel, toe] = pts;
+  G.line([hip, knee], 6, dark); G.line([knee, ankle], 4.6, dark); G.line([ankle, heel], 3.4, dark);
+  G.line([hip, knee], 4.8, col); G.line([knee, ankle], 3.5, col); G.line([ankle, heel], 2.4, col);
+  if (bands !== false) for (const [a, b] of [[hip, knee], [knee, ankle]]) for (const t of [.35, .7]) {        // 腿上的黑色橫紋
+    const p = lp(a, b, t), ang = Math.atan2(b.y - a.y, b.x - a.x) + Math.PI / 2;
+    G.line([P(p.x - Math.cos(ang) * 1.8, p.y - Math.sin(ang) * 1.8), P(p.x + Math.cos(ang) * 1.8, p.y + Math.sin(ang) * 1.8)], 1, '#1d2a14');
+  }
+  // 腳掌：四根長腳趾，浮水、跳躍時蹼張開
+  const a = Math.atan2(toe.y - heel.y, toe.x - heel.x), len = Math.hypot(toe.x - heel.x, toe.y - heel.y);
+  const tips = [-.32, -.1, .12, .34].map(o => P(heel.x + Math.cos(a + o) * len, heel.y + Math.sin(a + o) * len));
+  if (webbed) { G.save(); G.alpha(.55); G.poly([heel, ...tips], u > .3 ? '#e8572a' : col); G.restore(); }
+  for (const t of tips) { G.line([heel, t], 1.1, dark); G.circle(t.x, t.y, .7, dark); }
+}
+function drawFrogFront(pts, col, dark) {
+  const [sh, el, wr, tip] = pts;
+  G.line([sh, el, wr], 4.4, dark); G.line([sh, el, wr], 3.3, col);
+  const a = Math.atan2(tip.y - wr.y, tip.x - wr.x);
+  for (const o of [-.5, -.15, .2, .55]) G.line([wr, P(wr.x + Math.cos(a + o) * 3.4, wr.y + Math.sin(a + o) * 3.4)], .9, dark);   // 四根手指（無蹼）
+}
 function drawFrog(e) {
-  const s = e.size;
-  let k = 0;
-  if (e.mode === 'jump') k = e.vy < 0 ? 1 : clamp(1 - e.vy / 500, .25, 1);
-  if (e.mode === 'float') k = .55;
-  const tilt = e.mode === 'jump' ? clamp(Math.atan2(e.vy, Math.abs(e.vx) + 1) * .5, -.6, .6) : 0;
-  const squash = e.landT > 0 ? 1 - e.landT * 1.1 : 1;
+  const R = frogRig(e), s = e.size, u = R.u, juv = R.juvenile, lk = SPECIES[e.type].look || {};
+  const green = juv ? '#6f7d3c' : lk.green[0], green2 = juv ? '#8e9a52' : lk.green[1], dark = '#1f3a17';
+  const orange = juv ? (lk.bellySpots ? '#e0a03a' : '#e6e0bc') : lk.belly;
+  const limbBase = juv ? '#647236' : mixColor(lk.green[0], '#000000', .12), limbFarBase = juv ? '#4c5828' : mixColor(lk.green[0], '#000000', .35);
+  const limb = lk.unkenColor === false ? limbBase : mixColor(limbBase, orange, u * .55), limbFar = mixColor(limbFarBase, '#b8441f', u * .55);
   G.save(); G.tf(e.x, e.y, 0, e.dir * s, s);
   if (e.dead) G.alpha(.6);
-  G.tf(0, 0, tilt, 1 + (1 - squash) * .5, squash);
-  const hind = (dx, dy, col) => {
-    const hip = P(-12 + dx, -9 + dy);
-    const knee = lp(P(4, -5), P(-24, -6), k), ankle = lp(P(-14, -1), P(-36, -2), k), toe = lp(P(0, 0), P(-48, 0), k);
-    G.line([hip, P(knee.x + dx, knee.y + dy)], 7, col);
-    G.line([P(knee.x + dx, knee.y + dy), P(ankle.x + dx, ankle.y + dy)], 5, col);
-    G.line([P(ankle.x + dx, ankle.y + dy), P(toe.x + dx, toe.y + dy)], 3.2, col);
-    G.poly([P(toe.x + dx, toe.y + dy), P(toe.x + dx + (k > .5 ? -5 : 5), toe.y + dy - 2), P(toe.x + dx + (k > .5 ? -5 : 5), toe.y + dy + 2)], col);
-  };
-  hind(3, -2, '#2f6a2a');
-  G.poly(FROG_BODY, { lin: [0, -24, 0, -3, [[0, '#3c8a34'], [1, '#6cbf4c']]] }, '#24511f', 1);
-  G.poly(FROG_BELLY, '#e8572a');
-  for (const [x, y, r] of [[-8, -15, 2.2], [0, -19, 1.8], [8, -20, 1.6], [-2, -12, 1.6], [-12, -10, 2], [4, -14, 1.3]]) G.circle(x, y, r, '#1d2a14');
-  const pulse = e.croakT > 0 ? 1 + Math.abs(Math.sin(world.t * 14)) * 1.3 : 1 + Math.max(0, Math.sin(world.t * 3 + e.id)) * .45;   // 鳴叫時鳴囊大幅鼓起
-  G.poly(ellipsePts(15, -8, 5 * pulse, 2.6 * pulse, 0, 14), '#f3b07a');
-  G.line([P(23, -14), P(13, -12.5)], 1, '#24511f');
-  G.circle(12, -23, 4.6, '#4fa040', '#24511f', 1);
-  G.circle(12.5, -23.5, 3, '#c9a43a');
-  G.poly(ellipsePts(12.8, -23.5, 1.8, 1.1, 0, 10), e.dead ? '#666' : '#111');
-  const hand = lp(P(14, 0), P(24, -3), k);
-  G.line([P(12, -9), hand], 3.6, '#4fa040');
-  hind(0, 0, '#3f8a34');
+  G.tf(0, R.sink, R.tilt, 1 + (1 - R.squash) * .5, R.squash);
+  if (!R.flt && e.mode !== 'jump') { G.save(); G.alpha(.18); G.poly(ellipsePts(2, .5, 20, 2, 0, 14), '#000'); G.restore(); }
+  // 遠側四肢
+  const off = pts => pts.map(p => P(p.x + 2.5, p.y - 1.8));
+  drawFrogHind(off(R.hind), limbFar, dark, R.flt || R.jump > .5, u, lk.legBands);
+  drawFrogFront(off(R.front), limbFar, dark);
+  // 身體（鳴叫時身體起伏，沒有鳴囊）
+  const breathe = R.croak ? 1 + Math.abs(Math.sin(world.t * 12)) * .07 : 1 + Math.sin(world.t * 2.2 + e.id) * .015;
+  G.save(); G.tf(0, -4, 0, 1, breathe); G.tf(0, 4);
+  const body = (lk.ranid ? FROG_BODY_RANID : FROG_BODY).map(R.warp);
+  G.poly(body, { lin: [0, -15, 0, -4, [[0, green], [1, green2]]] }, dark, .8);
+  const belly = FROG_BELLY.map(p => R.warp(P(p.x, p.y - (p.y < -5.5 ? u * 2.2 : 0))));            // 鈴蟾反射時腹側露出更多紅色
+  G.poly(belly, orange);
+  if (lk.bellySpots) for (const [x, y, r] of [[-8, -4.8, .9], [0, -4.4, .7], [6, -4.9, .8], [12, -5.8, .6], [-4, -5.6, .5]]) { const p = R.warp(P(x, y)); G.circle(p.x, p.y, r, '#1d1410'); }
+  if (lk.warty) {
+    for (const bl of FROG_BLOTCH) G.poly(bl.map(R.warp), '#18261a');
+    for (const t of FROG_TUB) { const p = R.warp(t); G.circle(p.x, p.y, .75, 'rgba(30,70,25,.55)'); G.circle(p.x - .25, p.y - .3, .3, 'rgba(220,255,200,.5)'); }   // 尖刺疣粒
+  }
+  if (lk.goldBands) {                                                                                // 金線蛙：背中線＋金褐色背側褶
+    for (const [x, y, r] of [[-9, -7.5, .8], [-3, -6.6, .6], [3, -7, .7], [-12, -9, .6]]) G.circle(x, y, r, 'rgba(30,40,20,.6)');
+    const fold = [P(15.5, -12.8), P(9, -13.4), P(2, -13.8), P(-6, -12.8), P(-13, -10.8)];
+    G.line(fold, 2.8, '#a8823a'); G.line(fold.map(p => P(p.x, p.y - .6)), .9, '#e6c86a');
+    G.line([P(-13, -12.2), P(-6, -14.5), P(2, -15.1), P(9, -14.6), P(13, -14.6), P(19, -12.1)], 1.3, '#a6dc6a');
+  }
+  G.save(); G.alpha(lk.warty ? .45 : .6);                                                         // 濕潤的反光（光滑皮膚更亮）
+  for (const [x, y, rx] of lk.warty ? [[-4, -13, 2.2], [5, -13.2, 1.6], [16, -12.4, 1.2]] : [[-6, -12.6, 3.6], [5, -14, 2.6], [17, -12.6, 1.6]]) { const p = R.warp(P(x, y)); G.poly(ellipsePts(p.x, p.y, rx, .55, -.1, 10), '#ffffff'); }
+  G.restore();
+  // 頭：嘴、鼻孔、眼睛（三角形瞳孔；沒有鼓膜）
+  if (lk.tympanum) G.circle(7.6, -10.6, 2.3, '#b8954a', '#6a5424', .6);                         // 鼓膜（鈴蟾沒有）
+  const m0 = R.warp(P(lk.ranid ? 24 : 22, -8)), m1 = R.warp(P(13, -7.4));
+  G.line([m0, P((m0.x + m1.x) / 2, (m0.y + m1.y) / 2 + .4), m1], .8, dark);
+  const n = R.warp(P(20.4, -10.3)); G.circle(n.x, n.y, .4, dark);
+  const ec = R.warp(P(lk.ranid ? 13 : 12.2, lk.ranid ? -15.2 : -14.2));
+  G.circle(ec.x, ec.y, 3.5, green, dark, .7);
+  G.circle(ec.x + .3, ec.y - .3, 2.4, '#b8913a', '#4a3a14', .4);
+  if (!e.dead) {
+    if (lk.pupil === 'h') G.poly(ellipsePts(ec.x + .3, ec.y - .3, 1.5, .75, 0, 12), '#0e0e0a');     // 橫的瞳孔
+    else G.poly([P(ec.x - .9, ec.y - 1.1), P(ec.x + 1.5, ec.y - 1.1), P(ec.x + .3, ec.y + .8)], '#0e0e0a');   // 三角形瞳孔
+    G.circle(ec.x + 1, ec.y - 1.3, .45, '#fff');
+  } else G.line([P(ec.x - 2, ec.y), P(ec.x + 2, ec.y)], .8, '#333');
+  G.restore();
+  // 近側四肢
+  drawFrogHind(R.hind, limb, dark, R.flt || R.jump > .5, u, lk.legBands);
+  drawFrogFront(R.front, limb, dark);
   G.restore();
   if (e.tongue) {                                              // 舌頭用世界座標畫
     const tg = e.tongue, m = frogMouth(e);
