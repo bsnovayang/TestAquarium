@@ -40,6 +40,7 @@ function drawThumb(cv, type) {
     const conf = { guppy: [36, 22, .55], neon: [32, 22, .75], redtail: [37, 22, .17], turtle: [30, 38, .45], frog: [32, 38, .7], goldfrog: [31, 38, .66], tadpole: [34, 22, 1.5],
                    gecko: [38, 34, .38], mosquito: [32, 22, 2], larva: [32, 24, 2], whale: [32, 22, .036], cricket: [30, 30, 1.6], fly: [32, 22, 4] }[type];
     if (type === 'larva') e.phase = 1;
+    if (e.sex) { e.sex = 'm'; e.morph = 0; e.size = e.adult = 1; }
     if (type === 'tadpole') { e.size = 1; e.meta = .3; }
     if (type === 'whale') { e.amp = .4; e.wmode = 'cruise'; }
     ctx.translate(conf[0], conf[1]); ctx.scale(conf[2], conf[2]);
@@ -262,6 +263,7 @@ function updatePanels(force) {
         <div class="kv"><span>狀態</span><b data-f="state"></b></div>
         ${sp.hungerTime ? `<div class="kv"><span>飽食度</span><b data-f="hunger"></b></div><div class="bar"><i data-f="hungerBar"></i></div>` : ''}
         <div class="kv"><span>生命值</span><b data-f="hp"></b></div><div class="bar"><i data-f="hpBar" style="background:#e05a7a"></i></div>
+        ${sp.sexed ? '<div class="kv"><span>性別／品系</span><b data-f="sex"></b></div>' : ''}
         <div class="kv"><span>成體體型</span><b data-f="size"></b></div>
         <input type="range" class="sizeSlider" data-f="sizeSlider" min="0.3" max="3" step="0.05">
         <div class="kv"><span>實際長度</span><b data-f="len"></b></div>
@@ -273,6 +275,7 @@ function updatePanels(force) {
     const f = n => el.querySelector(`[data-f="${n}"]`);
     const surf = o.kind === 'gecko' ? (o.surface === 'glass' ? '（背面玻璃）' : '（陸地）') : '';
     f('state').textContent = `${o.dead ? '💀 ' : ''}${o.state || '—'}${surf}`;
+    if (f('sex')) f('sex').textContent = (o.sex === 'm' ? '♂ 公' : '♀ 母') + '・' + GUPPY_MORPHS[o.morph || 0].name + (o.preg > 0 ? `・懷孕 ${Math.round(o.preg * 100)}%` : '');
     if (f('hunger')) { f('hunger').textContent = Math.round(o.hunger) + '%'; f('hungerBar').style.width = clamp(o.hunger, 0, 100) + '%'; f('hungerBar').style.background = o.hunger < 25 ? '#e0603a' : '#4caf50'; }
     f('hp').textContent = Math.round(o.hp); f('hpBar').style.width = clamp(o.hp, 0, 100) + '%';
     const base = sp.scale || 1, grown = o.size / o.adult;

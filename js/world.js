@@ -152,6 +152,7 @@ function makeEnt(type, x, y, push = true) {
   if (sp.kind === 'nest') { e.adult = e.size = 1; e.t = 0; e.hatch = 30; e.count = 1; e.of = 'frog'; e.medium = 'water'; }
   if (sp.kind === 'whale') { e.breathT = rand(...sp.breath) * .5; e.wmode = 'cruise'; }
   if (sp.kind === 'cricket' || sp.kind === 'fly') { e.life = rand(...sp.life); e.adult = e.size = rand(.9, 1.1); }
+  if (sp.sexed) { e.morph = Math.floor(Math.random() * GUPPY_MORPHS.length); setSex(e, Math.random() < .5 ? 'm' : 'f'); }
   if (push) { world.ents.push(e); afterDrop(e); }
   return e;
 }
@@ -180,6 +181,14 @@ function dropLive(type, x, y) {
     } else makeEnt('fly', clamp(x + rand(-50, 50), TANK.left + 10, TANK.right - 10), clamp((y ?? TANK.top + 40) + rand(-30, 30), TANK.top + 12, Math.max(TANK.top + 14, wy - 10)));
   }
   logEvent(type === 'cricket' ? `🦗 投放了 ${sp.drop} 隻蟋蟀` : `🪰 投放了 ${sp.drop} 隻果蠅`);
+}
+// 設定性別：母魚體型較大（保持目前的成長比例）
+function setSex(e, sex) {
+  const sp = SPECIES[e.type], ratio = e.size / e.adult;
+  if (e.sex === 'f') e.adult /= sp.femaleScale;
+  e.sex = sex;
+  if (sex === 'f') e.adult *= sp.femaleScale;
+  e.size = e.adult * ratio; e.preg = 0;
 }
 function dropFood(x, n = 5) {
   for (let i = 0; i < n; i++)
@@ -338,8 +347,8 @@ function serialize() {
   return {
     v: 1, tank: world.tank, level: world.level, tod: world.tod, settings: world.settings,
     decor: world.decor.map(({ type, x, y, w, h, rot, seed }) => ({ type, x, y, w, h, rot, seed })),
-    ents: world.ents.filter(e => !e.dead).map(({ type, x, y, dir, hunger, hp, size, adult, stage, grow, count, meta, of, medium, t, hatch }) =>
-      ({ type, x, y, dir, hunger, hp, size, adult, stage, grow, count, meta, of, medium, t, hatch })),
+    ents: world.ents.filter(e => !e.dead).map(({ type, x, y, dir, hunger, hp, size, adult, stage, grow, count, meta, of, medium, t, hatch, sex, morph, preg }) =>
+      ({ type, x, y, dir, hunger, hp, size, adult, stage, grow, count, meta, of, medium, t, hatch, sex, morph, preg })),
   };
 }
 function deserialize(data, keepLogs = false) {
@@ -358,6 +367,7 @@ function deserialize(data, keepLogs = false) {
     Object.assign(e, { dir: s.dir || 1, hunger: s.hunger ?? 90, hp: s.hp ?? 100, size: s.size ?? e.size, adult: s.adult ?? s.size ?? e.adult });
     if (e.kind === 'larva') Object.assign(e, { stage: s.stage || 'larva', grow: s.grow || 0, count: s.count || 0 });
     if (e.kind === 'tadpole') e.meta = s.meta || 0;
+    if (s.sex) Object.assign(e, { sex: s.sex, morph: s.morph ?? 0, preg: s.preg || 0 });
     if (e.kind === 'nest') Object.assign(e, { of: s.of || 'frog', medium: s.medium || 'water', t: s.t || 0, hatch: s.hatch || 30, count: s.count || 1 });
     afterDrop(e);
   }
@@ -377,7 +387,7 @@ function loadSampleScene() {
   for (const [x, h] of [[560, 170], [740, 220], [960, 150], [1010, 200]]) makeDecor('plant', X(x), TANK.floor, { h: h * sy });
   makeDecor('bubbler', X(880), TANK.floor);
   const wy = world.waterY, n = Math.max(1, Math.round(sx));
-  for (let i = 0; i < 4 * n; i++) makeEnt('guppy', X(rand(500, 1000)), rand(wy + 60, TANK.floor - 80));
+  for (let i = 0; i < 4 * n; i++) setSex(makeEnt('guppy', X(rand(500, 1000)), rand(wy + 60, TANK.floor - 80)), i % 2 ? 'f' : 'm');   // 公母各半
   for (let i = 0; i < 6 * n; i++) makeEnt('neon', X(rand(600, 900)), rand(wy + 80, TANK.floor - 100));
   makeEnt('turtle', X(760), wy + 120);
   makeEnt('turtle', X(560), wy + 160);

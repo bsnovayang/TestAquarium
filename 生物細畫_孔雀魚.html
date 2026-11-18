@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>孔雀魚細畫</title>
+<style>
+  :root { --bg:#1d2124; --panel:#262b2f; --ink:#e8e6e1; --muted:#9aa0a4; --line:#3a4146; --accent:#4fb89f; }
+  @media (prefers-color-scheme: light) { :root:not([data-theme="dark"]) { --bg:#e9e6df; --panel:#fbfaf7; --ink:#2b2b2b; --muted:#6f6f6f; --line:#d8d2c5; --accent:#2f8f78; } }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.6 system-ui, "Microsoft JhengHei", "PingFang TC", sans-serif; }
+  main { max-width: 1200px; margin: 0 auto; padding: 16px; }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  h2 { font-size: 16px; margin: 22px 0 8px; }
+  p.lead { color: var(--muted); margin: 0 0 12px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+  figure { margin: 0; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 8px; }
+  figcaption { font-weight: 600; margin-bottom: 4px; }
+  figcaption small { font-weight: 400; color: var(--muted); }
+  canvas { display: block; width: 100%; border-radius: 6px; background: linear-gradient(#8fd0e6, #2e7aa3); }
+  ul { margin: 6px 0; padding-left: 20px; }
+  .src a { color: var(--accent); }
+</style>
+</head>
+<body>
+<main>
+  <h1>孔雀魚細畫</h1>
+  <p class="lead">依真實孔雀魚（<i>Poecilia reticulata</i>）的結構重畫，並加入公母差異。下方的圖直接使用遊戲裡的繪圖程式。</p>
+
+  <h2>舊版 vs 新版（公魚、母魚）</h2>
+  <div class="grid">
+    <figure><figcaption>舊版</figcaption><canvas id="old" width="420" height="240"></canvas></figure>
+    <figure><figcaption>新版・公魚</figcaption><canvas id="male" width="420" height="240"></canvas></figure>
+    <figure><figcaption>新版・母魚</figcaption><canvas id="female" width="420" height="240"></canvas></figure>
+  </div>
+
+  <h2>結構標示</h2>
+  <div class="grid" style="grid-template-columns: 1fr 1fr">
+    <figure><figcaption>公魚</figcaption><canvas id="aMale" width="640" height="380"></canvas></figure>
+    <figure><figcaption>母魚（懷孕中）</figcaption><canvas id="aFemale" width="640" height="380"></canvas></figure>
+  </div>
+
+  <h2>公魚品系 <small style="color:var(--muted);font-weight:400">小魚會遺傳父母其中一方</small></h2>
+  <div class="grid" id="morphs"></div>
+
+  <h2>母魚懷孕 <small style="color:var(--muted);font-weight:400">腹部鼓起、懷孕斑越來越大、越深</small></h2>
+  <div class="grid">
+    <figure><figcaption>剛懷孕</figcaption><canvas id="p0" width="360" height="200"></canvas></figure>
+    <figure><figcaption>懷孕一半</figcaption><canvas id="p1" width="360" height="200"></canvas></figure>
+    <figure><figcaption>快要生產</figcaption><canvas id="p2" width="360" height="200"></canvas></figure>
+  </div>
+
+  <h2>行為</h2>
+  <div class="grid">
+    <figure><figcaption>求偶展示 <small>公魚在母魚面前擺出 S 形姿勢、身體顫動</small></figcaption><canvas id="court" width="420" height="240"></canvas></figure>
+    <figure><figcaption>魚苗 <small>半透明、眼睛大（已放大顯示）</small></figcaption><canvas id="fry" width="420" height="240"></canvas></figure>
+  </div>
+
+  <h2>參考的真實特徵</h2>
+  <ul>
+    <li><b>公母差異</b>：公魚小（約 1.5～3.5 cm）、色彩鮮豔、尾鰭大而華麗、背鰭較長；母魚大（約 3～6 cm）、顏色樸素</li>
+    <li><b>交接器</b>：公魚的臀鰭特化成細長尖銳的生殖足，用來體內受精</li>
+    <li><b>懷孕斑</b>：母魚腹部靠近臀鰭的深色斑，越接近生產越大、越深，生產後變淡</li>
+    <li><b>卵胎生</b>：懷孕約 21～35 天（遊戲中縮短為 90 秒），一次生 12～60 隻，母魚越大生越多（遊戲受族群上限限制）</li>
+    <li><b>求偶</b>：公魚在母魚面前擺出 S 形姿勢（sigmoid display），是最主要的求偶動作</li>
+    <li><b>學名 reticulata</b>：意為「網狀的」，指鱗片邊緣形成的網紋</li>
+    <li><b>嘴</b>：上位口（嘴朝上），適合吃水面的食物（遊戲推論，資料未直接說明）</li>
+  </ul>
+  <p class="src">資料來源：
+    <a href="https://fishtankadvisor.com/male-vs-female-guppy/">Fish Tank Advisor（公母差異）</a>、
+    <a href="https://a-z-animals.com/blog/male-vs-female-guppy-key-differences-explained/">A-Z Animals</a>、
+    <a href="https://www.tankarium.com/male-vs-female-guppy/">Tankarium</a>、
+    <a href="https://pmc.ncbi.nlm.nih.gov/articles/PMC4046373">PMC（S 形求偶展示）</a>、
+    <a href="https://banglajol.info/index.php/JASBS/article/view/17866/12523">JASBS（懷孕期與產仔數）</a>、
+    <a href="https://a-z-animals.com/blog/guppy-gestation-period-how-long-are-guppies-pregnant/">A-Z Animals（懷孕期）</a>
+  </p>
+</main>
+
+<script src="js/core.js"></script>
+<script src="js/species.js"></script>
+<script src="js/world.js"></script>
+<script src="js/effects.js"></script>
+<script src="js/creatures.js"></script>
+<script src="js/draw.js"></script>
+<script>
+world.waterY = -99999;
+function makeG(sex, extra = {}) {
+  const e = makeEnt('guppy', 0, 0, false);
+  setSex(e, sex);
+  Object.assign(e, { dir: 1, id: 7, amp: .45, freq: 2, phase: 0, pec: 0, morph: 0 }, extra);
+  if (extra.adultScale) { e.adult *= extra.adultScale; e.size = e.adult * (extra.grow ?? 1); }
+  return e;
+}
+const views = [
+  { id: 'old', e: makeG('m'), sc: 2.2, old: true },
+  { id: 'male', e: makeG('m'), sc: 2.2 },
+  { id: 'female', e: makeG('f', { preg: .3 }), sc: 2.2 / 1.35 },
+  { id: 'aMale', e: makeG('m', { amp: .15, freq: 1 }), sc: 3.6, labels: [
+    ['扇形大尾鰭（依品系配色）', -46, -14, -6, -40], ['長而飄逸的背鰭', -8, -14, 10, -40], ['交接器（特化的臀鰭）', -12, 9.5, -8, 34],
+    ['上位口（嘴朝上）', 38, -4.2, 14, -30], ['大眼睛', 33.5, -2.2, 26, 12], ['金屬色斑與黑斑', 4, -4, 6, 40] ] },
+  { id: 'aFemale', e: makeG('f', { amp: .15, freq: 1, preg: .75 }), sc: 3.6 / 1.35, labels: [
+    ['懷孕斑', -2, 7, -10, 34], ['網狀鱗紋', 10, -6, 4, -40], ['小而圓的尾鰭', -40, -6, -2, -36], ['鼓起的腹部', 12, 12, 20, 26] ] },
+  { id: 'p0', e: makeG('f', { preg: .05 }), sc: 1.9 / 1.35 },
+  { id: 'p1', e: makeG('f', { preg: .5 }), sc: 1.9 / 1.35 },
+  { id: 'p2', e: makeG('f', { preg: .97 }), sc: 1.9 / 1.35 },
+  { id: 'court', e: makeG('m', { sigV: 1, amp: .1, freq: .6 }), sc: 1.8, mate: makeG('f', { preg: 0, dir: -1, morph: 1 }) },
+  { id: 'fry', e: makeG('f', { grow: .32 }), sc: 2.2 / .32 / 1.35 * .7 },
+].map(v => ({ ...v, ctx: document.getElementById(v.id).getContext('2d') }));
+views.find(v => v.id === 'fry').e.size = views.find(v => v.id === 'fry').e.adult * .32;
+GUPPY_MORPHS.forEach((m, i) => {
+  const f = document.createElement('figure');
+  f.innerHTML = `<figcaption>${m.name}</figcaption><canvas width="300" height="170"></canvas>`;
+  document.getElementById('morphs').appendChild(f);
+  views.push({ id: 'm' + i, e: makeG('m', { morph: i, id: 20 + i }), sc: 1.55, ctx: f.querySelector('canvas').getContext('2d') });
+});
+
+let last = performance.now();
+function frame(now) {
+  const dt = Math.min(.05, (now - last) / 1000); last = now;
+  world.t += dt;
+  for (const v of views) {
+    const c = v.ctx, cw = c.canvas.width, ch = c.canvas.height;
+    for (const e of [v.e, v.mate].filter(Boolean)) { e.phase += Math.PI * 2 * e.freq * dt; e.pec += dt * 7; }
+    c.setTransform(1, 0, 0, 1, 0, 0); c.clearRect(0, 0, cw, ch);
+    G.begin(c);
+    if (v.mate) { c.setTransform(1.5, 0, 0, 1.5, cw * .72, ch * .58); drawFish(v.mate); }
+    c.setTransform(v.sc, 0, 0, v.sc, cw / 2 + (v.mate ? -40 : 14 * v.sc * (v.e.size / v.e.adult < .5 ? .2 : 1)), ch * (v.mate ? .42 : .5));
+    if (v.old) drawFishGeneric(v.e); else drawFish(v.e);
+    if (v.labels) {
+      c.setTransform(1, 0, 0, 1, 0, 0);
+      const k = SPECIES.guppy.len / 64 * v.e.size * v.sc, ox = cw / 2 + 14 * v.sc, oy = ch * .5;
+      c.font = '14px system-ui, "Microsoft JhengHei", sans-serif'; c.textBaseline = 'middle';
+      for (const [text, lx, ly, dx, dy] of v.labels) {
+        const px = ox + lx * k, py = oy + ly * k, tx = px + dx * 2, ty = py + dy * 2;
+        c.strokeStyle = 'rgba(255,255,255,.8)'; c.lineWidth = 1.2; c.beginPath(); c.moveTo(px, py); c.lineTo(tx, ty); c.stroke();
+        c.fillStyle = '#ff9f1c'; c.beginPath(); c.arc(px, py, 3.5, 0, 7); c.fill();
+        const w = c.measureText(text).width, bx = clamp(tx - (dx < 0 ? w + 10 : 0), 2, cw - w - 12);
+        c.fillStyle = 'rgba(255,255,255,.92)'; c.fillRect(bx, ty - 11, w + 10, 22);
+        c.fillStyle = '#222'; c.textAlign = 'left'; c.fillText(text, bx + 5, ty);
+      }
+    }
+  }
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

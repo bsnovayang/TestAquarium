@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>紅尾黑鯊細畫</title>
+<style>
+  :root { --bg:#1d2124; --panel:#262b2f; --ink:#e8e6e1; --muted:#9aa0a4; --line:#3a4146; --accent:#4fb89f; }
+  @media (prefers-color-scheme: light) { :root:not([data-theme="dark"]) { --bg:#e9e6df; --panel:#fbfaf7; --ink:#2b2b2b; --muted:#6f6f6f; --line:#d8d2c5; --accent:#2f8f78; } }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.6 system-ui, "Microsoft JhengHei", "PingFang TC", sans-serif; }
+  main { max-width: 1200px; margin: 0 auto; padding: 16px; }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  h2 { font-size: 16px; margin: 22px 0 8px; }
+  p.lead { color: var(--muted); margin: 0 0 12px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
+  figure { margin: 0; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 8px; }
+  figcaption { font-weight: 600; margin-bottom: 4px; }
+  figcaption small { font-weight: 400; color: var(--muted); }
+  canvas { display: block; width: 100%; border-radius: 6px; background: linear-gradient(#8fd0e6, #2e7aa3); }
+  ul { margin: 6px 0; padding-left: 20px; }
+  .src a { color: var(--accent); }
+</style>
+</head>
+<body>
+<main>
+  <h1>紅尾黑鯊細畫</h1>
+  <p class="lead">依真實紅尾黑鯊（<i>Epalzeorhynchos bicolor</i>，鯉科）的結構重畫。下方的圖直接使用遊戲裡的繪圖程式。</p>
+
+  <h2>舊版 vs 新版</h2>
+  <div class="grid">
+    <figure><figcaption>舊版</figcaption><canvas id="old" width="520" height="280"></canvas></figure>
+    <figure><figcaption>新版</figcaption><canvas id="new" width="520" height="280"></canvas></figure>
+  </div>
+
+  <h2>結構標示</h2>
+  <figure><canvas id="anatomy" width="1100" height="500"></canvas></figure>
+
+  <h2>動作</h2>
+  <div class="grid">
+    <figure><figcaption>巡游 <small>身體 S 形波動，尾鰭寬度隨擺動伸縮</small></figcaption><canvas id="cruise" width="420" height="240"></canvas></figure>
+    <figure><figcaption>驅趕入侵者 <small>衝刺：擺尾頻率加倍</small></figcaption><canvas id="dash" width="420" height="240"></canvas></figure>
+    <figure><figcaption>啃食藻類 <small>低頭、用朝下的嘴啃石頭表面</small></figcaption><canvas id="graze" width="420" height="240"></canvas></figure>
+    <figure><figcaption>轉身 <small>側面視角：壓扁再翻面</small></figcaption><canvas id="turn" width="420" height="240"></canvas></figure>
+  </div>
+
+  <h2>參考的真實特徵</h2>
+  <ul>
+    <li><b>分類</b>：鯉科，不是真正的鯊魚；因為外型像鯊魚而得名。沒有脂鰭</li>
+    <li><b>體型</b>：細長流線、左右稍扁；<b>腹部平坦</b>，所以輪廓像鯊魚；年紀越大中段越厚（雌魚更明顯）</li>
+    <li><b>顏色</b>：全身絨黑，對比<b>深叉形的鮮紅（或橘紅）尾鰭</b></li>
+    <li><b>嘴</b>：<b>下位口</b>，長在頭部下方、朝下，周圍有<b>兩對觸鬚</b></li>
+    <li><b>背鰭</b>：高聳；雄魚的背鰭比較尖、身體比較瘦</li>
+    <li><b>行為</b>：持續啃食石頭和沉木上的藻類；地盤性強，會劃一塊地盤驅趕入侵者，年紀越大越兇</li>
+  </ul>
+  <p class="src">資料來源：
+    <a href="https://en.wikipedia.org/wiki/Red-tailed_black_shark">Wikipedia</a>、
+    <a href="https://seriouslyfish.com/genus/epalzeorhynchos">Seriously Fish（屬的形態）</a>、
+    <a href="https://fishprofiles.com/profiles/freshwater/Cyprinids/Epalzeorhynchos_bicolor/">FishProfiles</a>、
+    <a href="https://www.fishkeeper.co.uk/fish/freshwater/cyprinids/red-tailed-black-shark-">Fishkeeper</a>、
+    <a href="https://www.buildyouraquarium.com/red-tail-shark/">Build Your Aquarium（行為）</a>
+  </p>
+</main>
+
+<script src="js/core.js"></script>
+<script src="js/species.js"></script>
+<script src="js/world.js"></script>
+<script src="js/effects.js"></script>
+<script src="js/creatures.js"></script>
+<script src="js/draw.js"></script>
+<script>
+world.waterY = -99999;
+function makeS(extra = {}) {
+  const e = makeEnt('redtail', 0, 0, false);
+  Object.assign(e, { size: 1, adult: 1, dir: 1, id: 5, amp: .45, freq: 2, phase: 0, pec: 0, pitch: 0 }, extra);
+  return e;
+}
+const views = [
+  { id: 'old', e: makeS(), sc: 1.4, old: true },
+  { id: 'new', e: makeS(), sc: 1.4 },
+  { id: 'anatomy', e: makeS({ amp: .12, freq: 1 }), sc: 2.25, label: true },
+  { id: 'cruise', e: makeS(), sc: 1.1 },
+  { id: 'dash', e: makeS({ amp: 1, freq: 6 }), sc: 1.1 },
+  { id: 'graze', e: makeS({ amp: .1, freq: .8 }), sc: 1.1, graze: true },
+  { id: 'turn', e: makeS(), sc: 1.1, turn: true },
+].map(v => ({ ...v, ctx: document.getElementById(v.id).getContext('2d') }));
+
+// 標示位置（魚的局部座標，64 單位骨架）
+const LABELS = [
+  ['深叉形的紅尾鰭', -47, -9, -10, -30],
+  ['高聳的背鰭', 13, -24, 26, -4],
+  ['絨黑色身體', -6, -7, -40, -34],
+  ['側線', -10, -1, -36, -10],
+  ['鰓蓋', 30, -3, 10, -36],
+  ['下位口（嘴朝下）＋兩對觸鬚', 37, 8.5, 4, 34],
+  ['胸鰭', 22, 7, 10, 30],
+  ['平坦的腹部', 6, 8.6, -6, 34],
+  ['腹鰭', -6, 11, -24, 30],
+  ['臀鰭', -20, 9, -30, 20],
+];
+
+let last = performance.now();
+function frame(now) {
+  const dt = Math.min(.05, (now - last) / 1000); last = now;
+  world.t += dt;
+  for (const v of views) {
+    const c = v.ctx, cw = c.canvas.width, ch = c.canvas.height, e = v.e;
+    e.phase += Math.PI * 2 * e.freq * dt; e.pec += dt * 7;
+    if (v.turn) { const t = (world.t * .35) % 1; e.turnT = t < .5 ? 0 : (t - .5) * 2; if (t < .02) e.dir = 1; e.turning = e.turnT > 0; }
+    if (v.graze) e.pitch = .42 + Math.sin(world.t * 9) * .05;
+    c.setTransform(1, 0, 0, 1, 0, 0); c.clearRect(0, 0, cw, ch);
+    G.begin(c);
+    if (v.graze) {                                                  // 一塊石頭
+      c.setTransform(v.sc, 0, 0, v.sc, cw / 2, ch * .52);
+      G.poly(chaikin([P(-10, 72), P(30, 34), P(80, 30), P(130, 50), P(160, 90), P(-10, 90)], true, 2), { lin: [0, 30, 0, 90, [[0, '#8d9599'], [1, '#4f5558']]] }, '#3f4446', 1.5);
+      G.save(); G.alpha(.5); for (const [x, y] of [[40, 36], [62, 33], [85, 34], [105, 40]]) G.poly(ellipsePts(x, y, 9, 2.4, 0, 10), '#5f8a3a'); G.restore();   // 藻類
+      c.setTransform(v.sc, 0, 0, v.sc, cw / 2 - 20 * v.sc, ch * .52 - 4 * v.sc);
+    } else c.setTransform(v.sc, 0, 0, v.sc, cw / 2 + 10 * v.sc, ch * .5);
+    if (v.old) drawFishGeneric(e); else drawFish(e);
+    if (v.label) {
+      c.setTransform(1, 0, 0, 1, 0, 0);
+      const k = SPECIES.redtail.len / 64 * v.sc, ox = cw / 2 + 10 * v.sc, oy = ch * .5;
+      c.font = '15px system-ui, "Microsoft JhengHei", sans-serif'; c.textBaseline = 'middle';
+      for (const [text, lx, ly, dx, dy] of LABELS) {
+        const px = ox + lx * k, py = oy + ly * k, tx = px + dx * 2.6, ty = py + dy * 2.6;
+        c.strokeStyle = 'rgba(255,255,255,.75)'; c.lineWidth = 1.2; c.beginPath(); c.moveTo(px, py); c.lineTo(tx, ty); c.stroke();
+        c.fillStyle = '#ff9f1c'; c.beginPath(); c.arc(px, py, 3.5, 0, 7); c.fill();
+        const w = c.measureText(text).width;
+        c.fillStyle = 'rgba(255,255,255,.92)'; c.fillRect(tx - (dx < 0 ? w + 10 : 0), ty - 11, w + 10, 22);
+        c.fillStyle = '#222'; c.textAlign = 'left'; c.fillText(text, tx - (dx < 0 ? w + 5 : -5), ty);
+      }
+    }
+  }
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

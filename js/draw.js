@@ -138,7 +138,167 @@ function fishBand(n, i0, i1, f0, f1) {          // 身體內的一條色帶（�
   for (let i = i0; i <= i1; i++) { top.push(P(n[i].x, n[i].y + n[i].h * f0)); bot.push(P(n[i].x, n[i].y + n[i].h * f1)); }
   return chaikin([...top, ...bot.reverse()], true, 1);
 }
+
+// ---------------------------------------------------------------------
+// 紅尾黑鯊（細畫）：細長流線、腹部平坦、絨黑色身體、深叉形紅尾鰭、
+//   高聳的背鰭、下位口（嘴朝下）＋兩對觸鬚；沒有脂鰭（鯉科）
+// ---------------------------------------------------------------------
+function sharkProfile(s) {
+  const top = 12.5 * Math.pow(Math.max(0, Math.sin(Math.PI * Math.min(1, s * 1.06 + .07))), .62) * (1 - .58 * s) + 1.6;
+  const bot = 8 * Math.pow(Math.max(0, Math.sin(Math.PI * Math.min(1, s * 1.08 + .05))), .9) * (1 - .5 * s) + 1.4;   // 腹部比背部平
+  return { top, bot };
+}
+const SHARK_TAIL = chaikin([P(1, -2.6), P(-8, -7), P(-17, -14.5), P(-22.5, -15.5), P(-16, -6), P(-11, 0), P(-16, 6), P(-22.5, 15.5), P(-17, 14.5), P(-8, 7), P(1, 2.6)], true, 1);
+function drawSharkFish(e) {
+  const sp = SPECIES[e.type], R = fishRig(e), n = R.nodes, tb = n[FISH_N - 1], k = e.size * sp.len / 64;
+  const pr = n.map((q, i) => sharkProfile(i / (FISH_N - 1)));
+  const T = i => P(n[i].x, n[i].y - pr[i].top), B = i => P(n[i].x, n[i].y + pr[i].bot);
+  G.save(); G.tf(e.x, e.y, 0, R.sx * k, (e.dead ? -1 : 1) * k); G.tf(0, 0, e.pitch || 0);
+  if (e.dead) G.alpha(.65);
+  // 尾鰭：深叉形、鮮紅（尾柄是黑的）
+  G.save(); G.tf(tb.x, tb.y, R.tailRot, R.tailSx, 1);
+  G.poly(SHARK_TAIL, { lin: [0, 0, -22, 0, [[0, '#3a1410'], [.18, '#d8321f'], [.6, '#f2482a'], [1, '#ff6a3a']]] }, 'rgba(90,15,8,.5)', .5);
+  for (let r = -3; r <= 3; r++) G.line([P(-2, r * .5), P(-15 - Math.abs(r) * 1.6, r * 4.4)], .35, 'rgba(120,20,10,.35)');
+  G.restore();
+  // 遠側胸鰭
+  G.save(); G.tf(n[1].x - 1, n[1].y + pr[1].bot * .55, R.pecRot + .25);
+  G.poly(chaikin([P(0, 0), P(-6, 2.2), P(-8.5, 3.6), P(-3, 1.2)], true, 1), '#0a0b0d'); G.restore();
+  // 背鰭（高、尖、後緣內凹）
+  const d0 = T(2), d1 = T(4);
+  G.poly(chaikin([P(d0.x + 1.5, d0.y + 1), P(n[3].x + 4, d0.y - 15.5), P(n[3].x + .5, d0.y - 15.8), P(d1.x + 3, d1.y - 3.5), P(d1.x, d1.y + 1)], true, 1), '#0e1013', 'rgba(70,80,90,.5)', .4);
+  G.line([P(n[3].x + 4, d0.y - 15.3), P(n[3].x + .8, d0.y - 15.5)], .6, 'rgba(230,235,240,.55)');   // 背鰭尖端淡色邊
+  // 腹鰭、臀鰭
+  const b4 = B(4), b6 = B(6);
+  G.poly(chaikin([P(b4.x + 2.5, b4.y - 2.5), P(b4.x - 4.5, b4.y + 5), P(b4.x - 6.5, b4.y - 1.5)], true, 1), '#0e1013');   // 鰭的根部埋進身體裡，才不會看起來分開
+  G.poly(chaikin([P(b6.x + 2.5, b6.y - 2.5), P(b6.x - 4.5, b6.y + 5.5), P(b6.x - 7.5, b6.y - 1.5)], true, 1), '#0e1013');
+  // 身體：絨黑色、腹部平坦、吻端圓鈍
+  const ol = chaikin([P(n[0].x + 4.2, n[0].y - .6), ...n.map((q, i) => T(i)), ...n.map((q, i) => B(i)).reverse(), P(n[0].x + 3, n[0].y + 2.6)], true, 2);
+  G.poly(ol, { lin: [0, -13, 0, 9, [[0, '#1d2228'], [.45, '#0d0f12'], [1, '#16191c']]] }, 'rgba(80,90,100,.35)', .5);
+  G.save(); G.alpha(.2);                                                         // 背上的絨光
+  G.poly(chaikin([...n.slice(0, 7).map((q, i) => P(q.x, q.y - pr[i].top + 1.2)), ...n.slice(0, 7).map((q, i) => P(q.x, q.y - pr[i].top * .45)).reverse()], true, 1), '#7d8fa3');
+  G.restore();
+  G.line(n.slice(1, 8).map((q, i) => P(q.x, q.y - pr[i + 1].top * .12)), .45, 'rgba(160,170,180,.22)');   // 側線
+  G.line(arcPts(n[1].x + 4, n[1].y + .5, 7.5, Math.PI * .62, Math.PI * 1.38), .7, 'rgba(110,120,130,.45)');   // 鰓蓋
+  // 下位口＋兩對觸鬚
+  const mx = n[0].x + 2.6, my = n[0].y + pr[0].bot - .3;
+  G.line([P(mx - 1.8, my - .3), P(mx, my + .4), P(mx + 1.6, my - .2)], .6, '#3a2f2c');
+  G.line([P(mx + 1.4, my - .1), P(mx + 3, my + 2.4)], .4, '#2c2c2e');
+  G.line([P(mx - 1.4, my), P(mx - 1.6, my + 2.8)], .4, '#2c2c2e');
+  // 眼
+  const ex = n[0].x - .8, ey = n[0].y - 2.4;
+  G.circle(ex, ey, 2.5, '#0a0a0a', 'rgba(170,150,90,.8)', .55);
+  if (!e.dead) G.circle(ex + .7, ey - .7, .6, '#fff');
+  // 近側胸鰭（會撥動）
+  G.save(); G.tf(n[1].x - .5, n[1].y + pr[1].bot * .6, R.pecRot);
+  G.poly(chaikin([P(1, -.5), P(-8, 2.6), P(-11, 5.4), P(-3, 2.2)], true, 1), '#262a30', 'rgba(150,160,170,.55)', .45); G.restore();   // 稍亮一點，黑身體上才看得到
+  G.restore();
+}
+
+
+// ---------------------------------------------------------------------
+// 孔雀魚（細畫）：公母差異大
+//   公魚：細長、扇形大尾鰭（依品系配色、斑點）、長背鰭、臀鰭特化成交接器
+//   母魚：較大、灰色系、網狀鱗紋明顯、小圓尾；懷孕時腹部鼓起、懷孕斑變大變深
+//   共同：上位口（嘴朝上）、大眼睛；魚苗半透明
+// ---------------------------------------------------------------------
+function guppyTailPts(e, male) {
+  const base = male
+    ? [P(0, -3), P(-14, -10), P(-30, -22), P(-40, -25), P(-44, -12), P(-45.5, 0), P(-44, 12), P(-40, 25), P(-30, 22), P(-14, 10), P(0, 3)]
+    : [P(0, -3), P(-8, -6.5), P(-15, -8.5), P(-18.5, -4.5), P(-19.5, 0), P(-18.5, 4.5), P(-15, 8.5), P(-8, 6.5), P(0, 3)];
+  // 尾鰭後緣跟不上身體：沿著尾鰭傳遞的波（次級動作）
+  return base.map(p => P(p.x, p.y + Math.sin(e.phase - 1.3 + p.x * .05) * e.amp * Math.abs(p.x) * .07));
+}
+function drawGuppy(e) {
+  const sp = SPECIES[e.type], R = fishRig(e), n = R.nodes, tb = n[FISH_N - 1], k = e.size * sp.len / 64;
+  const juv = e.size < e.adult * .6, male = e.sex === 'm' && !juv, preg = e.sex === 'f' ? (e.preg || 0) : 0;
+  const M = GUPPY_MORPHS[e.morph || 0];
+  const bulge = i => Math.max(0, Math.sin(Math.PI * (i - 1) / 5));
+  const topH = i => n[i].h * (male ? .8 : .95), botH = i => n[i].h * (male ? .8 : 1 + bulge(i) * (.12 + preg * .4));
+  const T = i => P(n[i].x, n[i].y - topH(i)), B = i => P(n[i].x, n[i].y + botH(i));
+  G.save(); G.tf(e.x, e.y, 0, R.sx * k, (e.dead ? -1 : 1) * k);
+  if (e.dead) G.alpha(.65);
+  if (juv) G.alpha(.62);                                                            // 魚苗半透明
+  // 尾鰭
+  G.save(); G.tf(tb.x, tb.y, R.tailRot, R.tailSx, 1);
+  const tail = chaikin(guppyTailPts(e, male), true, 2);
+  if (male) {
+    G.save(); G.alpha(.93);
+    G.poly(tail, { lin: [0, 0, -45, 0, [[0, M.tail[0]], [.5, M.tail[1]], [1, M.tail[2]]]] }, 'rgba(40,20,20,.35)', .6);
+    G.restore();
+    for (let r = -5; r <= 5; r++) G.line([P(-1, r * .5), P(-42 + Math.abs(r) * .6, r * 4.6)], .45, 'rgba(60,20,10,.3)');   // 鰭條
+    const rnd = i => ((Math.sin(e.id * 12.9898 + i * 78.233) * 43758.5453) % 1 + 1) % 1;
+    for (let i = 0; i < (M.cobra ? 16 : 7); i++) {                                       // 尾鰭斑點（每隻不同）
+      const x = -10 - rnd(i) * 30, y = (rnd(i + 50) - .5) * (Math.abs(x) * .9);
+      G.circle(x, y, M.cobra ? 1.2 : 1.6 + rnd(i + 9) * 1.4, M.spot);
+    }
+    G.line(chaikin(guppyTailPts(e, true).slice(3, 8), false, 1), 1.4, 'rgba(255,255,255,.25)');   // 尾鰭邊緣反光
+  } else {
+    G.save(); G.alpha(juv ? .35 : .55);
+    G.poly(tail, { lin: [0, 0, -20, 0, [[0, '#c8ccc4'], [1, mixColor(M.tail[1], '#c8ccc4', .55)]]] }, 'rgba(60,60,50,.3)', .5);
+    G.restore();
+    for (let r = -3; r <= 3; r++) G.line([P(-1, r * .4), P(-18, r * 2.6)], .35, 'rgba(60,60,50,.25)');
+  }
+  G.restore();
+  // 背鰭
+  if (male) {
+    const dp = chaikin([P(n[2].x, T(2).y + 2.8), P(n[3].x - 1, T(3).y - 7), P(n[5].x - 4, T(5).y - 11 + Math.sin(e.phase - 2) * 1.5), P(n[6].x - 9, T(6).y - 6 + Math.sin(e.phase - 2.6) * 2), P(n[5].x, T(5).y + 2.8)], true, 2);   // 鰭根埋進身體
+    G.save(); G.alpha(.85); G.poly(dp, { lin: [0, -20, 0, -10, [[0, M.tail[2]], [1, M.tail[0]]]] }, 'rgba(40,20,20,.3)', .5); G.restore();
+    for (let i = 0; i < 3; i++) G.circle(n[4].x - i * 4, T(4).y - 4 - i, 1, M.spot);
+  } else {
+    G.save(); G.alpha(.5); G.poly(chaikin([P(n[2].x, T(2).y + 1), P(n[3].x, T(3).y - 5), P(n[4].x - 2, T(4).y - 3), P(n[4].x + 1, T(4).y + 1)], true, 1), '#b8bcb0'); G.restore();
+  }
+  // 臀鰭：公魚是尖細的交接器；母魚是小扇形
+  if (male) {
+    const g0 = B(5);
+    G.line([P(g0.x + 3, g0.y - .5), P(g0.x - 6, g0.y + 3.5), P(g0.x - 10, g0.y + 4.5)], 1.3, 'rgba(120,130,140,.85)');
+  } else {
+    G.save(); G.alpha(.5); G.poly(chaikin([P(B(5).x + 2, B(5).y - 1), P(B(6).x, B(6).y + 6), P(B(6).x - 3, B(6).y)], true, 1), '#b8bcb0'); G.restore();
+  }
+  G.save(); G.alpha(.45); G.poly(chaikin([P(B(3).x + 1, B(3).y - .5), P(B(3).x - 4, B(3).y + 4.5), P(B(3).x - 5, B(3).y)], true, 1), '#c8ccc4'); G.restore();   // 腹鰭
+  // 身體：上位口（嘴朝上）
+  const snout = P(n[0].x + 5.2, n[0].y - 2.2);
+  const ol = chaikin([snout, ...n.map((q, i) => T(i)), ...n.map((q, i) => B(i)).reverse(), P(n[0].x + 4, n[0].y + 1.5)], true, 2);
+  const bodyCol = male ? ['#6a8296', '#c4d2dc', '#f2f4ef'] : juv ? ['#9aa69a', '#d4dad0', '#eef0ea'] : ['#7b8476', '#c4c8bc', '#ece8dc'];
+  G.poly(ol, { lin: [0, -14, 0, 16, [[0, bodyCol[0]], [.45, bodyCol[1]], [1, bodyCol[2]]]] }, 'rgba(40,50,60,.35)', .5);
+  // 網狀鱗紋（reticulata 的由來）
+  G.save(); G.alpha(juv ? 0 : male ? .14 : .28);
+  for (let i = 1; i < 7; i++) for (const f of [-.55, -.2, .15]) {
+    const c = P(n[i].x, n[i].y + topH(i) * f);
+    G.line(arcPts(c.x + 1.6, c.y, 2.2, Math.PI * .6, Math.PI * 1.4, 5), .5, '#2a3438');
+  }
+  G.restore();
+  if (male) {                                                                            // 公魚：金屬色斑與黑斑
+    G.save(); G.alpha(.7);
+    G.poly(fishBand(n, 3, 6, -.7, -.15).map(p => P(p.x, p.y * .82)), M.patch[0]);
+    G.poly(fishBand(n, 2, 4, .05, .55).map(p => P(p.x, p.y * .82)), M.patch[1]);
+    G.restore();
+    for (const [i, f, r] of [[4, -.1, 1.8], [6, .1, 1.5], [3, .35, 1.2]]) G.circle(n[i].x, n[i].y + topH(i) * f, r, 'rgba(20,20,25,.7)');
+    if (M.cobra) for (let i = 1; i < 7; i++) G.line([P(n[i].x + 2, n[i].y - topH(i) * .6), P(n[i].x - 1, n[i].y - topH(i) * .2), P(n[i].x + 1.5, n[i].y + topH(i) * .2)], .7, 'rgba(40,30,15,.6)');   // 眼鏡蛇紋
+  } else if (!juv) {                                                                     // 母魚：懷孕斑
+    const g = P(n[5].x + 2, n[5].y + botH(5) * .55);
+    G.save(); G.alpha(.25 + preg * .6); G.poly(ellipsePts(g.x, g.y, 2.6 + preg * 2.4, 1.6 + preg * 1.6, -.2, 14), '#2a2018'); G.restore();
+  }
+  // 鰓蓋、嘴、眼
+  G.line(arcPts(n[1].x + 6, n[1].y, 8.5, Math.PI * .65, Math.PI * 1.35), .9, 'rgba(40,60,80,.35)');
+  G.line([P(snout.x - .2, snout.y + .2), P(snout.x - 2.6, snout.y - 1)], .7, 'rgba(30,30,30,.7)');
+  const ex = n[0].x - .5, ey = n[0].y - 2.2;
+  G.circle(ex, ey, juv ? 5.6 : 4.2, '#eef2f2', 'rgba(60,70,80,.5)', .4);            // 魚苗眼睛特別大
+  G.circle(ex + .5, ey, juv ? 3.8 : 2.6, e.dead ? '#777' : '#111');
+  if (!e.dead) G.circle(ex + 1.3, ey - .9, .8, '#fff');
+  // 胸鰭（半透明，會撥動）
+  G.save(); G.tf(n[2].x + 4, n[2].y + 3, R.pecRot);
+  G.poly(ellipsePts(-6, 0, 7, 2.8, 0, 12), 'rgba(255,240,225,.5)');
+  G.restore();
+  G.restore();
+}
+
 function drawFish(e) {
+  const shape = (SPECIES[e.type].look || {}).shape;
+  if (shape === 'shark') return drawSharkFish(e);
+  if (shape === 'guppy') return drawGuppy(e);
+  drawFishGeneric(e);
+}
+function drawFishGeneric(e) {
   const sp = SPECIES[e.type], lk = sp.look, R = fishRig(e), n = R.nodes, tb = n[FISH_N - 1];
   const k = e.size * sp.len / 64;
   G.save(); G.tf(e.x, e.y, 0, R.sx * k, (e.dead ? -1 : 1) * k);

@@ -15,8 +15,9 @@
 const SPECIES = {
   guppy: {
     name: '孔雀魚', kind: 'fish', len: 64, speed: 34, dash: 140, sight: 170, hungerTime: 900, huntBelow: 80, hit: 30,
-    growTime: 180, birth: .3, breed: { how: 'live', cool: [120, 200], count: [2, 4] },
-    look: { body: ['#5f7f99', '#b4c9d8', '#f2f6f8'], tail: ['#ffc04d', '#f2702e', '#d93a36'], tailType: 'fan',
+    growTime: 180, birth: .3, breed: { how: 'live', cool: [90, 150], count: [3, 6] },
+    sexed: true, femaleScale: 1.35, gestation: 90,   // 分公母；母魚較大；懷孕 90 秒後生產（真實約 21～35 天）
+    look: { shape: 'guppy', body: ['#5f7f99', '#b4c9d8', '#f2f6f8'], tail: ['#ffc04d', '#f2702e', '#d93a36'], tailType: 'fan',
             fin: 'rgba(245,140,60,.85)', hScale: 1, spots: true },
   },
   neon: {
@@ -27,8 +28,8 @@ const SPECIES = {
   },
   redtail: {
     name: '紅尾黑鯊', kind: 'fish', len: 216, speed: 30, dash: 120, sight: 180, hungerTime: 1000, huntBelow: 75, hit: 34,
-    growTime: 300, birth: .3, territorial: true, bottom: true,      // 地盤性、待在底層；水族缸內幾乎不繁殖
-    look: { body: ['#121416', '#25282c', '#3b3f44'], tail: ['#f04a30', '#d8321f', '#b0261a'], tailType: 'fork',
+    growTime: 300, birth: .3, territorial: true, bottom: true, grazer: true,   // 地盤性、待在底層、會啃食藻類；水族缸內幾乎不繁殖
+    look: { shape: 'shark', body: ['#121416', '#25282c', '#3b3f44'], tail: ['#f04a30', '#d8321f', '#b0261a'], tailType: 'fork',
             fin: '#1a1c1f', hScale: .82, dorsalTall: true },
   },
   turtle: { name: '麝香龜', kind: 'turtle', len: 90, scale: 2, speed: 26, walk: 14, sight: 190, hungerTime: 1200, huntBelow: 60, hit: 22,
@@ -63,6 +64,15 @@ const SPECIES = {
   cricket: { name: '蟋蟀', kind: 'cricket', len: 30, hit: 12, life: [240, 360], drop: 5 },
   fly:     { name: '果蠅', kind: 'fly', len: 6, speed: 45, hit: 8, life: [90, 140], drop: 8 },
 };
+
+// 孔雀魚公魚的品系（尾鰭與身上金屬色斑）；小魚遺傳父母其中一方
+const GUPPY_MORPHS = [
+  { name: '火紅',   tail: ['#ffd36a', '#ff6a2a', '#d42a2a'], spot: 'rgba(70,10,10,.55)', patch: ['#ff8a3a', '#5ab8f5'] },
+  { name: '藍草尾', tail: ['#b8ecff', '#4a9ae8', '#1f4fb8'], spot: 'rgba(10,15,40,.75)', patch: ['#5ab8f5', '#9fe8ff'] },
+  { name: '黃金',   tail: ['#fff3b0', '#ffcf40', '#e8a020'], spot: 'rgba(90,60,10,.45)', patch: ['#ffe070', '#ffffff'] },
+  { name: '眼鏡蛇', tail: ['#ffe08a', '#e8a03a', '#8a5a20'], spot: 'rgba(30,20,10,.8)',  patch: ['#c8a050', '#7fd0a0'], cobra: true },
+  { name: '馬賽克', tail: ['#a8e0ff', '#3a6ad0', '#d8303e'], spot: 'rgba(20,20,60,.5)',  patch: ['#4a8ae8', '#ff7a3a'] },
+];
 
 // 族群上限（以標準缸為準，大缸依面積放大）
 const CAPS = { mosquito: 30, larva: 80, fish: 16, frog: 6, tadpole: 30, turtle: 3, gecko: 4 };
