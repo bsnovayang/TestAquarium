@@ -39,7 +39,7 @@ function resize() {
 
 let acc = 0, last = performance.now();
 // 效能顯示（網址加 ?perf=1）：FPS、每幀模擬／繪圖時間、生物數
-const PERF = { on: new URLSearchParams(location.search).has('perf'), fps: 0, sim: 0, draw: 0, n: 0, t0: 0, show: '' };
+const PERF = { on: new URLSearchParams(location.search).has('perf'), fps: 0, sim: 0, draw: 0, n: 0, t0: 0, show: '量測中…' };
 function frame(now) {
   const real = Math.min(.1, (now - last) / 1000); last = now;
   const tSim = performance.now();
@@ -69,10 +69,11 @@ function drawPerf(now, tSim, tDraw) {
     PERF.sim = PERF.draw = PERF.n = 0; PERF.t0 = now;
   }
   ctx.setTransform(1, 0, 0, 1, 0, 0);
-  ctx.font = `${Math.round(12 * viewScale)}px system-ui, sans-serif`; ctx.textBaseline = 'top';
+  const dpr = Math.min(window.devicePixelRatio || 1, 2), fs = Math.max(11 * dpr, 12 * viewScale);   // 小螢幕也看得清楚
+  ctx.font = `${Math.round(fs)}px system-ui, sans-serif`; ctx.textBaseline = 'top';
   const w = ctx.measureText(PERF.show).width;
-  ctx.fillStyle = 'rgba(0,0,0,.6)'; ctx.fillRect(4, 4, w + 12, 20 * viewScale);
-  ctx.fillStyle = '#fff'; ctx.fillText(PERF.show, 10, 4 + 4 * viewScale);
+  ctx.fillStyle = 'rgba(0,0,0,.6)'; ctx.fillRect(4, 4, w + 12, fs * 1.6);
+  ctx.fillStyle = '#fff'; ctx.fillText(PERF.show, 10, 4 + fs * .3);
 }
 
 updateWaterY();

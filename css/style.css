@@ -28,11 +28,11 @@ h3 small { float: right; font-weight: 400; }
 h4 { margin: 0 0 6px; font-size: 15px; }
 h4 small { color: var(--muted); font-weight: 400; }
 
-.items { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.items { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 6px; }
 .pitem { background: var(--panel2); border: 1px solid var(--line); border-radius: 8px; padding: 4px 2px 2px; text-align: center;
   cursor: grab; touch-action: none; user-select: none; }
 .pitem:hover { border-color: var(--accent); }
-.pitem canvas { width: 64px; height: 44px; display: block; margin: 0 auto; pointer-events: none; background: #dfe9e4; border-radius: 6px; }
+.pitem canvas { width: 100%; max-width: 64px; height: auto; aspect-ratio: 64 / 44; display: block; margin: 0 auto; pointer-events: none; background: #dfe9e4; border-radius: 6px; }
 .pitem span { font-size: 12px; display: block; pointer-events: none; }
 .ghost { position: fixed; width: 64px; height: 44px; pointer-events: none; transform: translate(-50%, -50%) scale(1.3); z-index: 99; opacity: .85; }
 
@@ -74,11 +74,35 @@ body.view #cv { border-radius: 0; box-shadow: none; cursor: pointer; }
 /* 小螢幕（手機橫拿） */
 @media (max-width: 1000px), (max-height: 520px) {
   #app { grid-template-columns: 112px 1fr 180px; }
-  .items { grid-template-columns: 1fr; }
+  .items { grid-template-columns: minmax(0, 1fr); }
   #bar { gap: 4px 10px; padding: 4px 8px; }
   #bar button { padding: 2px 7px; }
   #water { width: 90px; }
 }
+
+/* 手機橫拿（畫面很矮）：工具列單行可滑動、右側資訊改成抽屜、左側面板變窄 */
+#sideToggle { display: none; }
+@media (max-height: 520px) {
+  #app { grid-template-columns: 96px 1fr; grid-template-areas: "pal stage" "bar bar"; }
+  #palette { padding: 4px; }
+  #palette .tabs { grid-template-columns: 1fr 1fr; gap: 3px; margin-bottom: 6px; }
+  #palette .tabs button { padding: 2px 0; font-size: 11px; line-height: 1.25; }
+  .items { gap: 4px; }
+  .pitem span { font-size: 11px; }
+  #stageWrap { padding: 4px; }
+  #side { position: fixed; top: 0; right: 0; bottom: 0; width: min(260px, 72vw); z-index: 30; padding-top: 34px;
+    transform: translateX(105%); transition: transform .2s; box-shadow: -6px 0 20px rgba(0,0,0,.4); }
+  body.sideOpen #side { transform: none; }
+  #sideToggle { display: block; position: fixed; top: 6px; right: 6px; z-index: 31; padding: 2px 10px; opacity: .9; }
+  body.sideOpen #sideToggle { background: var(--accent); border-color: var(--accent); color: #fff; }
+  body.view #sideToggle { display: none; }
+  #bar { flex-wrap: nowrap; overflow-x: auto; gap: 4px 8px; padding: 3px 6px; scrollbar-width: thin; }
+  #bar .grp { flex: none; gap: 4px; }
+  #bar .grp > span { display: none; }
+  #bar button, #bar select { padding: 2px 6px; font-size: 13px; }
+  #water { width: 80px; }
+}
+@media (max-height: 520px) and (prefers-reduced-motion: reduce) { #side { transition: none; } }
 
 /* 族群圖、事件 */
 .legend { display: flex; flex-wrap: wrap; gap: 2px 10px; font-size: 12px; color: var(--muted); margin-bottom: 4px; }
@@ -129,3 +153,18 @@ button:disabled { opacity: .4; cursor: default; }
 .pmCard small { font-size: 12px; color: var(--muted); }
 .pmIcons { display: flex; gap: 4px; min-height: 44px; }
 .pmIcons canvas { width: 64px; height: 44px; background: #dfe9e4; border-radius: 6px; }
+
+/* 新手提示 */
+#tut { position: fixed; inset: 0; z-index: 60; }
+#tut[hidden] { display: none; }
+.tutHole { position: fixed; border-radius: 10px; box-shadow: 0 0 0 9999px rgba(0,0,0,.55); outline: 2px solid var(--accent); outline-offset: 2px;
+  transition: left .25s, top .25s, width .25s, height .25s; pointer-events: none; }
+.tutBox { position: fixed; width: min(320px, calc(100vw - 16px)); background: var(--panel); color: var(--ink); border: 1px solid var(--line);
+  border-radius: 12px; padding: 12px 14px; box-shadow: 0 8px 30px rgba(0,0,0,.4); transition: left .25s, top .25s; }
+.tutBox b { display: block; font-size: 16px; margin: 2px 0 4px; }
+.tutBox p { margin: 0 0 12px; line-height: 1.6; }
+.tutStep { font-size: 12px; color: var(--muted); }
+.tutBtns { display: flex; gap: 6px; align-items: center; }
+.tutBtns span { flex: 1; }
+.tutBtns button[hidden] { display: none; }
+@media (prefers-reduced-motion: reduce) { .tutHole, .tutBox { transition: none; } }

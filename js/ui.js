@@ -159,7 +159,16 @@ function hitTest(p) {
   }
   return null;
 }
-function select(obj) { UI.sel = obj; updatePanels(true); }
+const compactLayout = () => window.matchMedia('(max-height: 520px)').matches;   // 手機橫拿：右側資訊是抽屜
+function setSideOpen(open) {
+  document.body.classList.toggle('sideOpen', open);
+  const b = document.getElementById('sideToggle');
+  if (b) { b.setAttribute('aria-expanded', open); b.textContent = open ? '✕ 關閉' : 'ℹ 資訊'; }
+}
+function select(obj) {
+  UI.sel = obj; updatePanels(true);
+  if (obj && compactLayout()) setSideOpen(true);                  // 小螢幕點選生物：自動打開資訊
+}
 // 畫布操作：
 //   拖曳物件 → 移動（編輯模式）
 //   拖曳空白處 → 移動鏡頭；點一下空白處 → 取消選取（觀賞模式：餵食）
@@ -457,6 +466,7 @@ function bindBar() {
   document.addEventListener('pointerup', () => { UNDO.sliding = false; });
   $('toView').onclick = () => setMode('view');
   $('toEdit').onclick = () => setMode('edit');
+  $('sideToggle').onclick = () => setSideOpen(!document.body.classList.contains('sideOpen'));
 }
 function syncTankUI() { const el = $('tank'); if (el) el.value = world.tank; }
 let toastT = 0;

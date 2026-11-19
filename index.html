@@ -13,6 +13,7 @@
   <main id="stageWrap">
     <canvas id="cv"></canvas>
     <button id="toEdit" class="floating">✎ 編輯模式</button>
+    <button id="sideToggle" aria-controls="side" aria-expanded="false">ℹ 資訊</button>
     <div id="balance" hidden>
       <div class="balhead"><b>平衡調整</b><small>改了立刻生效，並記在這個瀏覽器</small>
         <span><button id="balExport">匯出</button><button id="balImport">匯入</button><button id="balReset">重設預設</button><button id="balClose">✕</button></span></div>
@@ -46,7 +47,7 @@
       <button id="save">存檔</button><button id="load">讀檔</button>
       <button id="export">匯出</button><button id="import">匯入</button>
       <button id="newTank" class="primary">＋ 新魚缸</button><button id="clear">清空</button></div>
-    <div class="grp"><button id="openBal">⚙ 平衡</button></div>
+    <div class="grp"><button id="openBal">⚙ 平衡</button><button id="help" title="新手說明">？ 說明</button></div>
     <div class="grp right"><button id="toView" class="primary">▶ 觀賞模式</button></div>
     <input id="file" type="file" accept=".json,application/json" hidden>
   </footer>
@@ -71,5 +72,6 @@
 <script src="js/ui.js"></script>
 <script src="js/balance.js"></script>
 <script src="js/main.js"></script>
+<script src="js/tutorial.js"></script>
 </body>
 </html>
