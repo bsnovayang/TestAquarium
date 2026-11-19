@@ -14,6 +14,7 @@ const PXOPT = {
   bright: false,      // 亮色細線：觸角、腳、口鬚改用亮色
   light: 'day',       // 燈光：day 明亮（跟著日夜）／aqua 水族館藍光／glow 夜光
   hybrid: false,      // 混合光影：放大後再疊平滑的半透明光束、暗角、水面光暈
+  detail: true,       // 依格子數加細節＋自動清理雜點（關掉 = 改善前，給比較頁用）
 };
 const CREATURE = 9;   // 生物的格子在 PXB.tag 標成 9（燈光模式下保持明亮）
 const PXCAM = { z: 1, x: 0, y: 0 };                                   // x, y：畫面左上角的世界座標
@@ -31,6 +32,10 @@ const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5].map(v => (v
 const bayer = (x, y) => BAYER[(y & 3) * 4 + (x & 3)];
 // 色帶之間只在交界處抖色（v 是連續的色階位置；edge = 每條色帶靠近下一條的多少比例要抖色）
 const band = (v, x, y, edge = .25) => { const b = Math.floor(v), f = v - b; return f > 1 - edge && bayer(x, y) < (f - (1 - edge)) / edge ? b + 1 : b; };
+function mixU(a, b, t) {                                              // 兩個 Uint32 顏色混合
+  const r = (a & 255) + ((b & 255) - (a & 255)) * t, g = ((a >> 8) & 255) + (((b >> 8) & 255) - ((a >> 8) & 255)) * t, bl = ((a >> 16) & 255) + (((b >> 16) & 255) - ((a >> 16) & 255)) * t;
+  return ((255 << 24) | (Math.round(bl) << 16) | (Math.round(g) << 8) | Math.round(r)) >>> 0;
+}
 const hash2 = (x, y, s = 0) => { const n = Math.sin(x * 127.1 + y * 311.7 + s * 74.7) * 43758.5453; return n - Math.floor(n); };
 
 // ---------------------------------------------------------------------
@@ -87,12 +92,50 @@ class PixBuf {
     const marks = [];
     for (let y = ya; y <= yb; y++) for (let x = xa; x <= xb; x++) {
       const i = y * w + x; if (this.d[i]) continue;
-      const body = (xx, yy) => xx >= 0 && yy >= 0 && xx < w && yy < this.h && this.tag[yy * w + xx] === 1;
+      const body = (xx, yy) => { if (xx < 0 || yy < 0 || xx >= w || yy >= this.h) return false; const t = this.tag[yy * w + xx]; return t === 1 || t === 4; };
       if (body(x, y + 1)) marks.push(i, ct); else if (body(x, y - 1) || body(x - 1, y) || body(x + 1, y)) marks.push(i, co);
     }
     for (let k = 0; k < marks.length; k += 2) { this.d[marks[k]] = marks[k + 1]; this.tag[marks[k]] = 2; }
     this.x0 = xa; this.x1 = xb; this.y0 = ya; this.y1 = yb;
   }
+  // 自動清理（像素畫師手動做的事）：去掉孤立的雜點、補單格破洞、把夾在同色中間的單格雜色換掉
+  // 只看身體（tag 1）和鰭（tag 4）；之後才畫的亮點、細線不受影響
+  cleanup() {
+    if (this.x1 < 0) return;
+    const w = this.w, xa = Math.max(1, this.x0 - 1), xb = Math.min(w - 2, this.x1 + 1), ya = Math.max(1, this.y0 - 1), yb = Math.min(this.h - 2, this.y1 + 1);
+    const bw = xb - xa + 1, bh = yb - ya + 1, cd = new Uint32Array(bw * bh), ct = new Uint8Array(bw * bh);
+    for (let y = 0; y < bh; y++) for (let x = 0; x < bw; x++) { const i = (y + ya) * w + x + xa; cd[y * bw + x] = this.d[i]; ct[y * bw + x] = this.tag[i]; }
+    const isB = (x, y) => x >= 0 && y >= 0 && x < bw && y < bh && (ct[y * bw + x] === 1 || ct[y * bw + x] === 4);
+    for (let y = 0; y < bh; y++) for (let x = 0; x < bw; x++) {
+      const j = y * bw + x, i = (y + ya) * w + x + xa, nb = [[x + 1, y], [x - 1, y], [x, y + 1], [x, y - 1]].filter(([a, b]) => isB(a, b));
+      if (isB(x, y)) {
+        if (!nb.length) { this.d[i] = 0; this.tag[i] = 0; continue; }                    // 孤立的一格
+        if (nb.length === 4) {                                                            // 四周同一個顏色、只有自己不同 → 換掉
+          const c0 = cd[nb[0][1] * bw + nb[0][0]];
+          if (c0 !== cd[j] && nb.every(([a, b]) => cd[b * bw + a] === c0)) this.d[i] = c0;
+        }
+      } else if (!cd[j] && nb.length >= 3) {                                              // 單格破洞 → 補上
+        const [a, b] = nb[0]; this.d[i] = cd[b * bw + a]; this.tag[i] = ct[b * bw + a];
+        if (xa + x < this.x0) this.x0 = xa + x; if (xa + x > this.x1) this.x1 = xa + x; if (ya + y < this.y0) this.y0 = ya + y; if (ya + y > this.y1) this.y1 = ya + y;
+      }
+    }
+  }
+  // 內側受光邊：身體上緣往內一格變亮、下緣往內一格變暗（像素畫最常用的立體感手法）
+  rim(lightK = .3, darkK = .22, tags = [1]) {
+    if (this.x1 < 0) return;
+    const w = this.w, ch = [];
+    const isIn = (x, y) => x >= 0 && y >= 0 && x < w && y < this.h && tags.includes(this.tag[y * w + x]);
+    for (let y = this.y0; y <= this.y1; y++) for (let x = this.x0; x <= this.x1; x++) {
+      if (!isIn(x, y)) continue; const i = y * w + x;
+      if (!isIn(x, y - 1)) ch.push(i, mixU(this.d[i], 0xffffffff, lightK));
+      else if (!isIn(x, y + 1)) ch.push(i, mixU(this.d[i], 0xff201018, darkK));
+    }
+    for (let k = 0; k < ch.length; k += 2) this.d[ch[k]] = ch[k + 1];
+  }
+  // 只畫在某種 tag 的格子上（例如鰭條只畫在鰭上）
+  lineOn(x0, y0, x1, y1, c, onTag) { const col = typeof c === 'string' ? C(c) : c, w = this.w; this.line(x0, y0, x1, y1, (x, y) => (x >= 0 && y >= 0 && x < w && y < this.h && this.tag[y * w + x] === onTag) ? col : 0, onTag); }
+  // 只畫在已經有身體的格子上（例如鱗片亮點不會跑出輪廓）
+  setOn(x, y, c, onTags = [1]) { x = Math.floor(x + .5); y = Math.floor(y + .5); if (x < 0 || y < 0 || x >= this.w || y >= this.h) return; const i = y * this.w + x; if (onTags.includes(this.tag[i])) this.d[i] = typeof c === 'string' ? C(c) : c; }
   // 把有畫的格子貼到另一張緩衝區，並清掉自己（給精靈用的暫存區）
   blitTo(dst) {
     if (this.x1 < 0) return;
@@ -314,30 +357,30 @@ function drawPxFish(e) {
   const sp = SPECIES[e.type]; if (sp.cory) return drawPxCory(e);
   const lk = sp.look, R = fishRig(e), n = R.nodes, tb = n[FISH_N - 1], k = e.size * sp.len / 64, s = ppu() * k * PXOPT.cscale;
   const shape = lk.shape, pal = PX_FISH[shape === 'tetra' ? 'tetra' : 'guppy'], Rm = pal.ramp;
-  const juv = e.size < e.adult * .6, male = e.sex === 'm' && !juv;
+  const juv = e.size < e.adult * .6, male = e.sex === 'm' && !juv, M = GUPPY_MORPHS[e.morph || 0];
   const T = mapper(e.x, e.y, s, R.sx, e.dead ? -1 : 1);
   const ct = Math.cos(R.tailRot), st = Math.sin(R.tailRot);
   const TT = q => T(P(tb.x + q.x * R.tailSx * ct - q.y * st, tb.y + q.x * R.tailSx * st + q.y * ct));
+  const Lpx = 64 * s, D = PXOPT.detail;                                  // Lpx：這隻魚在畫面上有幾格長（決定畫多少細節）
+  const FIN = 4;
   live(B => {
     // 尾鰭
     let tail;
     if (shape === 'guppy') {
       tail = guppyTailPts(e, male);
       if (male) {
-        const M = GUPPY_MORPHS[e.morph || 0];
-        B.poly(tail.map(TT), M.tail[2]);                                  // 外圈深
-        B.poly(tail.map(q => TT(P(q.x * .72, q.y * .72))), M.tail[1]);
-        B.poly(tail.map(q => TT(P(q.x * .4, q.y * .45))), M.tail[0]);    // 靠近尾柄淡
-        if (s > .45) for (let i = 0; i < (M.cobra ? 14 : 6); i++) { const a = hash2(e.id, i) * 1.6 - .8, rr = .35 + hash2(i, e.id) * .5; const q = TT(P(-44 * rr, Math.sin(a) * 22 * rr)); B.set(q.x, q.y, C(mixColor(M.tail[2], '#000000', .45))); }
-      } else B.poly(tail.map(TT), pal.fin);
+        B.poly(tail.map(TT), M.tail[2], FIN);                             // 外圈深
+        B.poly(tail.map(q => TT(P(q.x * .72, q.y * .72))), M.tail[1], FIN);
+        B.poly(tail.map(q => TT(P(q.x * .4, q.y * .45))), M.tail[0], FIN);   // 靠近尾柄淡
+      } else B.poly(tail.map(TT), pal.fin, FIN);
     } else {
       tail = FISH_TAILS[lk.tailType || 'fork'];
-      B.poly(tail.map(TT), pal.fin);
+      B.poly(tail.map(TT), pal.fin, FIN);
     }
     // 背鰭、臀鰭
     const F = fishFins(n, lk.dorsalTall);
-    const finCol = shape === 'guppy' && male ? GUPPY_MORPHS[e.morph || 0].tail[1] : pal.fin;
-    B.poly(F.dorsal.map(T), finCol); B.poly(F.anal.map(T), finCol);
+    const finCol = shape === 'guppy' && male ? M.tail[1] : pal.fin;
+    B.poly(F.dorsal.map(T), finCol, FIN); B.poly(F.anal.map(T), finCol, FIN);
     // 身體：底色 → 背部暗 → 腹部亮
     const ol = [P(n[0].x + 5, n[0].y + 1), ...n.map(q => P(q.x, q.y - q.h)), ...n.map(q => P(q.x, q.y + q.h)).reverse()];
     B.poly(ol.map(T), Rm[1]);
@@ -348,19 +391,52 @@ function drawPxFish(e) {
       B.poly(fishBand(n, lk.redFull ? 1 : 4, 7, .08, .92).map(T), pal.red[1]);
       B.poly(fishBand(n, lk.redFull ? 1 : 4, 7, .55, .92).map(T), pal.red[2]);
       B.poly(fishBand(n, 1, 7, -.5, -.08).map(T), pal.blue[1]);
-      if (s > .45) B.path(fishBand(n, 1, 6, -.38, -.36).slice(0, 7).map(T), pal.blue[0]);
     }
-    if (shape === 'guppy' && male) {                                      // 孔雀魚公魚：身上的彩斑
-      const M = GUPPY_MORPHS[e.morph || 0];
-      B.poly(fishBand(n, 4, 7, -.3, .5).map(T), M.patch[0]);
-      if (n[3]) B.disc(T(n[3]).x, T(P(n[3].x, n[3].y + n[3].h * .1)).y, Math.max(.6, 3 * s), M.patch[1]);
+    if (shape === 'guppy' && male) B.poly(fishBand(n, 4, 7, -.3, .5).map(T), M.patch[0]);   // 孔雀魚公魚：身上的彩斑
+    if (D) B.cleanup();                                                    // ↑ 色塊　↓ 刻意放的細節
+    if (D && Lpx >= 28) B.rim(.32, .2);
+    // ---- 細節（格子夠多才畫）----
+    const fin2 = C(mixColor(finCol, '#000000', .28));
+    if (!D) {                                                              // 改善前的舊細節
+      if (shape === 'guppy' && male && s > .45) for (let i = 0; i < (M.cobra ? 14 : 6); i++) { const a2 = hash2(e.id, i) * 1.6 - .8, rr = .35 + hash2(i, e.id) * .5; const q = TT(P(-44 * rr, Math.sin(a2) * 22 * rr)); B.set(q.x, q.y, C(mixColor(M.tail[2], '#000000', .45)), FIN); }
+      if (shape === 'tetra' && s > .45) B.path(fishBand(n, 1, 6, -.38, -.36).slice(0, 7).map(T), pal.blue[0]);
+      if (shape === 'guppy' && male && n[3]) B.disc(T(n[3]).x, T(P(n[3].x, n[3].y + n[3].h * .1)).y, Math.max(.6, 3 * s), M.patch[1]);
+    } else {
+      if (Lpx >= 30) {                                                     // 鰭條：從鰭的根部放射出去，只畫在鰭上
+        const base = TT(P(-2, 0)), rays = shape === 'guppy' && male ? 7 : 4;
+        for (let r = 0; r < tail.length; r += Math.max(1, Math.floor(tail.length / rays))) { const q = TT(P(tail[r].x * .92, tail[r].y * .92)); B.lineOn(base.x, base.y, q.x, q.y, fin2, FIN); }
+        for (const fn of [F.dorsal, F.anal]) { const f0 = T(fn[0]), m = Math.floor(fn.length / 2); for (let r = 1; r < fn.length - 1; r += Math.max(1, Math.floor(fn.length / 4))) { const q = T(fn[r]); B.lineOn(f0.x, f0.y, q.x, q.y, fin2, FIN); } }
+      }
+      if (shape === 'guppy' && male && Lpx >= 24) for (let i = 0; i < (M.cobra ? 18 : 8); i++) {   // 尾鰭斑點（每隻不同）
+        const a2 = hash2(e.id, i) * 1.6 - .8, rr = .35 + hash2(i, e.id) * .5, q = TT(P(-44 * rr, Math.sin(a2) * 22 * rr));
+        B.setOn(q.x, q.y, C(mixColor(M.tail[2], '#000000', .5)), [FIN]); if (Lpx >= 48) B.setOn(q.x + 1, q.y, C(mixColor(M.tail[2], '#000000', .5)), [FIN]);
+      }
+      if (Lpx >= 26 && shape !== 'tetra') B.path([2, 3, 4, 5].map(i => T(P(n[i].x, n[i].y - n[i].h * .5))), C(Rm[0]));   // 背上的光澤線
+      if (shape === 'tetra') {
+        if (Lpx >= 22) B.path(fishBand(n, 1, 7, -.5, -.48).slice(0, 7).map(T), C(pal.blue[0]));   // 金屬條紋上緣的亮線
+        if (Lpx >= 40) B.path([2, 3, 4, 5, 6].map(i => T(P(n[i].x, n[i].y + n[i].h * .1))), C(pal.red[0]));   // 紅色的亮邊
+      }
+      if (Lpx >= 44) for (let x = n[2].x; x > n[6].x; x -= 4.2) for (const [fy, off] of [[-.18, 0], [.12, 2.1], [.4, 0]]) {   // 鱗片反光（交錯的亮點）
+        const xi = Math.round((x + off) * 10) / 10, i0 = n.findIndex(q => q.x < xi); if (i0 < 1) continue;
+        const q = n[i0], p = T(P(xi, q.y + q.h * fy)), cur = B.d[Math.floor(p.y + .5) * B.w + Math.floor(p.x + .5)];
+        if (hash2(Math.round(xi * 3), Math.round(fy * 10), e.id) < .55) continue;   // 稀疏、錯落
+        if (cur === C(Rm[1]) || cur === C(Rm[2]) || cur === C(Rm[0])) B.setOn(p.x, p.y, C(cur === C(Rm[0]) ? '#ffffff' : Rm[0]));
+      }
+      if (Lpx >= 24) B.path(arcPts(n[1].x + 6, n[1].y, 8 * (lk.hScale || 1) + 1, Math.PI * .65, Math.PI * 1.35, 6).map(T), C(Rm[3]));   // 鰓蓋線
+      if (Lpx >= 30) {                                                     // 胸鰭（半透明、會擺動）
+        const pf = Math.sin(e.pec || 0) * 2, b0 = P(n[1].x + 2, n[1].y + 2);
+        B.poly([b0, P(n[1].x - 7, n[1].y + 6 + pf), P(n[1].x - 5, n[1].y + 2.5)].map(T), mixColor(pal.fin, '#ffffff', .35));
+      }
+      if (shape === 'guppy' && male && Lpx >= 40) for (let i = 0; i < 5; i++) { const q = n[3 + (i % 4)]; B.setOn(T(q).x + hash2(i, e.id) * 3 - 1, T(P(q.x, q.y + q.h * (hash2(e.id, i) - .5) * .8)).y, C(M.patch[1])); }   // 公魚身上的亮彩點
+      if (shape === 'guppy' && e.sex === 'f' && (e.preg || 0) > .3 && Lpx >= 22) B.disc(T(n[4]).x, T(P(n[4].x, n[4].y + n[4].h * .4)).y, Math.max(.6, 2.6 * s), '#3a3a46');   // 懷孕的黑斑
     }
-    if (shape === 'guppy' && e.sex === 'f' && (e.preg || 0) > .3 && s > .35) B.disc(T(n[4]).x, T(P(n[4].x, n[4].y + n[4].h * .4)).y, Math.max(.6, 2.6 * s), '#3a3a46');   // 懷孕的黑斑
   }, Rm[3], pal.ol);
-  // 眼睛（外框之後畫）
+  // 眼睛：虹膜＋瞳孔＋反光；嘴
   const eye = T(P(n[0].x - 1, n[0].y - 2.5 * (lk.hScale || 1)));
-  PXB.disc(eye.x, eye.y, Math.max(.7, 3.6 * s), C(PXPAL.black), CREATURE);
-  if (s > .5) PXB.set(eye.x - s, eye.y - s * 1.2, C('#ffffff'), CREATURE);
+  if (D && Lpx >= 30) { PXB.disc(eye.x, eye.y, 3.8 * s, C(shape === 'tetra' ? '#c8e8f0' : '#d8d0b0'), CREATURE); PXB.disc(eye.x, eye.y, 2.5 * s, C(PXPAL.black), CREATURE); }
+  else PXB.disc(eye.x, eye.y, Math.max(.7, 3.6 * s), C(PXPAL.black), CREATURE);
+  if (D ? Lpx >= 22 : s > .5) PXB.set(eye.x - Math.max(.6, s), eye.y - Math.max(.6, s * 1.2), C('#ffffff'), CREATURE);
+  if (D && Lpx >= 36) { const m = T(P(n[0].x + 5, n[0].y + 1.6)); PXB.set(m.x, m.y, C(Rm[4]), CREATURE); }
 }
 
 // 鼠魚
@@ -371,22 +447,35 @@ function drawPxCory(e) {
   const swing = Math.sin(e.phase) * (e.amp || .5) * .22, ct = Math.cos(swing), st = Math.sin(swing);
   const TT = q => T(P(-26.5 + q.x * ct - q.y * st, -7 + q.x * st + q.y * ct));
   live(B => {
-    B.poly([P(1, -2.6), P(-6, -6), P(-14, -11.5), P(-11, -6), P(-9.5, -.2), P(-11, 6), P(-14, 10.5), P(-6, 5), P(1, 2.4)].map(TT), M.fin);   // 尾鰭
-    B.poly([P(12, -21), P(7, -37), P(3.5, -35), P(-1, -27), P(-3, -20.6)].map(T), M.panda || M.fin);   // 背鰭
+    const Lpx = 64 * s, D = PXOPT.detail, FIN = 4;
+    const tailPts = [P(1, -2.6), P(-6, -6), P(-14, -11.5), P(-11, -6), P(-9.5, -.2), P(-11, 6), P(-14, 10.5), P(-6, 5), P(1, 2.4)];
+    const dorsal = [P(12, -21), P(7, -37), P(3.5, -35), P(-1, -27), P(-3, -20.6)];
+    B.poly(tailPts.map(TT), M.fin, FIN);                                  // 尾鰭
+    B.poly(dorsal.map(T), M.panda || M.fin, FIN);                         // 背鰭
     B.line(T(P(12, -21)).x, T(P(12, -21)).y, T(P(7.3, -36.6)).x, T(P(7.3, -36.6)).y, M.panda ? M.panda : M.finDk);
-    B.poly([P(-17, -13.4), P(-19.5, -17.6), P(-23.5, -11)].map(T), M.fin);                          // 脂鰭
-    B.poly([P(-12, -2.6), P(-19, .6), P(-20, -3.6)].map(T), M.fin);                                  // 臀鰭
+    B.poly([P(-17, -13.4), P(-19.5, -17.6), P(-23.5, -11)].map(T), M.fin, FIN);                     // 脂鰭
+    B.poly([P(-12, -2.6), P(-19, .6), P(-20, -3.6)].map(T), M.fin, FIN);                             // 臀鰭
     const body = [...CORY_TOP, ...CORY_BOT].map(([x, y]) => P(x, y));
     B.poly(body.map(T), (x, y) => Rm[1]);
     B.poly([...CORY_TOP.map(([x, y]) => P(x, y)), ...CORY_TOP.slice().reverse().map(([x, y]) => P(x, y * .78 + 1.2))].map(T), Rm[2]);   // 背部較暗
     B.poly([...CORY_BOT.map(([x, y]) => P(x, y)), ...CORY_BOT.slice().reverse().map(([x, y]) => P(x, y - 2.4))].map(T), Rm[0]);       // 腹部亮
     B.poly(ellipsePts(-1, -11.5, 19, 3.4, .1, 14).map(T), M.sheen);     // 側面光澤
     B.poly(ellipsePts(22, -8.5, 5.5, 3.6, -.3, 10).map(T), M.cheek);    // 鰓蓋
-    if (s > .6) {                                                       // 骨板的接縫
+    if (D) B.cleanup();
+    if (D && Lpx >= 28) B.rim(.3, .22);
+    if (D && Lpx >= 30) {                                                 // 鰭條、尾鰭斑點
+      const fd = C(M.panda ? '#3a3a3a' : M.finDk), b0 = TT(P(-1, 0));
+      for (const q of [tailPts[2], tailPts[3], tailPts[5], tailPts[6]]) { const p = TT(q); B.lineOn(b0.x, b0.y, p.x, p.y, fd, FIN); }
+      const d0 = T(P(10, -21)); for (const q of [P(5, -33), P(1.5, -29)]) { const p = T(q); B.lineOn(d0.x, d0.y, p.x, p.y, fd, FIN); }
+      if (!M.panda && M.ring !== '#f6c4bc') for (const [x, y] of [[-7, -5], [-10, -8], [-6, 3], [-10, 6], [-4, -1]]) { const p = TT(P(x, y)); B.setOn(p.x, p.y, C(M.finDk), [FIN]); }
+    }
+    if (D && Lpx >= 24) B.path(arcPts(20.5, -9, 8.5, Math.PI * .62, Math.PI * 1.25, 6).map(T), C(Rm[3]));   // 鰓蓋線
+    if (D ? Lpx >= 34 : s > .6) {                                         // 骨板的接縫
       const midY = x => lerp(-12.2, -7, (24 - x) / 50);
       for (let i = 0; i < 9; i++) { const x = 15 - i * 4.8; B.line(T(P(x + 1, coryBodyY(x + 1, true) + 1)).x, T(P(x + 1, coryBodyY(x + 1, true) + 1)).y, T(P(x, midY(x))).x, T(P(x, midY(x))).y, Rm[3]); }
       const mid = []; for (let x = 24; x >= -26; x -= 4) mid.push(T(P(x, lerp(-12.2, -7, (24 - x) / 50))));
       B.path(mid, Rm[3]);
+      if (D && Lpx >= 48) for (let i = 0; i < 9; i++) { const x = 13.6 - i * 4.8; B.path([T(P(x, coryBodyY(x, true) + 1.6)), T(P(x - .6, (coryBodyY(x, true) + midY(x)) / 2))], C(Rm[0])); }   // 每片骨板的受光邊
     }
     if (M.panda) {
       B.poly([P(24.5, -18.6), P(19.5, -19), P(19, -12), P(20.5, -6.5), P(25, -6), P(26, -12)].map(T), M.panda);
@@ -452,21 +541,22 @@ function pxShrimpSprite(B, st, T, S, g) {
   for (const [da, len, col] of [[-R.tail.spread, 5.6, g.fan], [R.tail.spread, 5.6, g.fan], [0, 6.2, g.li]]) {   // 尾扇
     const tip = P(t0.x + Math.cos(ta + da) * len, t0.y + Math.sin(ta + da) * len), n = P(-Math.sin(ta + da), Math.cos(ta + da));
     B.poly([P(t0.x + n.x * .9, t0.y + n.y * .9), P(tip.x + n.x * 1.1, tip.y + n.y * 1.1), P(tip.x - n.x * 1.1, tip.y - n.y * 1.1), P(t0.x - n.x * .9, t0.y - n.y * .9)].map(T), col);
-    if (S >= 1.2) { const a = T(t0), b = T(tip); B.line(a.x, a.y, b.x, b.y, C(g.sh), 1); }
+    if (S >= (PXOPT.detail ? .85 : 1.2)) { const a = T(t0), b = T(tip); B.line(a.x, a.y, b.x, b.y, C(g.sh), 1); }
   }
   for (let i = 5; i >= 0; i--) {                                         // 腹部：從後往前
     const sg = R.ab[i], up = P(Math.cos(sg.ang + Math.PI / 2), Math.sin(sg.ang + Math.PI / 2)), nx = R.ab[i + 1] || { h: sg.h * .8 };
     const A = sg.a, Bq = sg.b, h0 = sg.h, h1 = nx.h;
     const quad = (f0, f1, col) => B.poly([P(A.x + up.x * h0 * f0, A.y + up.y * h0 * f0), P(Bq.x + up.x * h1 * f0, Bq.y + up.y * h1 * f0), P(Bq.x + up.x * h1 * f1, Bq.y + up.y * h1 * f1), P(A.x + up.x * h0 * f1, A.y + up.y * h0 * f1)].map(T), col);
-    quad(1.02, -.95, g.base); quad(-.35, -.95, g.sh); quad(1.02, .45, g.li); if (S >= 1.2) quad(1.02, .8, g.hi);
+    const DS = PXOPT.detail ? .85 : 1.2;                                  // 細節門檻（改善後在比較小的尺寸就出現）
+    quad(1.02, -.95, g.base); quad(-.35, -.95, g.sh); quad(1.02, .45, g.li); if (S >= DS) quad(1.02, .8, g.hi);
     const big = i === 1 ? 1.35 : 1, mid = P((A.x + Bq.x) / 2, (A.y + Bq.y) / 2), dn = P(-up.x, -up.y);
     if (i < 5 && S >= .8) B.poly([-1.25, -.6, 0, .6, 1.25].map((f, kk) => T(P(mid.x + (Bq.x - A.x) / 3.3 * f * 1.9 * big + dn.x * sg.h * (kk === 0 || kk === 4 ? .7 : 1.15 * big), mid.y + (Bq.y - A.y) / 3.3 * f * 1.9 * big + dn.y * sg.h * (kk === 0 || kk === 4 ? .7 : 1.15 * big)))), g.sh);
-    if (S >= 1.2) { const a = T(P(A.x + up.x * h0, A.y + up.y * h0)), b = T(P(A.x - up.x * h0 * .8, A.y - up.y * h0 * .8)); B.line(a.x, a.y, b.x, b.y, C(g.dk), 1); }
+    if (S >= DS) { const a = T(P(A.x + up.x * h0, A.y + up.y * h0)), b = T(P(A.x - up.x * h0 * .8, A.y - up.y * h0 * .8)); B.line(a.x, a.y, b.x, b.y, C(g.dk), 1); }
   }
   B.poly([P(4.2, -11.4), P(8, -12.6), P(13, -12.8), P(17, -12), P(19.6, -10.6), P(19.8, -7.8), P(16, -6.2), P(10, -5.6), P(4.4, -5.8)].map(T), g.base);   // 頭胸甲
   B.poly([P(4.4, -8), P(19.8, -8.6), P(19.8, -7.8), P(16, -6.2), P(10, -5.6), P(4.4, -5.8)].map(T), g.sh);
   B.poly([P(4.2, -11.4), P(8, -12.6), P(13, -12.8), P(17, -12), P(19.4, -10.8), P(17, -11), P(12, -11.6), P(6, -11)].map(T), g.li);
-  if (S >= 1.2) B.poly([P(7, -12.2), P(12.5, -12.6), P(16, -11.9), P(12, -12)].map(T), g.hi);
+  if (S >= (PXOPT.detail ? .6 : 1.2)) B.poly([P(7, -12.2), P(12.5, -12.6), P(16, -11.9), P(12, -12)].map(T), g.hi);
   B.poly([P(18.8, -11.4), P(25.6, -12), P(24.8, -11.1), P(19.2, -9.8)].map(T), g.li);   // 額角
   return R;
 }
@@ -488,7 +578,8 @@ function pxShrimpDetails(B, st, T, S, g, R) {                         // 外框�
   const eye = T(P(20.6, -9.6)), stalk = T(P(18.6, -9.4));
   B.line(stalk.x, stalk.y, eye.x, eye.y, C(g.sh));
   B.disc(eye.x, eye.y, Math.max(.7, S * 1.3), C('#140a10'), 2);
-  if (S >= 1.5) B.set(eye.x - S * .5, eye.y - S * .6, C('#ffffff'), 2);
+  if (S >= (PXOPT.detail ? .8 : 1.5)) B.set(eye.x - Math.max(.5, S * .5), eye.y - Math.max(.6, S * .6), C('#ffffff'), 2);
+  if (PXOPT.detail && S >= .9) { const sh = T(P(12, -12.4)); B.set(sh.x, sh.y, C('#ffffff'), 2); }   // 背甲的反光點
   const thick = S >= 2.6 ? 2 : 1, stroke = (pts, c, w = thick) => { for (let k = 0; k < w; k++) B.path(pts.map(T).map(p => P(p.x, p.y + k)), c); };
   const legC = PXOPT.bright && !g.molt ? g.hi : g.leg, legC2 = PXOPT.bright && !g.molt ? g.li : g.sh;
   for (const pl of R.pleo) if (S >= .8) stroke([pl.root, pl.tip], legC, 1);
@@ -508,7 +599,7 @@ function drawPxShrimp(e) {
                walk: (e.dist || 0) * .55, curl: e.curl || 0, grade: e.sex === 'm' ? Math.max(0, (e.morph || 0) - 1) : (e.morph || 0), sex: e.sex, berried: (e.preg || 0) > 0, adult: e.size >= e.adult * .6 };
   const g = PX_SHRIMP[st.grade], T = mapper(e.x, e.y, S, e.dir, 1);
   let R;
-  live(B => { R = pxShrimpSprite(B, st, T, S, g); B.outline(g.dk, g.ol); pxShrimpDetails(B, st, T, S, g, R); }, null);
+  live(B => { R = pxShrimpSprite(B, st, T, S, g); if (PXOPT.detail) { B.cleanup(); if (S >= .7) B.rim(.25, .18); } B.outline(g.dk, g.ol); pxShrimpDetails(B, st, T, S, g, R); }, null);
 }
 function drawPxMolts() {
   for (const m of world.molts) {
@@ -528,6 +619,8 @@ function drawPxSnail(e) {
       const lx = (x - cx.x) / s * e.dir, ly = (y - cx.y) / s, stripe = Math.sin((lx + ly * .25) * 1.05) > .55;
       return stripe ? '#2a1e0c' : (ly < -2.5 ? '#f0cc62' : ly < 3 ? '#d8b04a' : '#b08a2a');
     });
+    if (PXOPT.detail && 25 * s >= 14) { const h = T(P(3, -12.5)); B.setOn(h.x, h.y, C('#fff4c0')); }   // 殼的反光
+    if (PXOPT.detail && 25 * s >= 26) B.path(arcPts(-4, -9, 3.5, 0, Math.PI * 1.6, 8).map(T), C('#7a5a18'));   // 螺旋
   }, '#6a5420', '#3a2c0e');
   const a = T(P(11 + und, -2.5)), b = T(P(16 + und, -7)); PXB.line(a.x, a.y, b.x, b.y, C(PXOPT.bright ? '#d8d2c4' : '#6e6a60'), CREATURE);
   const ey = T(P(11.5 + und, -3.2)); PXB.set(ey.x, ey.y, C('#111111'), CREATURE);

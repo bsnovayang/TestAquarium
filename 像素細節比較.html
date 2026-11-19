@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>像素細節比較</title>
+<style>
+  :root { --bg:#1d2124; --panel:#262b2f; --ink:#e8e6e1; --muted:#9aa0a4; --line:#3a4146; --accent:#4fb89f; }
+  @media (prefers-color-scheme: light) { :root:not([data-theme="dark"]) { --bg:#e9e6df; --panel:#fbfaf7; --ink:#2b2b2b; --muted:#6f6f6f; --line:#d8d2c5; --accent:#2f8f78; } }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.6 system-ui, "Microsoft JhengHei", "PingFang TC", sans-serif; }
+  main { max-width: 1500px; margin: 0 auto; padding: 16px; }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  p.lead { color: var(--muted); margin: 0 0 12px; }
+  table { border-collapse: separate; border-spacing: 8px; width: 100%; table-layout: fixed; }
+  th { color: var(--muted); font-weight: 600; text-align: center; }
+  th.row { text-align: left; width: 96px; }
+  td { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 6px; vertical-align: top; }
+  .duo { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .duo div { text-align: center; font-size: 12px; color: var(--muted); }
+  canvas { display: block; width: 100%; aspect-ratio: 1.9 / 1; image-rendering: pixelated; border-radius: 6px; background: #86c0d2; }
+  ul { margin: 6px 0; padding-left: 20px; }
+  @media (max-width: 760px) { table, tbody, tr, td, th { display: block; } th.row { width: auto; } }
+</style>
+</head>
+<body>
+<main>
+  <h1>像素細節：改善前 vs 改善後</h1>
+  <p class="lead">同一隻生物在 20、40、80 格長時的樣子，每格都放大成一樣的螢幕大小，方便比較「資訊密度」。左邊是改善前，右邊是改善後（依格子數加細節＋自動清理雜點）。</p>
+  <table id="tbl"><colgroup><col style="width:96px"><col><col><col></colgroup><thead><tr><th class="row"></th><th>20 格（全景）</th><th>40 格（比例 2x 或鏡頭 2x）</th><th>80 格（鏡頭 4x）</th></tr></thead><tbody></tbody></table>
+  <h2 style="font-size:16px">改了什麼</h2>
+  <ul>
+    <li><b>自動清理</b>：身體色塊畫完後，去掉孤立的雜點、補單格破洞、把夾在同色中間的單格雜色換掉（之後才畫刻意放的亮點和細線）</li>
+    <li><b>魚</b>：22 格起有眼睛反光、紅蓮燈條紋的亮線；24 格起有鰓蓋線、孔雀魚尾鰭斑點；26 格起背上光澤線；30 格起鰭條（只畫在鰭上）、半透明會擺動的胸鰭、眼睛有虹膜；36 格起有嘴；40 格起紅色亮邊、公魚身上亮彩點；44 格起鱗片反光（交錯的亮點）</li>
+    <li><b>鼠魚</b>：24 格起鰓蓋線；30 格起尾鰭和背鰭的鰭條、青銅鼠尾鰭斑點；34 格起骨板接縫；48 格起每片骨板的受光邊</li>
+    <li><b>櫻花蝦</b>：背甲高光、分節線、尾扇的筋在比較小的尺寸就出現；眼睛反光、背甲反光點</li>
+  </ul>
+</main>
+<script src="js/core.js"></script>
+<script src="js/species.js"></script>
+<script src="js/world.js"></script>
+<script src="js/effects.js"></script>
+<script src="js/water.js"></script>
+<script src="js/creatures.js"></script>
+<script src="js/draw.js"></script>
+<script src="js/presets.js"></script>
+<script src="js/pixel.js"></script>
+<script>
+'use strict';
+world.waterY = -9999; world.tod = .5;
+const SIZES = [20, 40, 80], BG = C('#86c0d2');
+function mk(type, f) { const e = makeEnt(type, 600, 500, false); e.size = e.adult = 1; e.dir = 1; e.sx = 1; e.phase = 1.2; e.amp = .5; e.pec = 1; e.id = 7; f && f(e); return e; }
+const ROWS = [
+  { name: '孔雀魚（公）', e: mk('guppy', e => { setSex(e, 'm'); e.morph = 0; e.size = e.adult = 1; }), body: 'fish' },
+  { name: '孔雀魚（公・藍草尾）', e: mk('guppy', e => { setSex(e, 'm'); e.morph = 1; e.size = e.adult = 1; }), body: 'fish' },
+  { name: '紅蓮燈', e: mk('neon'), body: 'fish' },
+  { name: '鼠魚（青銅）', e: mk('cory', e => { e.morph = 0; e.cm = 'forage'; e.tilt = 0; }), body: 'cory' },
+  { name: '鼠魚（熊貓）', e: mk('cory', e => { e.morph = 2; e.cm = 'forage'; e.tilt = 0; }), body: 'cory' },
+  { name: '櫻花蝦（母）', e: mk('cherry', e => { setSex(e, 'f'); e.morph = 1; e.mode = 'walk'; e.state = '走動'; e.curl = 0; e.dist = 3; e.size = e.adult = 1; }), body: 'shrimp' },
+];
+// 畫一格：讓這隻生物在畫面上剛好 px 格長，畫完把那一塊切出來
+function renderCell(row, px, detail) {
+  const e = row.e, sp = SPECIES[e.type];
+  const ppuWant = row.body === 'shrimp' ? px / 48 : px / sp.len;          // 魚身長 = len 個世界單位；蝦身約 48 個局部單位
+  PXCAM.z = ppuWant / .5; PXOPT.detail = detail; PXOPT.cscale = 1;
+  const cw = Math.ceil(px * 1.9), ch = Math.ceil(px * (row.body === 'fish' ? 1.05 : .95));
+  const ay = row.body === 'fish' ? ch * .5 : ch * .82;
+  PXCAM.x = e.x - (cw * (row.body === 'shrimp' ? .42 : .5)) / ppu(); PXCAM.y = e.y - ay / ppu();
+  PXB.d.fill(BG); PXB.tag.fill(0);
+  if (row.body === 'shrimp') drawPxShrimp(e); else drawPxFish(e);
+  const img = new ImageData(cw, ch), out = new Uint32Array(img.data.buffer);
+  for (let y = 0; y < ch; y++) for (let x = 0; x < cw; x++) out[y * cw + x] = PXB.d[y * PXW + x];
+  return img;
+}
+const tbody = document.querySelector('#tbl tbody');
+for (const row of ROWS) {
+  const tr = document.createElement('tr'); tr.innerHTML = `<th class="row">${row.name}</th>`;
+  for (const px of SIZES) {
+    const td = document.createElement('td'), duo = document.createElement('div'); duo.className = 'duo';
+    for (const detail of [false, true]) {
+      const img = renderCell(row, px, detail), c = document.createElement('canvas');
+      c.width = img.width; c.height = img.height; c.getContext('2d').putImageData(img, 0, 0);
+      const w = document.createElement('div'); w.appendChild(c); w.appendChild(document.createTextNode(detail ? '改善後' : '改善前'));
+      duo.appendChild(w);
+    }
+    td.appendChild(duo); tr.appendChild(td);
+  }
+  tbody.appendChild(tr);
+}
+</script>
+</body>
+</html>
