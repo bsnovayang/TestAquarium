@@ -160,15 +160,23 @@ function muteColor(v, k = .38) {
   _mute.set(v, m); return m;
 }
 const muteHex = h => PXOPT.mute ? mixColor(h, '#7cb4c8', .38) : h;
-function layerFill(L, key, draw, opaque) {                            // 靜態圖層：內容沒變就直接用上次的結果
-  key += '|' + PXOPT.mute;
+function layerFill(L, key, draw, opaque) {                            // 靜態圖層：整個魚缸畫一次，平移時只複製看得到的那一塊
+  key += '|' + PXOPT.mute + '|' + PXOPT.detail;
+  const gw = Math.ceil(W * ppu()), gh = Math.ceil(H * ppu());
   if (L.key !== key) {
-    const tmp = new PixBuf(PXW, PXH); draw(tmp);
+    const cx = PXCAM.x, cy = PXCAM.y; PXCAM.x = 0; PXCAM.y = 0;          // 以魚缸左上角為原點畫整張
+    const tmp = new PixBuf(gw, gh); draw(tmp);
+    PXCAM.x = cx; PXCAM.y = cy;
     if (PXOPT.mute) for (let i = 0; i < tmp.d.length; i++) if (tmp.d[i]) tmp.d[i] = muteColor(tmp.d[i]);
-    L.d.set(tmp.d); L.key = key;
+    L.d = tmp.d; L.w = gw; L.h = gh; L.key = key;
   }
-  if (opaque) PXB.d.set(L.d);
-  else { const s = L.d, d = PXB.d; for (let i = 0; i < s.length; i++) if (s[i]) d[i] = s[i]; }
+  const ox = Math.round(PXCAM.x * ppu()), oy = Math.round(PXCAM.y * ppu()), src = L.d, dst = PXB.d;
+  for (let y = 0; y < PXH; y++) {
+    const sy = y + oy; if (sy < 0 || sy >= L.h) continue;
+    const row = sy * L.w, x0 = Math.max(0, -ox), x1 = Math.min(PXW, L.w - ox);
+    if (opaque) dst.set(src.subarray(row + ox + x0, row + ox + x1), y * PXW + x0);
+    else for (let x = x0; x < x1; x++) { const v = src[row + ox + x]; if (v) dst[y * PXW + x] = v; }
+  }
 }
 // 局部座標 → 畫面格子：原點 (wx, wy)、縮放 s（每單位幾格）、sx 左右（±1）、可選旋轉（繞局部 pivot）
 function mapper(wx, wy, s, sx = 1, sy = 1, rot = 0, pvx = 0, pvy = 0) {
@@ -207,13 +215,13 @@ function waterRamp() {                                                // 水色�
 }
 function drawPxBack(B) {
   const wyA = AY(world.waterY), floorA = AY(TANK.floor), wr = waterRamp().map(C), air = PXPAL.air.map(C);
-  for (let y = 0; y < PXH; y++) {
+  for (let y = 0; y < B.h; y++) {
     const inW = y >= wyA;
-    for (let x = 0; x < PXW; x++) {
+    for (let x = 0; x < B.w; x++) {
       let c;
       if (!inW) c = air[clamp(band((y - AY(TANK.top)) / Math.max(1, wyA - AY(TANK.top)) * 1.2, x, y), 0, 1)];
       else { const t = (y - wyA) / Math.max(1, floorA - wyA); c = wr[clamp(band(t * 4, x, y), 0, 4)]; }   // 上淺下深，只在色帶交界抖色
-      B.d[y * PXW + x] = c;
+      B.d[y * B.w + x] = c;
     }
   }
   // 背面岩壁：兩種深淺，頂端一條受光
@@ -250,7 +258,7 @@ function drawPxShafts() {
 // ---------------------------------------------------------------------
 // 造景
 // ---------------------------------------------------------------------
-function drawPxRock(B, d) {
+function drawPxRock_v1(B, d) {
   const ol = decorOutline(d, 36), pts = ol.map(p => P(AX(p.x), AY(p.y))), S = PXPAL.stone.map(C), r = rng(d.seed), s = ppu();
   const top = x => { const sp = decorSpan(d, clamp(PXCAM.x + x / s, d.x - d.w / 2 + .5, d.x + d.w / 2 - .5)); return sp ? AY(sp.top) : AY(d.y); };
   const bot = AY(d.y), lx = AX(d.x - d.w * .2);
@@ -267,7 +275,7 @@ function drawPxRock(B, d) {
   const al = world.water.algae / 100;                                    // 水下表面的藻膜
   if (al > .05) for (let i = 0; i + 1 < ol.length - 2; i++) if (ol[i].y > world.waterY + 4) B.line(AX(ol[i].x), AY(ol[i].y), AX(ol[i + 1].x), AY(ol[i + 1].y), C(PXPAL.algae));
 }
-function drawPxWood(B, d) {
+function drawPxWood_v1(B, d) {
   const [a, b] = woodEnds(d), c = Math.cos(d.rot), si = Math.sin(d.rot), nx = -si * d.h / 2, ny = c * d.h / 2, Wd = PXPAL.wood.map(C);
   const body = chaikin([P(a.x + nx, a.y + ny), P(a.x - nx, a.y - ny), P(b.x - nx, b.y - ny), P(b.x + nx, b.y + ny)], true, 1).map(p => P(AX(p.x), AY(p.y)));
   const s = ppu();
@@ -293,7 +301,7 @@ function drawPxFilterBody(B, d) {
   for (let i = 0; i < 5; i++) B.line(AX(x0 + 8), AY(y0 + 20 + i * 9), AX(x0 + d.w - 8), AY(y0 + 20 + i * 9), M[3]);
   R(d.x - 3, y0 + d.h, 6, 70, M[1]); R(d.x - 6, y0 + d.h + 70, 12, 16, M[3]);
 }
-function drawPxPlant(d) {                                              // 水草：會擺動，每幀畫
+function drawPxPlant_v1(d) {                                              // 水草：會擺動，每幀畫
   const wy = world.waterY, L = PXPAL.leaf.map(muteHex), s = ppu();
   sprite(B => {
     for (let k = 0; k < 4; k++) {
@@ -332,12 +340,12 @@ function drawPxFilterBubbles(d) {
   for (let i = 0; i < 6; i++) { const t = (world.t * 1.6 + i / 6) % 1; if (t > .8) continue; PXB.set(AX(x0 - 6 - t * 18), AY(wy + 6 + t * 26 + Math.sin(i * 3 + world.t * 5) * 2), C(PXPAL.bubble)); }
 }
 // 前景：底沙、缸框（靜態）
-function drawPxFront(B) {
+function drawPxFront_v1(B) {
   const Sd = PXPAL.sand.map(C), fl = AY(TANK.floor);
-  for (let y = Math.max(0, Math.floor(fl)); y < PXH; y++) for (let x = 0; x < PXW; x++) {
+  for (let y = Math.max(0, Math.floor(fl)); y < B.h; y++) for (let x = 0; x < B.w; x++) {
     const wx = Math.floor(PXCAM.x * ppu()) + x, wy = Math.floor(PXCAM.y * ppu()) + y, r = hash2(wx, wy, 5);
     const depth = (y - fl) / Math.max(1, AY(H) - fl);
-    B.d[y * PXW + x] = y === Math.floor(fl) ? Sd[0] : Sd[clamp(Math.floor(1 + depth * 2.2 + (r < .1 ? 1.2 : r > .92 ? -1 : 0) + bayer(x, y) * .5), 0, 4)];
+    B.d[y * B.w + x] = y === Math.floor(fl) ? Sd[0] : Sd[clamp(Math.floor(1 + depth * 2.2 + (r < .1 ? 1.2 : r > .92 ? -1 : 0) + bayer(x, y) * .5), 0, 4)];
   }
   for (const s of SAND) if (s.r > 2.4) B.disc(AX(s.x), AY(s.y), Math.max(.6, s.r * ppu() * .8), C(s.c), 0);   // 小石子
   const F = PXPAL.frame.map(C);
@@ -346,6 +354,160 @@ function drawPxFront(B) {
   R(0, 0, TANK.left, H, F[2]); R(TANK.right, 0, W - TANK.right, H, F[2]); R(0, H - 6, W, 6, F[3]);
 }
 
+
+// =====================================================================
+// 場景細化（細節開啟時）：和生物一樣，格子越多細節越多
+// z = 鏡頭倍數（1：全景、2、4）
+// =====================================================================
+// 平滑的雜訊（值雜訊）：做出不規則的斑塊，而不是方格
+function vnoise(x, y, sd = 0) {
+  const xi = Math.floor(x), yi = Math.floor(y), fx = x - xi, fy = y - yi, ux = fx * fx * (3 - 2 * fx), uy = fy * fy * (3 - 2 * fy);
+  const a = hash2(xi, yi, sd), b = hash2(xi + 1, yi, sd), c = hash2(xi, yi + 1, sd), d = hash2(xi + 1, yi + 1, sd);
+  return lerp(lerp(a, b, ux), lerp(c, d, ux), uy);
+}
+const fbm = (x, y, sd) => vnoise(x, y, sd) * .65 + vnoise(x * 2.3, y * 2.3, sd + 5) * .35;
+const PX_ROCK2 = ['#dfe3e3', '#bfc5c6', '#9da4a6', '#7d8487', '#5f6669', '#454b4e'];
+const PX_MOSS = ['#9cc46a', '#74a24c', '#567f3a'];
+const PX_WOOD2 = ['#d2ad7c', '#b08a5c', '#8e6a42', '#6e4f30', '#503820', '#362412'];
+const PX_SAND2 = ['#e2cfa4', '#d4be92', '#c4ad80', '#b09a6e', '#9a845c', '#80694a'];
+const PX_GRAIN = ['#efe2c2', '#a88a62', '#c8a890', '#9aa0a0', '#7a6248'];
+
+// 水草：尖的披針形葉子、前後深淺、頂端嫩葉；2 倍以上有葉脈和莖節，4 倍有亮邊
+function drawPxPlant(d) {
+  if (!PXOPT.detail) return drawPxPlant_v1(d);
+  const wy = world.waterY, z = PXCAM.z, s = ppu(), r = rng(d.seed * 3 + 1);
+  const L = ['#b6e07c', '#8fd06a', '#66b356', '#4a9a48', '#357a3c', '#24592e'].map(muteHex);
+  const reddish = Math.floor(d.seed * 10) % 3 === 0;                     // 有些水草（像圓葉節節菜）頂端偏紅
+  const tipCol = muteHex(reddish ? '#e09a78' : '#c6e88a'), tipCol2 = muteHex(reddish ? '#c06a58' : '#a2d070');
+  const order = [0, 3, 1, 2];                                            // 先畫後面的兩根（較暗），再畫前面的
+  sprite(B => {
+    for (const k of order) {
+      const back = k === 0 || k === 3, pts = [], hk = d.h * (.7 + .3 * Math.sin(d.seed + k * 2.1));
+      for (let i = 0; i <= 10; i++) {
+        const t = i / 10, y = d.y - hk * t, under = y > wy;
+        const sway = under ? Math.sin(world.t * 1.4 + k * 1.3 + t * 3 + d.seed) * 12 * t : 4 * t;
+        pts.push(P(d.x + (k - 1.5) * 9 + sway + Math.sin(k + t * 4) * 4, y));
+      }
+      const stem = back ? L[4] : L[3], A = pts.map(p => P(AX(p.x), AY(p.y)));
+      for (let w = 0; w < Math.max(1, Math.round(3.6 * s * .5)); w++) B.path(A.map(p => P(p.x + w, p.y)), stem, 1);
+      if (z >= 2) for (let i = 1; i < pts.length; i++) { const a = A[i]; B.set(a.x, a.y, C(L[5]), 1); }   // 莖節
+      for (let i = 1; i < pts.length; i++) {                             // 葉子：每節一對、交錯
+        const p = pts[i], t = i / (pts.length - 1), young = t > .82;
+        for (const side of [1, -1]) {
+          const dirA = (side > 0 ? -.55 : Math.PI + .55) + Math.sin(world.t * 1.2 + i + k) * .08 * (p.y > wy ? 1 : 0) + (r() - .5) * .3;
+          const len = (young ? 8 : 14 - t * 4) * (.85 + r() * .3), wd = (young ? 2.4 : 3.4) * (.9 + r() * .2);
+          const ca = Math.cos(dirA), sa = Math.sin(dirA), nx = -sa, ny = ca;
+          const leaf = [P(p.x, p.y), P(p.x + ca * len * .35 + nx * wd, p.y + sa * len * .35 + ny * wd), P(p.x + ca * len, p.y + sa * len), P(p.x + ca * len * .35 - nx * wd, p.y + sa * len * .35 - ny * wd)];
+          const base = young ? tipCol : back ? L[3] : L[2], lite = young ? '#e6f6b0' : back ? L[2] : L[1];
+          // 葉子上半（朝光）亮、下半暗：用點在葉軸的哪一邊判斷
+          B.poly(leaf.map(q => P(AX(q.x), AY(q.y))), (x, y) => {
+            const wx2 = PXCAM.x + (x + .5) / s - p.x, wy2 = PXCAM.y + (y + .5) / s - p.y, side2 = wx2 * sa - wy2 * ca;
+            return C((side2 * side > 0) ? lite : base);
+          });
+          if (z >= 2) { const a = P(AX(p.x + ca * 1.2), AY(p.y + sa * 1.2)), b = P(AX(p.x + ca * len * .82), AY(p.y + sa * len * .82)); B.line(a.x, a.y, b.x, b.y, C(young ? tipCol2 : back ? L[4] : L[3]), 1); }   // 葉脈
+        }
+      }
+    }
+    if (z >= 4) B.rim(.22, .18);                                          // 4 倍：葉子的亮邊、背光邊
+  }, L[4], L[5]);
+}
+
+// 岩石：分成幾個切面（每面不同明暗）；2 倍以上有表面顆粒和青苔；4 倍有小坑洞
+function drawPxRock(B, d) {
+  if (!PXOPT.detail) return drawPxRock_v1(B, d);
+  const ol = decorOutline(d, 40), pts = ol.map(p => P(AX(p.x), AY(p.y))), S = PX_ROCK2.map(C), M = PX_MOSS.map(C), s = ppu(), z = PXCAM.z, r = rng(d.seed);
+  const seeds = []; for (let i = 0; i < 4 + Math.floor(d.w / 70); i++) seeds.push({ x: d.x + (r() - .5) * d.w * .9, y: d.y - r() * d.h * .9, f: (r() - .5) * .9 });   // 切面
+  const topW = wx => { const sp = decorSpan(d, clamp(wx, d.x - d.w / 2 + .5, d.x + d.w / 2 - .5)); return sp ? sp.top : d.y; };
+  B.poly(pts, (x, y) => {
+    const wx = PXCAM.x + (x + .5) / s, wy = PXCAM.y + (y + .5) / s, top = topW(wx);
+    const t = (wy - top) / Math.max(1, d.y - top), side = (wx - (d.x - d.w * .2)) / d.w;
+    let best = 1e9, f = 0; for (const q of seeds) { const dd = (q.x - wx) ** 2 + ((q.y - wy) * 1.4) ** 2; if (dd < best) { best = dd; f = q.f; } }
+    let v = t * 3 + side * 1.5 + f + .7;                                  // 高度＋左右＋切面
+    const tex = fbm(wx / 6, wy / 6, d.seed);                             // 大塊的明暗起伏（不規則）
+    v += (tex - .5) * 1.2;
+    if (z >= 2) {                                                         // 表面顆粒：不規則的小斑點
+      const g = fbm(wx / 1.6, wy / 1.6, d.seed + 3);
+      if (g < .2) v += .9; else if (g > .8) v -= .9;
+      const mossN = fbm(wx / 7, wy / 5, d.seed + 9);                       // 頂部的青苔（一團一團）
+      if (wy - top < 2 + mossN * 9 && mossN > .5) return M[clamp(Math.floor((wy - top) / 3.5 + (1 - mossN) * 2 + bayer(x, y) * .6), 0, 2)];
+    }
+    if (z >= 4 && fbm(wx / .9, wy / .9, d.seed + 7) < .08) return S[5];   // 小坑洞
+    return S[clamp(band(v, x, y, .18), 0, 5)];
+  });
+  for (let i = 0; i < 3 + d.w / 70; i++) {                               // 裂紋（暗線＋下方一格亮，像刻進去）
+    const x0 = d.x + (r() - .5) * d.w * .6, sp = decorSpan(d, x0); if (!sp) continue;
+    let p = P(x0, lerp(sp.top + 8, d.y - 6, r() * .6));
+    for (let k = 0; k < 3; k++) { const q = P(p.x + (r() - .5) * 16, p.y + 4 + r() * 10); B.line(AX(p.x), AY(p.y), AX(q.x), AY(q.y), S[5], 1); if (z >= 2) B.line(AX(p.x) + 1, AY(p.y), AX(q.x) + 1, AY(q.y), S[1], 1); p = q; }
+  }
+  const al = world.water.algae / 100;
+  if (al > .05) for (let i = 0; i + 1 < ol.length - 2; i++) if (ol[i].y > world.waterY + 4) B.line(AX(ol[i].x), AY(ol[i].y), AX(ol[i + 1].x), AY(ol[i + 1].y), C(PXPAL.algae), 1);
+}
+
+// 沉木：上緣受光脊線、順著木頭的樹皮溝紋；2 倍以上樹瘤有年輪、兩端切面；4 倍有小苔蘚
+function drawPxWood(B, d) {
+  if (!PXOPT.detail) return drawPxWood_v1(B, d);
+  const [a, b] = woodEnds(d), c = Math.cos(d.rot), si = Math.sin(d.rot), nx = -si * d.h / 2, ny = c * d.h / 2, Wd = PX_WOOD2.map(C), s = ppu(), z = PXCAM.z;
+  const body = chaikin([P(a.x + nx, a.y + ny), P(a.x - nx, a.y - ny), P(b.x - nx, b.y - ny), P(b.x + nx, b.y + ny)], true, 1).map(p => P(AX(p.x), AY(p.y)));
+  B.poly(body, (x, y) => {
+    const wx = PXCAM.x + (x + .5) / s, wy = PXCAM.y + (y + .5) / s, v = ((wx - d.x) * -si + (wy - d.y) * c) / (d.h / 2);   // -1 上 … 1 下
+    const along = (wx - d.x) * c + (wy - d.y) * si;
+    let k = (v + 1) * 2.1 + .3;
+    const groove = Math.sin(v * 7 + Math.sin(along * .045 + d.seed) * 1.6 + Math.sin(along * .13) * .5);   // 樹皮溝紋（順著木頭）
+    if (groove > .78) k += 1.2; else if (groove < -.9 && z >= 2) k -= .8;
+    if (v < -.72) k -= .9;                                               // 上緣受光脊線
+    if (z >= 4 && v < -.4 && hash2(Math.floor(along / 4), Math.floor(v * 3), d.seed) > .86) return C(PX_MOSS[hash2(Math.floor(along), 2) < .5 ? 0 : 1]);   // 小苔蘚
+    return Wd[clamp(band(k, x, y, .3), 0, 5)];
+  });
+  for (const kk of [.3, .68]) {                                           // 樹瘤
+    const p = P(lerp(a.x, b.x, kk) + nx * .2, lerp(a.y, b.y, kk) + ny * .2), R = Math.max(1, d.h * .24 * s);
+    B.disc(AX(p.x), AY(p.y), R, Wd[4]); B.disc(AX(p.x) - .4, AY(p.y) - .4, R * .62, Wd[2]);
+    if (z >= 2) { B.disc(AX(p.x) - .4, AY(p.y) - .4, R * .32, Wd[4]); for (let t = 0; t < 6.28; t += .5) B.set(AX(p.x) + Math.cos(t) * R, AY(p.y) + Math.sin(t) * R, Wd[5]); }   // 年輪
+  }
+  if (z >= 2) for (const [e0, sgn] of [[a, -1], [b, 1]]) {                // 兩端的切面（較亮、有年輪）
+    const ce = P(e0.x + c * sgn * 1.5, e0.y + si * sgn * 1.5);
+    B.poly(ellipsePts(ce.x, ce.y, d.h * .18, d.h * .5, d.rot, 12).map(p => P(AX(p.x), AY(p.y))), Wd[1]);
+    B.poly(ellipsePts(ce.x, ce.y, d.h * .09, d.h * .26, d.rot, 10).map(p => P(AX(p.x), AY(p.y))), Wd[3], 0);
+  }
+  const al = world.water.algae / 100;
+  if (al > .05) for (let kk = 0; kk < 1; kk += .05) { const p = P(lerp(a.x, b.x, kk) - nx, lerp(a.y, b.y, kk) - ny), q = P(lerp(a.x, b.x, kk + .05) - nx, lerp(a.y, b.y, kk + .05) - ny); if (p.y > world.waterY + 4) B.line(AX(p.x), AY(p.y), AX(q.x), AY(q.y), C(PXPAL.algae), 1); }
+}
+
+// 底沙：石頭、沉木的影子；2 倍以上一粒粒不同顏色的沙；4 倍小石子有亮暗面、沙紋
+function drawPxFront(B) {
+  if (!PXOPT.detail) return drawPxFront_v1(B);
+  const Sd = PX_SAND2.map(C), Gr = PX_GRAIN.map(C), fl = AY(TANK.floor), z = PXCAM.z, s = ppu();
+  // 影子：每個實心造景底下，沙子變暗（中間深、兩側淡）
+  const shade = new Float32Array(B.w);
+  for (const d of world.decor) {
+    if (!DECOR_TYPES[d.type].solid && d.type !== 'bubbler') continue;
+    let x0, x1;
+    if (d.type === 'wood') { const [a, b] = woodEnds(d); if (Math.max(a.y, b.y) + d.h < TANK.floor - 30) continue; x0 = Math.min(a.x, b.x); x1 = Math.max(a.x, b.x); }
+    else { x0 = d.x - d.w / 2; x1 = d.x + d.w / 2; }
+    for (let x = Math.max(0, Math.floor(AX(x0 - 12))); x <= Math.min(B.w - 1, Math.ceil(AX(x1 + 12))); x++) {
+      const wx = PXCAM.x + (x + .5) / s, u = (wx - x0) / Math.max(1, x1 - x0);
+      shade[x] = Math.max(shade[x], u < 0 ? Math.max(0, 1 + u * (x1 - x0) / 12) : u > 1 ? Math.max(0, 1 - (u - 1) * (x1 - x0) / 12) : 1);
+    }
+  }
+  for (let y = Math.max(0, Math.floor(fl)); y < B.h; y++) for (let x = 0; x < B.w; x++) {
+    const wx = Math.floor(PXCAM.x * s) + x, wy = Math.floor(PXCAM.y * s) + y, r = hash2(wx, wy, 5);
+    const depth = (y - fl) / Math.max(1, AY(H) - fl), dy = (y - fl) / s;
+    let k = 1 + depth * 2.4 + (r < .1 ? 1 : r > .93 ? -1 : 0) * (z >= 2 ? 0 : 1);
+    k += shade[x] * Math.max(0, 1.6 - dy / 6);                           // 影子：靠近沙面最深
+    if (z >= 4) { const rip = Math.sin(wx / s * .09 + Math.sin(wy / s * .3) * 1.5 + dy * .6); if (rip > .93) k -= .8; }   // 沙紋
+    let c = y === Math.floor(fl) && shade[x] < .3 ? Sd[0] : Sd[clamp(band(k, x, y, .3), 0, 5)];
+    if (z >= 2) { const g = hash2(wx, wy, 11); if (g < .16) c = Gr[Math.floor(g / .16 * Gr.length)]; }   // 一粒粒不同顏色的沙
+    B.d[y * B.w + x] = c;
+  }
+  for (const sd of SAND) if (sd.r > 2.2) {                               // 小石子
+    const R = Math.max(.6, sd.r * s * .8), cx = AX(sd.x), cy = AY(sd.y);
+    B.disc(cx, cy, R, C(sd.c), 0);
+    if (z >= 4 && R >= 1.5) { B.set(cx - R * .4, cy - R * .4, C(mixColor(sd.c, '#ffffff', .4)), 0); B.set(cx + R * .4, cy + R * .4, C(mixColor(sd.c, '#000000', .3)), 0); }
+  }
+  const F = PXPAL.frame.map(C);
+  const R = (x, y, w, h, c) => B.poly([P(AX(x), AY(y)), P(AX(x + w), AY(y)), P(AX(x + w), AY(y + h)), P(AX(x), AY(y + h))], c, 0);
+  R(0, 0, W, TANK.top, (x, y) => (x & 3) === 0 && y > AY(4) && y < AY(TANK.top - 4) ? F[0] : (y < AY(TANK.top) - 2 ? F[1] : F[2]));
+  R(0, 0, TANK.left, H, F[2]); R(TANK.right, 0, W - TANK.right, H, F[2]); R(0, H - 6, W, 6, F[3]);
+}
 // ---------------------------------------------------------------------
 // 魚（孔雀魚、紅蓮燈／日光燈、通用）：直接用遊戲裡的骨架點，點陣化
 // ---------------------------------------------------------------------
@@ -665,7 +827,7 @@ const PX_ORDER = { shrimp: 0, snail: 0, nest: 0, larva: 0, tadpole: 1, fish: 2 }
 function renderPixel() {
   const z = PXCAM.z, cx = Math.round(PXCAM.x * ppu()), cy = Math.round(PXCAM.y * ppu());
   PXCAM.x = cx / ppu(); PXCAM.y = cy / ppu();                            // 鏡頭對齊格子，畫面才不會抖
-  const view = [z, cx, cy, W, H].join(','), wkey = Math.round(world.waterY) + ',' + Math.round(world.water.algae / 5) + ',' + Math.round(world.water.dirt / 8);
+  const view = [z, W, H].join(','), wkey = Math.round(world.waterY) + ',' + Math.round(world.water.algae / 5) + ',' + Math.round(world.water.dirt / 8);
   layerFill(LAYER.back, view + '|' + wkey, drawPxBack, true);
   PXB.tag.fill(0);
   if (!PXOPT.hybrid && PXOPT.light === 'day') drawPxShafts();          // 混合模式改用平滑的光束（畫在放大之後）
