@@ -168,3 +168,23 @@ button:disabled { opacity: .4; cursor: default; }
 .tutBtns span { flex: 1; }
 .tutBtns button[hidden] { display: none; }
 @media (prefers-reduced-motion: reduce) { .tutHole, .tutBox { transition: none; } }
+
+/* 成就 */
+#achBox summary { cursor: pointer; color: var(--muted); font-size: 13px; }
+.achCat { font-size: 12px; color: var(--muted); margin: 8px 0 2px; }
+.ach { display: flex; align-items: center; gap: 8px; padding: 3px 0; opacity: .5; }
+.ach.done { opacity: 1; }
+.ach .achIcon { font-size: 18px; width: 24px; text-align: center; filter: grayscale(1); }
+.ach.done .achIcon { filter: none; }
+.ach b { display: block; font-size: 13px; font-weight: 600; }
+.ach em { display: block; font-style: normal; font-size: 12px; color: var(--muted); line-height: 1.35; }
+.ach i { margin-left: auto; color: var(--accent); font-style: normal; font-weight: 700; }
+#achPop { position: fixed; top: 14px; left: 50%; transform: translate(-50%, -140%); z-index: 70; display: flex; align-items: center; gap: 10px;
+  background: var(--panel); color: var(--ink); border: 1px solid var(--accent); border-radius: 12px; padding: 8px 16px 8px 12px;
+  box-shadow: 0 8px 30px rgba(0,0,0,.4); transition: transform .3s; pointer-events: none; max-width: calc(100vw - 16px); }
+#achPop.show { transform: translate(-50%, 0); }
+#achPop .achIcon { font-size: 28px; }
+#achPop small { display: block; font-size: 11px; color: var(--accent); font-weight: 600; letter-spacing: .05em; }
+#achPop b { display: block; font-size: 15px; }
+#achPop em { display: block; font-style: normal; font-size: 12px; color: var(--muted); }
+@media (prefers-reduced-motion: reduce) { #achPop { transition: none; } }

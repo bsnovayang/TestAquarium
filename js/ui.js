@@ -126,6 +126,7 @@ function placeObject(type, x, y) {
   if (DECOR_TYPES[type]) { const d = makeDecor(type, x, y); settle(d); select(d); return; }
   const before = stockingDensity().level;
   const e = makeEnt(type, x, y);
+  emit('place', { e });
   select(e);
   const L = SPECIES[type].len * e.size;
   const notes = [];

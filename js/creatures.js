@@ -202,7 +202,7 @@ function territorialTick(e, dt) {
     let best = null, bd = 170;
     for (const o of entsOfKind('fish')) if (o.kind === 'fish' && o.type !== e.type && !o.dead && dist(o, e.home) < bd) { bd = dist(o, e.home); best = o; }
     e.chasing = best;
-    if (best) { best.scaredBy = e; best.scaredT = 1.2; e.chaseTurns = 0; }   // 被盯上的魚立刻逃
+    if (best) { best.scaredBy = e; best.scaredT = 1.2; e.chaseTurns = 0; emit('chase', { by: e, target: best }); }   // 被盯上的魚立刻逃
   }
   if (e.chasing) {
     e.chaseT += dt * 1.4;
@@ -735,6 +735,7 @@ function layEggs(m) {
   const raft = makeEnt('larva', m.x, world.waterY + 1);
   raft.stage = 'egg'; raft.count = Math.min(room, Math.round(rand(...sp.raft)));
   logEvent(`🥚 蚊子在水面產下卵塊（${raft.count} 顆）`);
+  emit('mosquitoLay');
   return true;
 }
 
@@ -842,6 +843,7 @@ function tickBreed(e, dt) {
     }
     e.hunger -= 15;
     logEvent(`🐟 ${sp.name}生了 ${n} 隻小魚`);
+    emit('fishBirth', { type: e.type, n });
   } else if (b.how === 'spawn') {                             // 青蛙：浮在水面時在水中產卵
     if (e.mode !== 'float') { e.breedT = 12; return; }
     const room = capFor('tadpole') - countKind('tadpole');
@@ -879,6 +881,7 @@ function tickPregnancy(e, dt, sp, b) {
     }
     e.hunger -= 15;
     logEvent(`🐟 ${sp.name}母魚生了 ${n} 隻魚苗`);
+  emit('fishBirth', { type: e.type, n });
     return;
   }
   if (e.breedT === undefined) e.breedT = rand(...b.cool) * .5;
@@ -916,6 +919,7 @@ function updNest(e, dt) {
     }
   }
   logEvent(sp.kind === 'frog' ? `🐸 ${sp.name}的卵孵出 ${e.count} 隻蝌蚪` : `🐣 ${sp.name}的蛋孵化了（${e.count} 隻）`);
+  emit('hatch', { kind: sp.kind, type: e.of || e.type, n: e.count });
   e.removed = true;
 }
 
@@ -964,6 +968,7 @@ function updTadpole(e, dt) {
       const of = e.of || 'frog', f = makeEnt(of, e.x, wy);
       f.size = f.adult * SPECIES[of].birth; f.mode = 'float'; f.y = wy; f.hunger = 80;
       logEvent(`🐸 蝌蚪變成小${SPECIES[of].name}了`);
+      emit('metamorph', { type: of });
       addFx(e.x, wy - 10, '變態', '#7fd067');
     }
     e.removed = true;
@@ -993,7 +998,7 @@ function updWhale(e, dt) {
     if (e.breathT <= 0) { e.wmode = 'ascend'; e.ty = wy + hh * .45; }
   } else if (e.wmode === 'ascend') {
     e.state = '上浮換氣';
-    if (Math.abs(e.y - e.ty) < 3) { e.wmode = 'spout'; e.spoutT = 0; ripple(e.x, wy, 1.6); ripple(e.x + e.dir * whaleL(e) * .3, wy, 1.2); }
+    if (Math.abs(e.y - e.ty) < 3) { e.wmode = 'spout'; e.spoutT = 0; emit('whaleSpout', { e }); ripple(e.x, wy, 1.6); ripple(e.x + e.dir * whaleL(e) * .3, wy, 1.2); }
   } else if (e.wmode === 'spout') {
     e.state = '噴水換氣';
     e.spoutT += dt; e.ty = wy + hh * .45;
@@ -1172,7 +1177,7 @@ function updShrimp(e, dt) {
       if (e.sex === 'f' && isAdult(e) && !(e.preg > 0) && e.hunger > 50 && world.settings.breed) {   // 吃飽才抱卵
         const males = entsOfType(e.type).filter(o => o.type === e.type && o.sex === 'm' && !o.dead && isAdult(o) && dist(o, e) < 400);
         for (const m of males) { m.swarmT = rand(5, 8); m.swarmTo = e; }   // 母蝦釋放費洛蒙，公蝦狂游
-        if (males.length && countKind('shrimp') < capFor('shrimp')) { e.preg = .001; logEvent(`🦐 ${sp.name}母蝦蛻殼後抱卵了`); }
+        if (males.length && countKind('shrimp') < capFor('shrimp')) { e.preg = .001; logEvent(`🦐 ${sp.name}母蝦蛻殼後抱卵了`); emit('shrimpBerried', { e }); }
       }
     }
     return;
@@ -1183,7 +1188,7 @@ function updShrimp(e, dt) {
       e.preg = 0;
       const room = capFor('shrimp') - countKind('shrimp'), n = Math.min(room, Math.round(rand(...sp.clutch)));
       for (let i = 0; i < n; i++) { const c = makeEnt(e.type, e.x + rand(-12, 12), e.y - 4); c.size = c.adult * sp.birth; c.hunger = 80; c.morph = e.morph; }
-      if (n > 0) logEvent(`🦐 ${sp.name}孵出了 ${n} 隻小蝦`);
+      if (n > 0) { logEvent(`🦐 ${sp.name}孵出了 ${n} 隻小蝦`); emit('shrimpHatch', { type: e.type, morph: e.morph, n }); }
     }
   }
   if (e.mode === 'walk' && e.moltT <= 0) { e.mode = 'molt'; e.moltProg = 0; return; }

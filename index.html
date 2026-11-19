@@ -31,6 +31,7 @@
       <div class="legend"><span><i style="background:var(--series-1)"></i>魚</span><span><i style="background:var(--series-2)"></i>蚊子</span><span><i style="background:var(--series-3)"></i>孑孓（含蛹、卵）</span></div>
       <div class="chartBox"><canvas id="chart"></canvas><div id="chartTip"></div></div></section>
     <section><h3>事件</h3><div id="eventPanel"></div></section>
+    <section><h3>成就 <small id="achCount"></small></h3><details id="achBox"><summary>查看全部</summary><div id="achPanel"></div></details></section>
     <section><h3>設定</h3><div id="setPanel"></div></section>
   </aside>
 
@@ -59,6 +60,7 @@
   </div>
 </div>
 <div id="toast"></div>
+<div id="achPop" role="status" aria-live="polite"></div>
 <div id="rotateHint"><div>📱↻<br>請將裝置轉為橫向</div></div>
 
 <script src="js/core.js"></script>
@@ -71,6 +73,7 @@
 <script src="js/presets.js"></script>
 <script src="js/ui.js"></script>
 <script src="js/balance.js"></script>
+<script src="js/achievements.js"></script>
 <script src="js/main.js"></script>
 <script src="js/tutorial.js"></script>
 </body>

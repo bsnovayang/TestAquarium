@@ -143,6 +143,7 @@ function loadPreset(id) {
   p.build(presetBuilder());
   world.events = [];
   logEvent(`🐠 建立了「${p.name}」`);
+  emit('preset', { id: p.id });
   return p;
 }
 

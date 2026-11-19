@@ -66,7 +66,9 @@ function eatAlgae(amount) {
   return got;
 }
 function waterChange() {
+  const before = world.water.dirt;
   world.water.dirt *= .65; world.water.algae *= .92;
+  emit('waterChange', { before, after: world.water.dirt });
   logEvent('🪣 換了 30% 的水');
 }
 function scrubAlgae() {

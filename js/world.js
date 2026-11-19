@@ -217,9 +217,19 @@ function dropTail(e) {
   world.tailBits.push({ x, y, ang, len: 40 * s, t: 0, seed: Math.random() * 10, onGlass: e.surface === 'glass' });
   e.tailLen = .25; e.regrown = true;
   logEvent('🦎 壁虎斷尾了（尾巴會慢慢長回來）');
+  emit('autotomy', { e });
   return true;
 }
+// ---------------------------------------------------------------------
+// 事件：模擬發生的事通知外部（成就、之後的 Steam、音效…）；模擬本身不依賴任何監聽者
+// 移植時對應 Godot 的 signal、Unity 的 event
+// ---------------------------------------------------------------------
+const EVENT_HOOKS = [];
+function onWorldEvent(fn) { EVENT_HOOKS.push(fn); }
+function emit(type, data) { for (const h of EVENT_HOOKS) { try { h(type, data || {}); } catch (err) { console.warn('事件處理失敗', type, err); } } }
+
 function dropFood(x, n = 5) {
+  emit('feed');
   for (let i = 0; i < n; i++)
     world.food.push({ id: world.nextId++, kind: 'food', x: clamp(x + rand(-30, 30), TANK.left + 8, TANK.right - 8), y: TANK.top + rand(0, 10), vy: 0, t: 0 });
 }
@@ -318,6 +328,7 @@ function eat(e, t) {
   e.eaten++;
   addFx(t.x, t.y, '+' + v, t.kind === 'food' ? '#c08a4f' : '#ffb020');
   if (t.kind !== 'food') logEvent(`${entName(e)} 吃掉 ${entName(t)}`);
+  emit('eat', { pred: e, prey: t });
   if (t.y > world.waterY + 6 && Math.random() < .6) bubbles(t.x, t.y, 2);      // 水中進食冒小氣泡
 }
 
