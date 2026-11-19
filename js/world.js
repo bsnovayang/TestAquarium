@@ -250,11 +250,53 @@ function larvaCount() {
 // ---------------------------------------------------------------------
 // 捕食
 // ---------------------------------------------------------------------
+// ---------------------------------------------------------------------
+// 效能：捕食規則查表、每一步的生物索引（依物種、依類別）
+// 索引只在 step() 進行中有效；其他時候 entsOf* 直接回傳全部生物（呼叫端都還會自己檢查條件）
+// ---------------------------------------------------------------------
+const RULE_IDX = {}, PREY_KINDS = {}, PRED_KINDS = {};
+for (const r of RULES) {
+  (RULE_IDX[r.pred] = RULE_IDX[r.pred] || {})[r.prey] = r;
+  (PREY_KINDS[r.pred] = PREY_KINDS[r.pred] || []).push(r.prey);
+  (PRED_KINDS[r.prey] = PRED_KINDS[r.prey] || []).push(r.pred);
+}
+const NO_ENTS = [];
+function buildIndex() {
+  const ix = { type: {}, kind: {}, prey: {}, pred: {} };
+  for (const e of world.ents) {
+    if (e.dead || e.removed) continue;
+    (ix.type[e.type] = ix.type[e.type] || []).push(e);
+    (ix.kind[e.kind] = ix.kind[e.kind] || []).push(e);
+  }
+  world._ix = ix;
+}
+function entsOfType(type) { const ix = world._ix; return ix ? ix.type[type] || NO_ENTS : world.ents; }
+function entsOfKind(kind) { const ix = world._ix; return ix ? ix.kind[kind] || NO_ENTS : world.ents; }
+function kindsList(map, cacheKey, kind) {                     // 好幾個類別合併成一個清單（每一步算一次）
+  const ix = world._ix; if (!ix) return world.ents;
+  const c = ix[cacheKey]; if (c[kind]) return c[kind];
+  const out = []; for (const k of map[kind] || NO_ENTS) for (const o of ix.kind[k] || NO_ENTS) out.push(o);
+  return (c[kind] = out);
+}
+const preyCandidates = kind => kindsList(PREY_KINDS, 'prey', kind);   // 這個類別可能吃的生物
+const predatorsOf = kind => kindsList(PRED_KINDS, 'pred', kind);      // 可能吃這個類別的生物
+function threatsTo(e) {                                        // 現在真的可能吃掉 e 的生物（先排除規則關閉、只吃幼體等整類不可能的）
+  const out = [];
+  for (const pk of PRED_KINDS[e.kind] || NO_ENTS) {
+    const r = RULE_IDX[pk][e.kind];
+    if (!world.settings.rules[r.id] || (r.juvenileOnly && !(e.size < e.adult * .6))) continue;
+    const list = entsOfKind(pk);
+    if (list === world.ents) return world.ents;                // 不在 step 裡：直接全部（呼叫端會再檢查）
+    for (const o of list) out.push(o);
+  }
+  return out;
+}
+
 function canEat(e, t) {
   if (!t || t === e || t.dead || t.removed || t.held) return false;
   if (t.stage === 'egg') return false;                        // 卵塊不會被吃
   if (t.kind === 'nest') return false;
-  const r = RULES.find(r => r.pred === e.kind && r.prey === t.kind);
+  const r = RULE_IDX[e.kind] && RULE_IDX[e.kind][t.kind];
   if (!r || !world.settings.rules[r.id]) return false;
   if (r.juvenileOnly && !(t.size < t.adult * .6)) return false;
   if (r.pred === r.prey && t.type === e.type && t.size >= e.size * .6) return false;
@@ -264,8 +306,9 @@ function canEat(e, t) {
 }
 function findPrey(e, range, ok, from = e) {
   let best = null, bd = range;
-  for (const t of world.ents) if (canEat(e, t) && (!ok || ok(t))) { const d = dist(from, t); if (d < bd) { bd = d; best = t; } }
-  for (const t of world.food) if (canEat(e, t) && (!ok || ok(t))) { const d = dist(from, t); if (d < bd) { bd = d; best = t; } }
+  const near = t => Math.abs(t.x - from.x) < bd && Math.abs(t.y - from.y) < bd;   // 先用方框粗篩，再做詳細檢查
+  for (const t of preyCandidates(e.kind)) if (near(t) && canEat(e, t) && (!ok || ok(t))) { const d = dist(from, t); if (d < bd) { bd = d; best = t; } }
+  for (const t of world.food) if (near(t) && canEat(e, t) && (!ok || ok(t))) { const d = dist(from, t); if (d < bd) { bd = d; best = t; } }
   return best;
 }
 function eat(e, t) {
@@ -286,6 +329,7 @@ function step(dt) {
   updateWaterY();
   tickDayNight(dt);
   spawnMosquitoes(dt);
+  buildIndex();
   for (const e of world.ents) {
     if (e.held || e.removed) continue;
     if (e.dead) { updDead(e, dt); continue; }
@@ -295,6 +339,7 @@ function step(dt) {
     if (!e.removed && !e.dead) { growTick(e, dt); tickBreed(e, dt); }
   }
   for (const f of world.food) updFood(f, dt);
+  world._ix = null;
   // 安全網：座標壞掉（NaN）就移除，超出魚缸就拉回來
   for (const e of world.ents) {
     if (!Number.isFinite(e.x) || !Number.isFinite(e.y)) { e.removed = true; console.warn('移除座標異常的生物', e.type, e.state); continue; }

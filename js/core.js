@@ -15,7 +15,7 @@ const rand = (a, b) => a + Math.random() * (b - a);
 const lerp = (a, b, t) => a + (b - a) * t;
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 const ease = (dt, rate) => 1 - Math.exp(-dt * rate);
-const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+const dist = (a, b) => { const dx = a.x - b.x, dy = a.y - b.y; return Math.sqrt(dx * dx + dy * dy); };   // 不用 Math.hypot（慢很多）
 const pick = arr => arr[Math.floor(Math.random() * arr.length)];
 function angDiff(a, b) {
   let d = b - a;
@@ -60,7 +60,43 @@ const P = (x, y) => ({ x, y });
 // ---------------------------------------------------------------------
 const G = {
   c: null,
-  begin(ctx) { this.c = ctx; },
+  frame: 0,
+  begin(ctx) {
+    this.c = ctx;
+    if (++this.frame % 120 === 0)                                     // 清掉很久沒用到的圖層
+      for (const [k, v] of this._layers) if (this.frame - v.used > 240) this._layers.delete(k);
+  },
+  // -------------------------------------------------------------------
+  // 靜態圖層快取：內容沒變時，畫成一張圖重複貼上（省下每幀重畫的時間）
+  // 只快取畫面上看得到的範圍，並對齊螢幕像素 → 不會模糊、大缸放大也不會爆記憶體
+  // id：哪一個圖層（固定）；key：內容版本（變了才重畫）；x,y,w,h：內容的世界座標範圍
+  // 移植時對應 Godot 的 SubViewport／CanvasItem 快取、Unity 的 RenderTexture
+  // -------------------------------------------------------------------
+  _layers: new Map(),
+  layersOn: true,
+  layer(id, key, x, y, w, h, draw) {
+    const c = this.c, m = c.getTransform ? c.getTransform() : null;
+    if (!this.layersOn || !m || m.b || m.c || typeof document === 'undefined') return draw();
+    const cw = c.canvas.width, ch = c.canvas.height;
+    const px0 = Math.max(0, Math.floor(x * m.a + m.e)), py0 = Math.max(0, Math.floor(y * m.d + m.f));
+    const px1 = Math.min(cw, Math.ceil((x + w) * m.a + m.e)), py1 = Math.min(ch, Math.ceil((y + h) * m.d + m.f));
+    if (px1 <= px0 || py1 <= py0) return;                            // 不在畫面上
+    const pw = px1 - px0, ph = py1 - py0;
+    const full = key + '|' + m.a + ',' + m.d + ',' + m.e + ',' + m.f + '|' + px0 + ',' + py0 + ',' + pw + ',' + ph;
+    let L = this._layers.get(id);
+    if (!L) { L = { cv: document.createElement('canvas'), full: null, used: 0 }; this._layers.set(id, L); }
+    L.used = this.frame;
+    if (L.full !== full) {
+      if (L.cv.width !== pw || L.cv.height !== ph) { L.cv.width = pw; L.cv.height = ph; }
+      const oc = L.cv.getContext('2d'), keep = this.c;
+      oc.setTransform(1, 0, 0, 1, 0, 0); oc.clearRect(0, 0, pw, ph); oc.globalAlpha = 1;
+      oc.setTransform(m.a, 0, 0, m.d, m.e - px0, m.f - py0);
+      this.c = oc;
+      try { draw(); } finally { this.c = keep; }
+      L.full = full;
+    }
+    c.save(); c.setTransform(1, 0, 0, 1, 0, 0); c.drawImage(L.cv, px0, py0); c.restore();
+  },
   save() { this.c.save(); },
   restore() { this.c.restore(); },
   tf(x, y, rot = 0, sx = 1, sy = 1) {

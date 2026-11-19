@@ -78,6 +78,31 @@ function decorOutline(d, n = 28) {
   pts.push(P(d.x + d.w / 2, d.y), P(d.x - d.w / 2, d.y));
   return pts;
 }
+// 會動的部分：土坡水面上的小草
+function drawMoundGrass(d) {
+  const wy = world.waterY, top = decorOutline(d).slice(0, -2);
+  for (let i = 0; i < top.length; i += 2) { const p = top[i]; if (p.y < wy - 4) G.line([p, P(p.x + Math.sin(i + world.t) * 2, p.y - 9)], 2, '#78b04a'); }
+}
+// 靜態造景（岩石、漂流木、土坡）用圖層快取；位置、水位、藻類量變了才重畫
+const STATIC_DECOR = { rock: 1, boulder: 1, mound: 1, wood: 1 };
+const decorLayerId = new WeakMap(); let decorLayerSeq = 0;
+function drawDecorCached(d) {
+  if (!STATIC_DECOR[d.type]) return drawDecor(d);
+  let id = decorLayerId.get(d); if (!id) { id = 'decor' + (++decorLayerSeq); decorLayerId.set(d, id); }
+  let x0, y0, x1, y1;
+  if (d.type === 'wood') {
+    const [a, b] = woodEnds(d), m = d.h + 10;
+    x0 = Math.min(a.x, b.x) - m; x1 = Math.max(a.x, b.x) + m; y0 = Math.min(a.y, b.y) - m; y1 = Math.max(a.y, b.y) + m;
+  } else {
+    const ol = decorOutline(d); x0 = x1 = ol[0].x; y0 = y1 = ol[0].y;
+    for (const p of ol) { x0 = Math.min(x0, p.x); x1 = Math.max(x1, p.x); y0 = Math.min(y0, p.y); y1 = Math.max(y1, p.y); }
+    x0 -= 10; x1 += 10; y0 -= 10; y1 += 6;
+  }
+  const key = [d.type, d.x, d.y, d.w, d.h, d.rot || 0, d.seed, Math.round(world.waterY), Math.round(world.water.algae / 3)].join(',');
+  G.layer(id, key, x0, y0, x1 - x0, y1 - y0, () => drawDecor(d));
+  if (d.type === 'mound') drawMoundGrass(d);
+}
+
 function drawDecor(d) {
   const wy = world.waterY;
   if (d.type === 'plant') return drawPlant(d);
@@ -138,7 +163,6 @@ function drawDecor(d) {
     const above = top.filter(p => p.y < wy - 2), below = top.filter(p => p.y >= wy - 2);
     if (above.length > 1) G.line(above, 7, '#5f9a3c');
     if (below.length > 1) G.line(below, 5, '#3f6a3a');
-    for (let i = 0; i < top.length; i += 2) { const p = top[i]; if (p.y < wy - 4) G.line([p, P(p.x + Math.sin(i + world.t) * 2, p.y - 9)], 2, '#78b04a'); }
     algaeFilm(top);
     return;
   }
@@ -403,7 +427,33 @@ function drawTetra(e) {
   G.restore();
 }
 
+// 畫面上很小的魚（大缸全景）改畫簡化版：外形、顏色、擺尾一樣，省掉細節
+const FISH_LOD_PX = 26;                                            // 魚在螢幕上短於這個長度（像素）就用簡化版
+let fishLodOn = true;
+function screenScale() { const m = G.c.getTransform ? G.c.getTransform() : null; return m ? Math.hypot(m.a, m.b) : 1; }
+function drawFishLOD(e) {
+  const sp = SPECIES[e.type], lk = sp.look, R = fishRig(e), n = R.nodes, tb = n[FISH_N - 1], k = e.size * sp.len / 64;
+  const juv = e.size < e.adult * .6, male = e.sex === 'm' && !juv;
+  G.save(); G.tf(e.x, e.y, 0, R.sx * k, (e.dead ? -1 : 1) * k);
+  if (e.dead) G.alpha(.65); else if (juv && lk.shape === 'guppy') G.alpha(.62);
+  let tailCol = lk.tail[1], tailLen = lk.shape === 'guppy' && male ? 40 : 22, tailH = lk.shape === 'guppy' && male ? 20 : 12;
+  if (lk.shape === 'guppy' && male) tailCol = GUPPY_MORPHS[e.morph || 0].tail[1];
+  G.save(); G.tf(tb.x, tb.y, R.tailRot, R.tailSx, 1);
+  G.poly([P(2, 0), P(-tailLen, -tailH), P(-tailLen * .8, 0), P(-tailLen, tailH)], tailCol);
+  G.restore();
+  const body = [P(n[0].x + 5, n[0].y + 1)];
+  for (const q of n) body.push(P(q.x, q.y - q.h));
+  for (let i = n.length - 1; i >= 0; i--) body.push(P(n[i].x, n[i].y + n[i].h));
+  G.poly(body, e.dead ? '#9aa' : lk.body[1]);
+  if (lk.shape === 'tetra') {                                      // 紅蓮燈／日光燈：藍條紋＋紅色
+    G.poly(fishBand(n, lk.redFull ? 1 : 4, 7, .05, .8), '#e0322a');
+    G.poly(fishBand(n, 1, 7, -.45, -.1), '#2fd0e8');
+  } else if (lk.shape === 'shark') G.poly(fishBand(n, 1, 7, -.9, .9), lk.body[0]);
+  G.circle(n[0].x - 1, n[0].y - 2.5 * (lk.hScale || 1), 4, '#111');
+  G.restore();
+}
 function drawFish(e) {
+  if (fishLodOn && SPECIES[e.type].len * e.size * screenScale() < FISH_LOD_PX) return drawFishLOD(e);
   const shape = (SPECIES[e.type].look || {}).shape;
   if (shape === 'shark') return drawSharkFish(e);
   if (shape === 'guppy') return drawGuppy(e);
@@ -1304,7 +1354,13 @@ function drawShrimp(e) {
   const k = e.size * SPECIES[e.type].len / 40;
   G.save(); G.tf(e.x, e.y, 0, e.dir * k, k);
   if (e.dead) G.alpha(.5);
-  drawShrimpBody(e);
+  if (fishLodOn && 40 * k * screenScale() < FISH_LOD_PX) {          // 畫面上很小：簡化版（身體＋尾扇＋眼睛）
+    const gr = SHRIMP_GRADES[e.morph || 0];
+    G.alpha(e.sex === 'm' ? gr.opacity * .8 : gr.opacity);
+    G.poly(ellipsePts(2, -8 + (e.curl || 0) * 2, 17, 4.5, -.05, 12), gr.color);
+    G.poly([P(-13, -6), P(-22, -10), P(-21, -1)], gr.color);
+    G.circle(18, -9, 1.8, '#111');
+  } else drawShrimpBody(e);
   G.restore();
 }
 function drawMolts() {                                             // 蛻下的空殼：半透明、慢慢淡掉
@@ -1373,14 +1429,13 @@ function drawDebug(e, sel) {
 // 整個畫面
 // ---------------------------------------------------------------------
 function render(selected) {
-  drawBackground();
-  drawWaterBack();
+  G.layer('bg', [W, H, Math.round(world.waterY)].join(','), 0, 0, W, H, () => { drawBackground(); drawWaterBack(); });   // 靜態：背景＋水的底色
   drawLightShafts();
   drawGlassAlgae();
   drawFarPlants();
   for (const e of world.ents) if (e.kind === 'gecko' && e.surface === 'glass') drawGecko(e);   // 背面玻璃上的壁虎
   for (const d of world.decor) if (d.type === 'plant') drawDecor(d);
-  for (const d of world.decor) if (d.type !== 'plant') drawDecor(d);
+  for (const d of world.decor) if (d.type !== 'plant') drawDecorCached(d);
   drawTailBits();
   drawMolts();
   for (const f of world.food) drawFood(f);
@@ -1388,7 +1443,7 @@ function render(selected) {
   const list = world.ents.filter(e => !(e.kind === 'gecko' && e.surface === 'glass')).sort((a, b) => order[a.kind] - order[b.kind]);
   drawShadows(list);
   for (const e of list) DRAW[e.kind](e);
-  drawSubstrate();
+  G.layer('substrate', W + ',' + H + ',' + SAND.length + ',' + (SAND[0] ? SAND[0].x : 0), 0, TANK.floor - 4, W, H - TANK.floor + 4, drawSubstrate);
   drawCaustics();
   drawWaterFront();
   drawMurk();
@@ -1396,8 +1451,7 @@ function render(selected) {
   drawParticles();
   drawFrontPlants();
   drawGrading();
-  drawVignette();
-  drawFrame();
+  G.layer('over', W + ',' + H, 0, 0, W, H, () => { drawVignette(); drawFrame(); });   // 靜態：暗角＋缸框
   drawFx();
   for (const e of world.ents) drawDebug(e, e === selected);
   if (selected && (world.ents.includes(selected) || world.decor.includes(selected))) drawSelection(selected);

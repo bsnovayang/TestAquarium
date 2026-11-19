@@ -28,13 +28,13 @@ function fishAnim(e, dt, freq, amp) {
 }
 function schoolInfo(e) {
   let sx = 0, sy = 0, sd = 0, n = 0;
-  for (const o of world.ents) if (o !== e && o.type === e.type && !o.dead && dist(o, e) < 300) { sx += o.x; sy += o.y; sd += o.dir; n++; }
+  for (const o of entsOfType(e.type)) if (o !== e && o.type === e.type && !o.dead && dist(o, e) < 300) { sx += o.x; sy += o.y; sd += o.dir; n++; }
   if (!n) return null;
   return { c: P(sx / n, sy / n), dir: sd === 0 ? e.dir : Math.sign(sd), n };
 }
 function schoolCenter(e) {
   let sx = 0, sy = 0, n = 0;
-  for (const o of world.ents) if (o !== e && o.type === e.type && !o.dead && dist(o, e) < 300) { sx += o.x; sy += o.y; n++; }
+  for (const o of entsOfType(e.type)) if (o !== e && o.type === e.type && !o.dead && dist(o, e) < 300) { sx += o.x; sy += o.y; n++; }
   return n ? P(sx / n, sy / n) : null;
 }
 function fishWander(e) {
@@ -79,15 +79,15 @@ function updFish(e, dt) {
   e.think -= dt;
   const minY = wy + 8 + 6 * e.size, maxY = Math.max(minY, TANK.floor - 8);
   let threat = null, threatName = '';
-  for (const o of world.ents)                                  // 會吃自己的掠食者靠近就逃
-    if ((o.kind === 'turtle' && o.mode === 'swim' || o.kind === 'fish') && !o.dead && o !== e && dist(o, e) < 90 && canEat(o, e)) { threat = o; threatName = entName(o); }
+  for (const o of threatsTo(e))                         // 會吃自己的掠食者靠近就逃
+    if ((o.kind === 'turtle' && o.mode === 'swim' || o.kind === 'fish') && !o.dead && o !== e && Math.abs(o.x - e.x) < 90 && Math.abs(o.y - e.y) < 90 && dist(o, e) < 90 && canEat(o, e)) { threat = o; threatName = entName(o); }
   if (!threat && e.scaredT > 0) { e.scaredT -= dt; threat = e.scaredBy; threatName = '紅尾黑鯊'; }   // 被紅尾黑鯊驅趕
   e.fleeReal = !!threat;
   if (!threat && sp.school) {                                  // 魚群連鎖反應：旁邊的同伴真的在逃，自己也跟著逃
     if (e.alarmCD > 0) e.alarmCD -= dt;
     if (e.alarmT > 0) { e.alarmT -= dt; threat = e.alarmFrom; threatName = '（跟著魚群逃）'; }
     else if (!(e.alarmCD > 0)) {                               // 驚慌 0.8 秒，之後 4 秒內不會再被同伴嚇到
-      const mate = world.ents.find(o => o !== e && o.type === e.type && o.fleeReal && !o.dead && dist(o, e) < 130);
+      const mate = entsOfType(e.type).find(o => o !== e && o.type === e.type && o.fleeReal && !o.dead && dist(o, e) < 130);
       if (mate) { e.alarmT = .8; e.alarmCD = 4; e.alarmFrom = P(e.x - (mate.tx - mate.x) * .5, e.y - (mate.ty - mate.y) * .5); threat = e.alarmFrom; threatName = '（跟著魚群逃）'; }
     }
   }
@@ -131,7 +131,7 @@ function updFish(e, dt) {
     if (sp.grazer && !isNight() && Math.random() < dt / 5) { const g = findGrazeSpot(e); if (g) { e.graze = { ...g, t: rand(4, 8), timeout: 12 }; } }
     if (sp.sexed && e.sex === 'm' && isAdult(e) && !isNight() && Math.random() < dt / 7) {
       let best = null, bd = 320;
-      for (const o of world.ents) if (o.type === e.type && o.sex === 'f' && !o.dead && isAdult(o) && dist(o, e) < bd) { bd = dist(o, e); best = o; }
+      for (const o of entsOfType(e.type)) if (o.type === e.type && o.sex === 'f' && !o.dead && isAdult(o) && dist(o, e) < bd) { bd = dist(o, e); best = o; }
       if (best) e.court = { f: best, t: rand(4, 7) };
     }
     if (e.think <= 0 || e.mode === 'chase' || e.mode === 'flee' || e.mode === 'graze' || (Math.abs(e.tx - e.x) < 15 && Math.abs(e.ty - e.y) < 15)) fishWander(e);
@@ -200,7 +200,7 @@ function territorialTick(e, dt) {
   if (e.rest > 0) { e.rest -= dt; return; }
   if (!e.chasing) {
     let best = null, bd = 170;
-    for (const o of world.ents) if (o.kind === 'fish' && o.type !== e.type && !o.dead && dist(o, e.home) < bd) { bd = dist(o, e.home); best = o; }
+    for (const o of entsOfKind('fish')) if (o.kind === 'fish' && o.type !== e.type && !o.dead && dist(o, e.home) < bd) { bd = dist(o, e.home); best = o; }
     e.chasing = best;
     if (best) { best.scaredBy = e; best.scaredT = 1.2; e.chaseTurns = 0; }   // 被盯上的魚立刻逃
   }
@@ -492,7 +492,7 @@ function updFrog(e, dt) {
   if (e.croakT > 0) e.croakT -= dt;
   else if (isNight() && !e.tongue && Math.random() < dt / 12) { e.croakT = sp.call === '啾' ? .6 : 2.2; addFx(e.x, e.y - 22 * e.size, sp.call, '#dff0ff'); }
   // 鈴蟾反射：烏龜靠近時背部下凹、露出紅色警告色
-  const threatened = e.mode === 'sit' && world.ents.some(o => o.kind === 'turtle' && !o.dead && dist(o, e) < 45 * o.size);
+  const threatened = e.mode === 'sit' && entsOfKind('turtle').some(o => o.kind === 'turtle' && !o.dead && dist(o, e) < 45 * o.size);
   if (e.unkenT > 0) e.unkenT -= dt;
   else if (threatened && sp.unken) e.unkenT = 2.5;
   if (e.scareCD > 0) e.scareCD -= dt;
@@ -703,7 +703,7 @@ function updLarva(e, dt) {
   }
   // 感覺到魚靠近 → 扭動身體下潛
   if (e.dive <= 0 && world.settings.rules.fish_larva)
-    for (const f of world.ents) if (f.kind === 'fish' && !f.dead && dist(f, e) < sp.fear) { e.dive = rand(.8, 1.4); break; }
+    for (const f of entsOfKind('fish')) if (f.kind === 'fish' && !f.dead && dist(f, e) < sp.fear) { e.dive = rand(.8, 1.4); break; }
   if (e.dive <= 0 && e.stage === 'larva' && Math.random() < dt / 20) e.dive = rand(.5, 1);   // 偶爾下潛覓食
   if (e.dive > 0) {
     e.dive -= dt; e.y += (e.stage === 'pupa' ? 55 : 45) * dt;
@@ -830,7 +830,7 @@ function tickBreed(e, dt) {
   if (e.breedT > 0) return;
   e.breedT = rand(...b.cool);
   if (!isAdult(e) || e.hunger < 60) return;
-  if (!world.ents.some(o => o !== e && o.type === e.type && !o.dead && isAdult(o))) return;   // 要有另一隻成年同類
+  if (!entsOfType(e.type).some(o => o !== e && o.type === e.type && !o.dead && isAdult(o))) return;   // 要有另一隻成年同類
   const wy = world.waterY;
   if (b.how === 'live') {                                     // 魚：直接生小魚
     const room = capFor('fish') - countKind('fish');
@@ -883,7 +883,7 @@ function tickPregnancy(e, dt, sp, b) {
   }
   if (e.breedT === undefined) e.breedT = rand(...b.cool) * .5;
   if ((e.breedT -= dt) > 0 || e.hunger < 50) return;
-  const male = world.ents.find(o => o.type === e.type && o.sex === 'm' && !o.dead && isAdult(o) && dist(o, e) < 300);
+  const male = entsOfType(e.type).find(o => o.type === e.type && o.sex === 'm' && !o.dead && isAdult(o) && dist(o, e) < 300);
   if (!male) { e.breedT = 10; return; }
   e.preg = .001; e.mateMorph = male.morph;
   logEvent(`💕 ${sp.name}母魚懷孕了`);
@@ -931,7 +931,7 @@ function updTadpole(e, dt) {
   if (world.water.algae > 3) e.hunger = Math.min(100, e.hunger + eatAlgae(.0015 * dt) * 8);   // 蝌蚪也吃藻類
   // 逃離會吃蝌蚪的魚和烏龜
   let threat = null;
-  for (const o of world.ents) if ((o.kind === 'fish' || o.kind === 'turtle') && !o.dead && canEat(o, e) && dist(o, e) < 80) threat = o;
+  for (const o of threatsTo(e)) if ((o.kind === 'fish' || o.kind === 'turtle') && !o.dead && canEat(o, e) && dist(o, e) < 80) threat = o;
   const food = !threat && e.hunger < sp.huntBelow ? findPrey(e, sp.sight, t => t.y > wy) : null;
   if (threat) { e.tx = e.x + (e.x - threat.x) * 2; e.ty = e.y + (e.y - threat.y) + 20; e.state = '逃跑'; }
   else if (food) { e.tx = food.x; e.ty = food.y; e.state = '吃飼料'; }
@@ -1071,7 +1071,7 @@ function updCricket(e, dt) {
   if (e.y > wy + 1) { e.mode = 'swim'; e.swimT = 0; return; }
   e.think -= dt;
   let threat = null;
-  for (const o of world.ents) if ((o.kind === 'frog' || o.kind === 'gecko') && !o.dead && dist(o, e) < 70 && canEat(o, e)) threat = o;
+  for (const o of threatsTo(e)) if ((o.kind === 'frog' || o.kind === 'gecko') && !o.dead && dist(o, e) < 70 && canEat(o, e)) threat = o;
   if (threat && Math.random() < dt * 2) { cricketHop(e, Math.sign(e.x - threat.x) || 1); return; }
   if (e.think <= 0) {
     e.think = rand(1, 3.5);
@@ -1151,7 +1151,7 @@ function updShrimp(e, dt) {
   if (e.paleT > 0) e.paleT -= dt;
   // 掠食者靠近：彈尾往後逃
   if (e.mode !== 'flip' && e.mode !== 'molt') {
-    for (const o of world.ents) if ((o.kind === 'fish' || o.kind === 'turtle') && !o.dead && canEat(o, e) && dist(o, e) < 70) {
+    for (const o of threatsTo(e)) if ((o.kind === 'fish' || o.kind === 'turtle') && !o.dead && canEat(o, e) && dist(o, e) < 70) {
       e.mode = 'flip'; e.flipT = 0; e.fvx = Math.sign(e.x - o.x || -e.dir) * 200; e.fvy = -rand(30, 80); break;
     }
   }
@@ -1170,7 +1170,7 @@ function updShrimp(e, dt) {
       world.molts.push({ x: e.x, y: e.y, dir: e.dir, size: e.size, t: 0 });
       e.mode = 'walk'; e.paleT = 15; e.moltT = rand(...sp.molt);
       if (e.sex === 'f' && isAdult(e) && !(e.preg > 0) && e.hunger > 50 && world.settings.breed) {   // 吃飽才抱卵
-        const males = world.ents.filter(o => o.type === e.type && o.sex === 'm' && !o.dead && isAdult(o) && dist(o, e) < 400);
+        const males = entsOfType(e.type).filter(o => o.type === e.type && o.sex === 'm' && !o.dead && isAdult(o) && dist(o, e) < 400);
         for (const m of males) { m.swarmT = rand(5, 8); m.swarmTo = e; }   // 母蝦釋放費洛蒙，公蝦狂游
         if (males.length && countKind('shrimp') < capFor('shrimp')) { e.preg = .001; logEvent(`🦐 ${sp.name}母蝦蛻殼後抱卵了`); }
       }
