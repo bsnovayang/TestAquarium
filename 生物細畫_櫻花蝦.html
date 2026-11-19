@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>櫻花蝦細畫</title>
+<style>
+  :root { --bg:#1d2124; --panel:#262b2f; --ink:#e8e6e1; --muted:#9aa0a4; --line:#3a4146; --accent:#4fb89f; }
+  @media (prefers-color-scheme: light) { :root:not([data-theme="dark"]) { --bg:#e9e6df; --panel:#fbfaf7; --ink:#2b2b2b; --muted:#6f6f6f; --line:#d8d2c5; --accent:#2f8f78; } }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.6 system-ui, "Microsoft JhengHei", "PingFang TC", sans-serif; }
+  main { max-width: 1200px; margin: 0 auto; padding: 16px; }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  h2 { font-size: 16px; margin: 22px 0 8px; }
+  p.lead { color: var(--muted); margin: 0 0 12px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
+  figure { margin: 0; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 8px; }
+  figcaption { font-weight: 600; margin-bottom: 4px; }
+  figcaption small { font-weight: 400; color: var(--muted); }
+  canvas { display: block; width: 100%; border-radius: 6px; background: linear-gradient(#7cb8cc 0 80%, #c8b285 80%); }
+  ul { margin: 6px 0; padding-left: 20px; }
+  .src a { color: var(--accent); }
+</style>
+</head>
+<body>
+<main>
+  <h1>櫻花蝦細畫</h1>
+  <p class="lead">依真實紅櫻花蝦（<i>Neocaridina davidi</i>）的結構重畫。下方的圖直接使用遊戲裡的繪圖程式。</p>
+
+  <h2>結構標示</h2>
+  <figure><canvas id="anatomy" width="1100" height="520"></canvas></figure>
+
+  <h2>色級 <small style="color:var(--muted);font-weight:400">紅色越深、越不透明，等級越高</small></h2>
+  <div class="grid" id="grades"></div>
+
+  <h2>公母差異與繁殖</h2>
+  <div class="grid">
+    <figure><figcaption>公蝦 <small>較小、顏色淡、半透明</small></figcaption><canvas id="male" width="360" height="220"></canvas></figure>
+    <figure><figcaption>母蝦 <small>較大、顏色深；背上黃色的卵鞍</small></figcaption><canvas id="female" width="360" height="220"></canvas></figure>
+    <figure><figcaption>抱卵 <small>腹部下方抱著一團卵，游泳足搧動；快孵化時看得到眼點</small></figcaption><canvas id="berried" width="360" height="220"></canvas></figure>
+    <figure><figcaption>小蝦 <small>直接發育：孵出來就是小蝦的樣子（已放大顯示）</small></figcaption><canvas id="juv" width="360" height="220"></canvas></figure>
+  </div>
+
+  <h2>行為</h2>
+  <div class="grid">
+    <figure><figcaption>用小螯夾食 <small>前兩對步足輪流把食物送到嘴邊</small></figcaption><canvas id="pick" width="360" height="220"></canvas></figure>
+    <figure><figcaption>走動 <small>步足交替</small></figcaption><canvas id="walk" width="360" height="220"></canvas></figure>
+    <figure><figcaption>彈尾逃跑 <small>腹部用力捲起、往後彈</small></figcaption><canvas id="flip" width="360" height="220"></canvas></figure>
+    <figure><figcaption>蛻殼 <small>脫下一個完整的半透明空殼</small></figcaption><canvas id="molt" width="360" height="220"></canvas></figure>
+  </div>
+
+  <h2>參考的真實特徵</h2>
+  <ul>
+    <li><b>身體構造</b>：和海蝦相似；共 10 隻步足，最前面一對特化成小螯；腹部有游泳足；尾端是尾扇</li>
+    <li><b>公母差異</b>：公蝦較小、顏色較淡；母蝦較大、顏色較深，背上有卵鞍（透過背甲看到的卵巢）</li>
+    <li><b>繁殖</b>：母蝦蛻殼後釋放費洛蒙，公蝦會在水中到處狂游尋找（會這樣狂游的一定是公蝦）；交配後母蝦把卵抱在腹部下方約 3～4 週（遊戲中縮短為 120 秒）</li>
+    <li><b>直接發育</b>：孵出來就是小蝦，沒有幼體期，母蝦不照顧</li>
+    <li><b>蛻殼</b>：定期脫下完整的外殼；抱卵中蛻殼可能會掉卵</li>
+    <li><b>色級</b>：一般分為普通（半透明帶紅斑）、櫻花、極火（全身鮮紅不透明）等（遊戲簡化為三級）</li>
+    <li><b>遊戲中的設定</b>：吃藻類和生物膜；對水質比魚敏感（水稍髒就褪色、太髒會生病）；遇到掠食者會彈尾往後逃；魚會吃小蝦</li>
+  </ul>
+  <p class="src">資料來源：
+    <a href="https://ask.ifas.ufl.edu/publication/IN1301">UF/IFAS</a>、
+    <a href="https://www.theshrimpfarm.com/articles/cherry_shrimp_breeding.php">The Shrimp Farm</a>、
+    <a href="https://shrimpscience.com/articles/breeding-cherry-crystal-bee-shrimp">Shrimp Science</a>、
+    <a href="https://shrimpscience.com/articles/molting-and-common-problems">Shrimp Science（蛻殼）</a>、
+    <a href="https://www.superiorshrimpaquatics.com/blogs/news/a-guide-to-identifying-the-sex-of-shrimp">Superior Shrimp（公母辨識）</a>、
+    <a href="https://www.cw.com.tw/article/5071570">天下雜誌（台灣觀賞蝦產業）</a>
+  </p>
+</main>
+
+<script src="js/core.js"></script>
+<script src="js/species.js"></script>
+<script src="js/world.js"></script>
+<script src="js/effects.js"></script>
+<script src="js/water.js"></script>
+<script src="js/creatures.js"></script>
+<script src="js/draw.js"></script>
+<script>
+world.waterY = -99999;
+function makeS(sex, extra = {}) {
+  const e = makeEnt('cherry', 0, 0, false);
+  setSex(e, sex);
+  Object.assign(e, { dir: 1, id: 3, phase: 0, curl: 0, dist: 0, morph: 2, state: '走動', mode: 'walk', paleT: 0, paleV: 0 }, extra);
+  return e;
+}
+const V = [
+  { id: 'anatomy', e: makeS('f', { morph: 1 }), sc: 15, labels: true },
+  { id: 'male', e: makeS('m'), sc: 5.5 },
+  { id: 'female', e: makeS('f'), sc: 5.5 / 1.2 },
+  { id: 'berried', e: makeS('f', { preg: .7 }), sc: 5.5 / 1.2 },
+  { id: 'juv', e: makeS('f', { morph: 1 }), sc: 5.5, juv: true },
+  { id: 'pick', e: makeS('f', { state: '用小螯夾食' }), sc: 5.5 / 1.2 },
+  { id: 'walk', e: makeS('f'), sc: 5.5 / 1.2, walk: true },
+  { id: 'flip', e: makeS('f'), sc: 5.5 / 1.2, flip: true },
+  { id: 'molt', e: makeS('f'), sc: 5.5 / 1.2, molt: true },
+].map(v => ({ ...v, ctx: document.getElementById(v.id).getContext('2d') }));
+const juvE = V.find(v => v.juv).e; juvE.size = juvE.adult * .25; V.find(v => v.juv).sc = 5.5 / .25 / 1.2 * .5;
+SHRIMP_GRADES.forEach((g, i) => {
+  const f = document.createElement('figure');
+  f.innerHTML = `<figcaption>${g.name}</figcaption><canvas width="320" height="200"></canvas>`;
+  document.getElementById('grades').appendChild(f);
+  V.push({ e: makeS('f', { morph: i, id: 10 + i }), sc: 5, ctx: f.querySelector('canvas').getContext('2d') });
+});
+const LABELS = [
+  ['額角（帶鋸齒）', 22, -10.6, 10, -30], ['複眼（有眼柄）', 18.9, -9, 26, -10], ['第一觸角（短、分叉）', 25, -14, 6, -34],
+  ['第二觸角（長鞭）', 38, -6, 20, 20], ['頭胸甲', 10, -11, -6, -40], ['卵鞍（母蝦的卵巢）', 6.5, -10.2, -30, -34],
+  ['腹部 6 節', -4, -9, -20, -36], ['尾扇（尾節＋尾肢）', -16, -4, -24, 18], ['步足 5 對（前 2 對有小螯）', 14, -1, 10, 30], ['游泳足', -1, -4.5, -26, 30],
+];
+let last = performance.now();
+function frame(now) {
+  const dt = Math.min(.05, (now - last) / 1000); last = now;
+  world.t += dt;
+  for (const v of V) {
+    const c = v.ctx, cw = c.canvas.width, ch = c.canvas.height, e = v.e;
+    e.phase += dt * 5;
+    if (v.walk) e.dist += dt * 12;
+    if (v.flip) e.curl = Math.max(0, Math.sin(world.t * 1.8)) ;
+    c.setTransform(1, 0, 0, 1, 0, 0); c.clearRect(0, 0, cw, ch);
+    G.begin(c);
+    if (v.molt) {                                                    // 空殼在左，蝦在右
+      c.setTransform(v.sc, 0, 0, v.sc, cw * .3, ch * .78); world.molts = [{ x: 0, y: 0, dir: 1, size: 1, t: 5 }]; drawMolts();
+      c.setTransform(v.sc, 0, 0, v.sc, cw * .62, ch * .78); e.paleT = 5;
+    } else c.setTransform(v.sc, 0, 0, v.sc, cw / 2 - 6 * v.sc * e.size, ch * .78);
+    drawShrimp(e);
+    if (v.labels) {
+      c.setTransform(1, 0, 0, 1, 0, 0);
+      const ox = cw / 2 - 6 * v.sc * e.size, oy = ch * .78, k = v.sc * e.size;
+      c.font = '15px system-ui, "Microsoft JhengHei", sans-serif'; c.textBaseline = 'middle';
+      for (const [text, lx, ly, dx, dy] of LABELS) {
+        const px = ox + lx * k, py = oy + ly * k, tx = px + dx * 2.4, ty = py + dy * 2.4;
+        c.strokeStyle = 'rgba(20,20,20,.75)'; c.lineWidth = 1.2; c.beginPath(); c.moveTo(px, py); c.lineTo(tx, ty); c.stroke();
+        c.fillStyle = '#ff9f1c'; c.beginPath(); c.arc(px, py, 3.5, 0, 7); c.fill();
+        const w = c.measureText(text).width, bx = clamp(tx - (dx < 0 ? w + 10 : 0), 2, cw - w - 12);
+        c.fillStyle = 'rgba(255,255,255,.92)'; c.fillRect(bx, ty - 11, w + 10, 22); c.fillStyle = '#222'; c.textAlign = 'left'; c.fillText(text, bx + 5, ty);
+      }
+    }
+  }
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

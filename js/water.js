@@ -49,14 +49,15 @@ function tickWater(dt) {
   if (before < Wp.deadlyAt && w.dirt >= Wp.deadlyAt) logEvent('☠️ 水質很差，魚開始生病');
   if (algaeBefore < 50 && w.algae >= 50) logEvent('🟢 藻類變多了（可以刷藻，或放斑馬螺）');
   // 水太髒：魚和蝌蚪掉血
-  if (w.dirt > Wp.harmAt) {
-    const harm = (w.dirt - Wp.harmAt) / (w.dirt > Wp.deadlyAt ? 12 : 30);
-    for (const e of world.ents) {
-      if (e.dead || e.y < wy || !(e.kind === 'fish' || e.kind === 'tadpole' || e.kind === 'whale')) continue;
-      if (world.settings.death) { e.hp -= harm * dt; if (e.hp <= 0) kill(e, '水質太差死亡'); }
-      e.sick = true;
-    }
-  } else for (const e of world.ents) e.sick = false;
+  for (const e of world.ents) {                               // 水太髒：魚、蝌蚪生病；蝦更敏感（門檻低 15）
+    if (e.dead) continue;
+    const sens = e.kind === 'shrimp' ? Wp.harmAt - 15 : Wp.harmAt;
+    const ok = e.kind === 'fish' || e.kind === 'tadpole' || e.kind === 'whale' || e.kind === 'shrimp';
+    if (!ok || e.y < wy || w.dirt <= sens) { e.sick = false; continue; }
+    const harm = (w.dirt - sens) / (w.dirt > Wp.deadlyAt ? 12 : 30);
+    if (world.settings.death) { e.hp -= harm * dt; if (e.hp <= 0) kill(e, '水質太差死亡'); }
+    e.sick = true;
+  }
 }
 // 生物吃藻：回傳實際吃到多少
 function eatAlgae(amount) {

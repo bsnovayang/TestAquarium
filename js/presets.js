@@ -17,6 +17,7 @@ const PRESETS = [
       B.decor('filter', 1215, B.waterY + 40);
       B.decor('floater', 260, B.waterY); B.decor('floater', 760, B.waterY);
       B.ent('nerite', 330, B.floor - 70); B.ent('nerite', 700, B.floor - 30);
+      for (let i = 0; i < 6; i++) B.ent('cherry', B.rx(560, 860), B.floor - 40, { sex: i < 2 ? 'm' : 'f' });   // 櫻花蝦 2 公 4 母
       for (let i = 0; i < 6; i++) B.ent('guppy', B.rx(500, 900), B.ry(.3, .8), { sex: i % 2 ? 'f' : 'm' });
       for (let i = 0; i < 8; i++) B.ent('neon', B.rx(600, 900), B.ry(.3, .6));
     },

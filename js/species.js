@@ -68,6 +68,10 @@ const SPECIES = {
            fear: 70,                   // 魚靠近多少距離會下潛逃跑
            escape: .55 },              // 正在下潛時，魚撲空的機率
   nest: { name: '卵', kind: 'nest', len: 12, hit: 14 },
+  // 櫻花蝦（Neocaridina davidi）：母蝦較大、顏色較深、有卵鞍；母蝦蛻殼後公蝦狂游，交配後抱卵，孵出的直接是小蝦
+  cherry: { name: '櫻花蝦', kind: 'shrimp', len: 40, speed: 12, hungerTime: 1800, huntBelow: 85, hit: 12,
+            sexed: true, femaleScale: 1.2, morphs: 'shrimp', growTime: 240, birth: .25,
+            gestation: 120, clutch: [6, 12], molt: [220, 360] },   // 抱卵 120 秒（真實約 3～4 週）
   // 斑馬螺（蜑螺）：在水中的地面、石頭上慢慢爬，吃藻類；淡水中產的卵不會孵化，所以不會繁殖失控
   nerite: { name: '斑馬螺', kind: 'snail', len: 36, speed: 5, hungerTime: 3000, huntBelow: 90, hit: 14 },             // 青蛙卵、烏龜蛋、壁虎蛋（共用）
   // 活餌：玩家投放，不繁殖；給青蛙、壁虎吃
@@ -84,8 +88,15 @@ const GUPPY_MORPHS = [
   { name: '馬賽克', tail: ['#a8e0ff', '#3a6ad0', '#d8303e'], spot: 'rgba(20,20,60,.5)',  patch: ['#4a8ae8', '#ff7a3a'] },
 ];
 
+// 櫻花蝦色級：普通（半透明帶紅斑）→ 櫻花 → 極火（全身鮮紅不透明）
+const SHRIMP_GRADES = [
+  { name: '普通', color: '#e04a3a', opacity: .55, speckle: true },
+  { name: '櫻花', color: '#e8302a', opacity: .8,  speckle: true },
+  { name: '極火', color: '#d81e1e', opacity: .97, speckle: false },
+];
+
 // 族群上限（以標準缸為準，大缸依面積放大）
-const CAPS = { mosquito: 30, larva: 80, fish: 16, frog: 6, tadpole: 30, turtle: 3, gecko: 4 };
+const CAPS = { mosquito: 30, larva: 80, fish: 16, frog: 6, tadpole: 30, turtle: 3, gecko: 4, shrimp: 20 };
 
 const DECOR_TYPES = {
   rock:    { name: '石頭',   w: 150, h: 80,  solid: true },
@@ -115,7 +126,7 @@ const WATER = {
   deadlyAt: 85,        // 超過這個值，生病得更快
 };
 
-const FOOD_VALUE = { food: 10, mosquito: 15, fish: 40, larva: 6, tadpole: 12, cricket: 25, fly: 6 };
+const FOOD_VALUE = { shrimp: 8, food: 10, mosquito: 15, fish: 40, larva: 6, tadpole: 12, cricket: 25, fly: 6 };
 
 // 捕食規則：每一條都可以在設定面板單獨開關
 //   juvenileOnly：只吃幼體（大魚吃魚苗）
@@ -140,6 +151,9 @@ const RULES = [
   { id: 'turtle_food',    pred: 'turtle',  prey: 'food',     label: '烏龜吃飼料' },
   { id: 'tadpole_food',   pred: 'tadpole', prey: 'food',     label: '蝌蚪吃飼料' },
   { id: 'snail_food',     pred: 'snail',   prey: 'food',     label: '螺吃落底的飼料' },
+  { id: 'shrimp_food',    pred: 'shrimp',  prey: 'food',     label: '蝦吃飼料' },
+  { id: 'fish_shrimp',    pred: 'fish',    prey: 'shrimp',   label: '魚吃小蝦', juvenileOnly: true },
+  { id: 'turtle_shrimp',  pred: 'turtle',  prey: 'shrimp',   label: '烏龜吃蝦' },
 ];
 
 // 從缸外飛進來的蚊子：[每隻間隔秒數, 缸內成蟲少於幾隻才會飛進來]

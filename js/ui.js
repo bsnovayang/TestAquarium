@@ -7,7 +7,7 @@ const UI = { sel: null, drag: null, mode: 'edit', speed: 1 };
 // 物件面板：用頁籤分類（物件變多時比較好找）
 const PALETTE = [
   { cat: '造景', items: ['mound', 'boulder', 'rock', 'wood', 'plant', 'carpet', 'fern', 'floater', 'bubbler', 'filter'] },
-  { cat: '水中生物', items: ['guppy', 'neon', 'neontetra', 'redtail', 'nerite'] },
+  { cat: '水中生物', items: ['guppy', 'neon', 'neontetra', 'redtail', 'cherry', 'nerite'] },
   { cat: '兩棲爬蟲', items: ['frog', 'goldfrog', 'tadpole', 'turtle', 'gecko'] },
   { cat: '昆蟲', items: ['mosquito', 'larva'] },
   { cat: '迷你版', items: ['whale'] },
@@ -42,9 +42,9 @@ function drawThumb(cv, type) {
     const e = makeEnt(type, 0, 0, false);
     e.size = e.adult = 1; e.dir = 1; e.amp = .3; e.mode = type === 'turtle' ? 'walk' : 'sit';
     const conf = { guppy: [36, 22, .55], neon: [33, 22, .6], neontetra: [33, 22, .7], redtail: [37, 22, .17], turtle: [30, 38, .45], frog: [32, 38, .7], goldfrog: [31, 38, .66], tadpole: [34, 22, 1.5],
-                   gecko: [38, 34, .38], mosquito: [32, 22, 2], nerite: [33, 34, 1.3], larva: [32, 24, 2], whale: [32, 22, .036], cricket: [30, 30, 1.6], fly: [32, 22, 4] }[type];
+                   gecko: [38, 34, .38], mosquito: [32, 22, 2], nerite: [33, 34, 1.3], cherry: [30, 34, 1.5], larva: [32, 24, 2], whale: [32, 22, .036], cricket: [30, 30, 1.6], fly: [32, 22, 4] }[type];
     if (type === 'larva') e.phase = 1;
-    if (e.sex) { e.sex = 'm'; e.morph = 0; e.size = e.adult = 1; }
+    if (e.sex) { e.sex = type === 'cherry' ? 'f' : 'm'; e.morph = type === 'cherry' ? 1 : 0; e.size = e.adult = 1; }
     if (type === 'tadpole') { e.size = 1; e.meta = .3; }
     if (type === 'whale') { e.amp = .4; e.wmode = 'cruise'; }
     ctx.translate(conf[0], conf[1]); ctx.scale(conf[2], conf[2]);
@@ -286,7 +286,7 @@ function updatePanels(force) {
     const f = n => el.querySelector(`[data-f="${n}"]`);
     const surf = o.kind === 'gecko' ? (o.surface === 'glass' ? '（背面玻璃）' : '（陸地）') : '';
     f('state').textContent = `${o.dead ? '💀 ' : ''}${o.state || '—'}${surf}${o.sick ? '（水質太差，生病中）' : ''}`;
-    if (f('sex')) f('sex').textContent = (o.sex === 'm' ? '♂ 公' : '♀ 母') + '・' + GUPPY_MORPHS[o.morph || 0].name + (o.preg > 0 ? `・懷孕 ${Math.round(o.preg * 100)}%` : '');
+    if (f('sex')) f('sex').textContent = (o.sex === 'm' ? '♂ 公' : '♀ 母') + '・' + (sp.morphs === 'shrimp' ? SHRIMP_GRADES : GUPPY_MORPHS)[o.morph || 0].name + (o.preg > 0 ? (o.kind === 'shrimp' ? `・抱卵 ${Math.round(o.preg * 100)}%` : `・懷孕 ${Math.round(o.preg * 100)}%`) : '');
     if (f('hunger')) { f('hunger').textContent = Math.round(o.hunger) + '%'; f('hungerBar').style.width = clamp(o.hunger, 0, 100) + '%'; f('hungerBar').style.background = o.hunger < 25 ? '#e0603a' : '#4caf50'; }
     f('hp').textContent = Math.round(o.hp); f('hpBar').style.width = clamp(o.hp, 0, 100) + '%';
     const base = sp.scale || 1, grown = o.size / o.adult;

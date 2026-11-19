@@ -3,7 +3,7 @@
 // draw.js — 外觀層：把骨架資料畫出來（只使用 core.js 的 G 指令）
 // =====================================================================
 
-const DRAW = { snail: drawSnail, fish: drawFish, turtle: drawTurtle, frog: drawFrog, gecko: drawGecko, mosquito: drawMosquito, larva: drawLarva,
+const DRAW = { shrimp: drawShrimp, snail: drawSnail, fish: drawFish, turtle: drawTurtle, frog: drawFrog, gecko: drawGecko, mosquito: drawMosquito, larva: drawLarva,
                tadpole: drawTadpole, whale: drawWhale, nest: drawNest, cricket: drawCricket, fly: drawFly };
 
 // ---------------------------------------------------------------------
@@ -1201,6 +1201,120 @@ function drawCarpet(d) {
   }
 }
 
+
+// ---------------------------------------------------------------------
+// 櫻花蝦（側面細畫，原點 = 腳下地面，頭在 +x）
+//   額角（帶鋸齒）、有眼柄的複眼、第一觸角（短、分叉）、第二觸角（長鞭）、頭胸甲、
+//   腹部 6 節＋尾扇（尾節＋尾肢）、步足 5 對（前 2 對有小螯）、游泳足 5 對；
+//   母蝦：卵鞍、抱卵；色級：普通（半透明帶紅斑）／櫻花／極火
+// ---------------------------------------------------------------------
+const SHRIMP_CARAPACE = chaikin([P(4, -6), P(4.5, -10.5), P(10, -12.2), P(15.5, -10.8), P(18, -8.2), P(17, -6), P(10, -5)], true, 2);
+function shrimpAbdomen(curl) {                                   // 腹部 6 節：從頭胸甲後方往後、往下彎
+  const segs = []; let p = P(4.5, -8.4), a = Math.PI + .18;
+  const H = [3.4, 3.2, 3, 2.7, 2.3, 1.9];
+  for (let i = 0; i < 6; i++) {
+    a -= .085 + curl * .42;                                          // 角度遞減 = 往下彎（腹部往下拱，平常尾巴離地；彈尾時用力捲起）
+    const q = P(p.x + Math.cos(a) * 3.3, p.y + Math.sin(a) * 3.3);
+    segs.push({ a: p, b: q, h: H[i], ang: a }); p = q;
+  }
+  return segs;
+}
+function drawShrimpBody(e, ghost) {
+  const juv = e.size < e.adult * .6, male = e.sex === 'm';
+  const G0 = SHRIMP_GRADES[e.morph || 0];
+  const stress = (e.paleT > 0 ? .5 : 0) + (world.water.dirt > 40 ? .4 : 0);
+  e.paleV = lerp(e.paleV || 0, Math.min(1, stress), .03);
+  const op = ghost ? .22 : (juv ? .35 : G0.opacity * (male ? .55 : 1)) * (1 - e.paleV * .45);
+  const col = ghost ? '#f0eee4' : mixColor(G0.color, '#f2e2d8', (male ? .25 : 0) + e.paleV * .4);
+  const edge = ghost ? 'rgba(255,255,255,.6)' : 'rgba(120,20,15,.45)';
+  const segs = shrimpAbdomen(e.curl || 0), last = segs[5];
+  const walk = (e.dist || 0) * .5, picking = e.state === '用小螯夾食';
+  if (!ghost) for (let i = 0; i < 5; i++) {                       // 遠側步足
+    const x = 6 + i * 2.5 + .8, sw = Math.sin(walk + i * 1.3 + Math.PI) * 1.4;
+    G.line([P(x, -6), P(x + 1.6, -3.2), P(x + 1 + sw, -.2)], .5, 'rgba(150,40,30,.45)');
+  }
+  G.save(); G.alpha(op);
+  { // 腹部：一個連續平滑的輪廓，再畫分節線
+    const up = s0 => P(Math.cos(s0.ang + Math.PI / 2), Math.sin(s0.ang + Math.PI / 2));
+    const top = [], bot = [];
+    segs.forEach((s0, i) => { const n = up(s0); top.push(P(s0.a.x + n.x * s0.h, s0.a.y + n.y * s0.h)); bot.push(P(s0.a.x - n.x * s0.h * .85, s0.a.y - n.y * s0.h * .85)); });
+    const nl = up(last); top.push(P(last.b.x + nl.x * 1.4, last.b.y + nl.y * 1.4)); bot.push(P(last.b.x - nl.x * 1.2, last.b.y - nl.y * 1.2));
+    G.poly(chaikin([...top, ...bot.reverse()], true, 2), col, edge, .35);
+    for (let i = 1; i < 6; i++) { const s0 = segs[i], n = up(s0); G.line(chaikin([P(s0.a.x + n.x * s0.h, s0.a.y + n.y * s0.h), P(s0.a.x - .8, s0.a.y), P(s0.a.x - n.x * s0.h * .8, s0.a.y - n.y * s0.h * .8)], false, 1), .35, edge); }
+  }
+  const ta = last.ang, tb = last.b;                               // 尾扇：尾節＋兩片尾肢
+  const fan = (o, l, w) => {
+    const a = ta + o, tip = P(tb.x + Math.cos(a) * l, tb.y + Math.sin(a) * l), nx = Math.cos(a + Math.PI / 2) * w, ny = Math.sin(a + Math.PI / 2) * w;
+    G.poly([tb, P(tip.x + nx, tip.y + ny), tip, P(tip.x - nx, tip.y - ny)], col, edge, .3);
+  };
+  fan(-.45, 5.5, 1.3); fan(.45, 5.5, 1.3); fan(0, 6, .9);
+  G.poly(SHRIMP_CARAPACE, col, edge, .4);                         // 頭胸甲
+  G.restore();
+  if (op < .85) G.line([P(16, -8), P(10, -8.6), ...segs.map(s0 => s0.b)], .5, 'rgba(70,40,20,.5)');   // 體內腸道
+  if (!ghost) {
+    if (G0.speckle || juv) {                                      // 紅色斑點（色素細胞）
+      const r = rng(e.id + .5);
+      G.save(); G.alpha(.55 * (1 - e.paleV * .5));
+      for (let i = 0; i < 26; i++) {
+        let p0;
+        if (r() < .45) p0 = P(5 + r() * 12, -10 + r() * 4.5);
+        else { const s0 = segs[Math.floor(r() * 6)]; p0 = P(s0.a.x + (r() - .5) * 2, s0.a.y + (r() - .5) * 4); }
+        G.circle(p0.x, p0.y, .35 + r() * .35, '#c8141a');
+      }
+      G.restore();
+    }
+    if (e.sex === 'f' && !juv && !(e.preg > 0)) { G.save(); G.alpha(.75); G.poly(ellipsePts(6.5, -10.2, 2.8, 1.4, -.1, 12), '#e8d060'); G.restore(); }   // 卵鞍
+    G.save(); G.alpha(.35); G.line([P(6, -11.6), P(11, -12), P(15, -10.8)], .6, '#ffffff'); G.restore();   // 背上的高光
+    const beat = e.mode === 'swim' || e.mode === 'swarm' || e.preg > 0 ? 1 : .25;   // 游泳足
+    for (let i = 0; i < 5; i++) {
+      const s0 = segs[i], n = P(Math.cos(s0.ang - Math.PI / 2), Math.sin(s0.ang - Math.PI / 2)), b = P(s0.b.x + n.x * s0.h * .8, s0.b.y + n.y * s0.h * .8);   // 腹部下方
+      const sw = Math.sin(e.phase * 2 + i * .8) * beat * .5;
+      G.line([b, P(b.x + n.x * 2.4 + Math.cos(s0.ang) * sw * 2, b.y + n.y * 2.4 + Math.sin(s0.ang) * sw * 2)], .45, 'rgba(200,80,60,.6)');
+    }
+    if (e.preg > 0) {                                             // 抱卵：越接近孵化越深、看得到眼點
+      const r = rng(e.id), ec = mixColor('#d8cc58', '#6a5a3a', e.preg);
+      for (let i = 0; i < 12; i++) {
+        const s0 = segs[Math.floor(r() * 4)], n = P(Math.cos(s0.ang - Math.PI / 2), Math.sin(s0.ang - Math.PI / 2));
+        const p0 = P(s0.a.x + n.x * (s0.h + .8 + r()), s0.a.y + n.y * (s0.h + .8 + r()) + (r() - .5));
+        G.circle(p0.x, p0.y, .8, ec);
+        if (e.preg > .6) G.circle(p0.x + .2, p0.y, .25, '#1a1a1a');
+      }
+    }
+  }
+  G.poly([P(15.5, -9.6), P(24.5, -11.2), P(16, -8.6)], ghost ? 'rgba(240,238,228,.3)' : col, edge, .3);   // 額角
+  if (ghost) return;
+  for (let i = 0; i < 4; i++) G.line([P(17.5 + i * 1.7, -10 - i * .28), P(17.9 + i * 1.7, -10.9 - i * .28)], .3, edge);   // 額角鋸齒
+  G.line([P(16.5, -8.4), P(18.4, -8.9)], .9, col); G.circle(18.9, -9, 1.5, '#141010'); G.circle(19.3, -9.4, .45, '#ffffff');   // 有眼柄的複眼
+  const sw = Math.sin(world.t * 1.6 + e.id) * 1.2;              // 觸角
+  G.line([P(18, -9.5), P(22, -13), P(26, -14.5 + sw * .3)], .35, 'rgba(160,40,30,.7)');
+  G.line([P(18, -9.5), P(22.5, -12), P(26.5, -11.5 + sw * .3)], .35, 'rgba(160,40,30,.7)');
+  G.line(chaikin([P(17.5, -8.6), P(25, -12.5), P(33, -12 + sw), P(39, -6 + sw * 1.5), P(42, 1 + sw)], false, 1), .3, 'rgba(160,40,30,.6)');
+  G.line(chaikin([P(17.5, -8.4), P(24, -10), P(32, -7 + sw * .6), P(37, -1 + sw)], false, 1), .3, 'rgba(160,40,30,.5)');
+  for (let i = 0; i < 5; i++) {                                   // 近側步足：前 2 對有小螯，夾食時輪流送到嘴邊
+    const x = 6 + i * 2.5, cheli = i >= 3;
+    let foot;
+    if (cheli && picking) { const k = (Math.sin(e.phase * 3 + i * Math.PI) + 1) / 2; foot = P(lerp(x + 2.5, 18, k), lerp(-.3, -6.5, k)); }
+    else foot = P(x + 1 + Math.sin(walk + i * 1.3) * 1.4, -.2);
+    const knee = P((x + foot.x) / 2 + .9, Math.min(-3, (foot.y - 6) / 2));
+    G.line([P(x, -5.8), knee, foot], .6, 'rgba(200,60,45,.75)');
+    if (cheli) { G.line([foot, P(foot.x + 1, foot.y - .5)], .4, 'rgba(200,60,45,.9)'); G.line([foot, P(foot.x + 1, foot.y + .4)], .4, 'rgba(200,60,45,.9)'); }
+  }
+}
+function drawShrimp(e) {
+  const k = e.size * SPECIES[e.type].len / 40;
+  G.save(); G.tf(e.x, e.y, 0, e.dir * k, k);
+  if (e.dead) G.alpha(.5);
+  drawShrimpBody(e);
+  G.restore();
+}
+function drawMolts() {                                             // 蛻下的空殼：半透明、慢慢淡掉
+  for (const m of world.molts) {
+    G.save(); G.tf(m.x, m.y, 0, m.dir * m.size, m.size); G.alpha(Math.min(1, (40 - m.t) / 10));
+    drawShrimpBody({ type: 'cherry', size: 1, adult: 1, curl: .1, id: 1, morph: 0 }, true);
+    G.restore();
+  }
+}
+
 // ---------------------------------------------------------------------
 // 編輯用疊加層（選取框、除錯）
 // ---------------------------------------------------------------------
@@ -1268,8 +1382,9 @@ function render(selected) {
   for (const d of world.decor) if (d.type === 'plant') drawDecor(d);
   for (const d of world.decor) if (d.type !== 'plant') drawDecor(d);
   drawTailBits();
+  drawMolts();
   for (const f of world.food) drawFood(f);
-  const order = { snail: 0, nest: 0, larva: 0, tadpole: 1, whale: 1, fish: 2, cricket: 3, turtle: 3, frog: 4, gecko: 5, mosquito: 6, fly: 6 };
+  const order = { shrimp: 0, snail: 0, nest: 0, larva: 0, tadpole: 1, whale: 1, fish: 2, cricket: 3, turtle: 3, frog: 4, gecko: 5, mosquito: 6, fly: 6 };
   const list = world.ents.filter(e => !(e.kind === 'gecko' && e.surface === 'glass')).sort((a, b) => order[a.kind] - order[b.kind]);
   drawShadows(list);
   for (const e of list) DRAW[e.kind](e);

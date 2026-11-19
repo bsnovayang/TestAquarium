@@ -23,6 +23,7 @@ const world = {
   particles: [],       // 水花、漣漪、氣泡（純視覺）
   water: { dirt: 5, algae: 3 },   // 水質：髒污、藻類（0～100）
   tailBits: [],        // 壁虎斷掉、還在扭動的尾巴（純視覺）
+  molts: [],           // 蝦蛻下的空殼（純視覺）
   tod: .375,           // 一天中的時間（0 = 午夜；預設早上 9 點）
   settings: {
     death: true,
@@ -167,7 +168,8 @@ function makeEnt(type, x, y, push = true) {
   if (sp.kind === 'whale') { e.breathT = rand(...sp.breath) * .5; e.wmode = 'cruise'; }
   if (sp.kind === 'cricket' || sp.kind === 'fly') { e.life = rand(...sp.life); e.adult = e.size = rand(.9, 1.1); }
   if (sp.kind === 'gecko') { e.tailLen = 1; e.regrown = false; }
-  if (sp.sexed) { e.morph = Math.floor(Math.random() * GUPPY_MORPHS.length); setSex(e, Math.random() < .5 ? 'm' : 'f'); }
+  if (sp.sexed) { e.morph = Math.floor(Math.random() * (sp.morphs === 'shrimp' ? SHRIMP_GRADES : GUPPY_MORPHS).length); setSex(e, Math.random() < .5 ? 'm' : 'f'); }
+  if (sp.kind === 'shrimp') { e.moltT = rand(...sp.molt) * rand(.2, 1); e.mode = 'fall'; e.curl = 0; }
   if (push) { world.ents.push(e); afterDrop(e); }
   return e;
 }
@@ -306,6 +308,8 @@ function step(dt) {
   tickParticles(dt);
   tickWater(dt);
   for (const b of world.tailBits) b.t += dt;
+  for (const m of world.molts) m.t += dt;
+  world.molts = world.molts.filter(m => m.t < 40);   // 真實的蝦也會吃掉空殼補鈣
   world.tailBits = world.tailBits.filter(b => b.t < 9);
   for (const f of world.fx) { f.t += dt; f.y -= 18 * dt; }
   world.fx = world.fx.filter(f => f.t < 1.2);

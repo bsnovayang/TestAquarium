@@ -5,7 +5,7 @@
 // =====================================================================
 
 const UPDATE = { fish: updFish, turtle: updTurtle, frog: updFrog, gecko: updGecko, mosquito: updMosquito, larva: updLarva,
-                 tadpole: updTadpole, whale: updWhale, nest: updNest, cricket: updCricket, fly: updFly, snail: updSnail };
+                 tadpole: updTadpole, whale: updWhale, nest: updNest, cricket: updCricket, fly: updFly, snail: updSnail, shrimp: updShrimp };
 
 // 轉身：轉完後有 0.8 秒冷卻，避免目標在身邊晃動時原地連續翻轉
 function startTurn(e) { if (!e.turning && !(e.turnCD > 0)) { e.turning = true; e.turnT = 0; } }
@@ -1135,4 +1135,108 @@ function updSnail(e, dt) {
   const got = eatAlgae(.004 * dt);                        // 邊爬邊刮藻
   e.hunger = Math.min(100, e.hunger + got * 60 + .03 * dt);   // 沒有藻類時也能刮食表面的生物膜（勉強維生）
   e.state = got > 0 ? '刮食藻類' : food ? '爬向飼料' : '刮食生物膜';
+}
+
+
+// =====================================================================
+// 櫻花蝦：在地面、石頭、沉木上走動，用小螯不停夾食（藻類、生物膜、飼料）；
+//   偶爾短距離游泳；遇到掠食者彈尾往後逃；定期蛻殼留下空殼；
+//   母蝦蛻殼 → 附近公蝦狂游 → 母蝦抱卵 → 孵出小蝦（直接發育）
+// =====================================================================
+function updShrimp(e, dt) {
+  const sp = SPECIES[e.type], wy = world.waterY, s = e.size;
+  if (wy >= TANK.floor - 8) { e.state = '缺水'; if (world.settings.death) kill(e, '缺水死亡'); return; }
+  e.phase += dt * (e.mode === 'swim' || e.mode === 'swarm' ? 14 : 5);
+  e.moltT -= dt;
+  if (e.paleT > 0) e.paleT -= dt;
+  // 掠食者靠近：彈尾往後逃
+  if (e.mode !== 'flip' && e.mode !== 'molt') {
+    for (const o of world.ents) if ((o.kind === 'fish' || o.kind === 'turtle') && !o.dead && canEat(o, e) && dist(o, e) < 70) {
+      e.mode = 'flip'; e.flipT = 0; e.fvx = Math.sign(e.x - o.x || -e.dir) * 200; e.fvy = -rand(30, 80); break;
+    }
+  }
+  const toGround = () => { e.mode = 'fall'; e.vy = 0; };
+  if (e.mode === 'flip') {                                     // 彈尾：身體捲起、快速往後
+    e.flipT += dt; const k = Math.max(0, 1 - e.flipT / .45);
+    e.x = clamp(e.x + e.fvx * k * dt, TANK.left + 8, TANK.right - 8); e.y = clamp(e.y + e.fvy * k * dt, wy + 8, TANK.floor - 4);
+    if (solidAt(e.x, e.y)) e.y -= 40 * dt;
+    e.curl = k; e.dir = -Math.sign(e.fvx) || e.dir; e.state = '彈尾逃跑';
+    if (e.flipT > .45) toGround();
+    return;
+  }
+  if (e.mode === 'molt') {                                     // 蛻殼
+    e.moltProg += dt; e.state = '蛻殼中'; e.curl = Math.sin(e.moltProg * 6) * .4;
+    if (e.moltProg >= 2) {
+      world.molts.push({ x: e.x, y: e.y, dir: e.dir, size: e.size, t: 0 });
+      e.mode = 'walk'; e.paleT = 15; e.moltT = rand(...sp.molt);
+      if (e.sex === 'f' && isAdult(e) && !(e.preg > 0) && e.hunger > 50 && world.settings.breed) {   // 吃飽才抱卵
+        const males = world.ents.filter(o => o.type === e.type && o.sex === 'm' && !o.dead && isAdult(o) && dist(o, e) < 400);
+        for (const m of males) { m.swarmT = rand(5, 8); m.swarmTo = e; }   // 母蝦釋放費洛蒙，公蝦狂游
+        if (males.length && countKind('shrimp') < capFor('shrimp')) { e.preg = .001; logEvent(`🦐 ${sp.name}母蝦蛻殼後抱卵了`); }
+      }
+    }
+    return;
+  }
+  if (e.preg > 0) {                                            // 抱卵：孵出小蝦
+    e.preg += dt / sp.gestation * (e.hunger > 30 ? 1 : .3);
+    if (e.preg >= 1) {
+      e.preg = 0;
+      const room = capFor('shrimp') - countKind('shrimp'), n = Math.min(room, Math.round(rand(...sp.clutch)));
+      for (let i = 0; i < n; i++) { const c = makeEnt(e.type, e.x + rand(-12, 12), e.y - 4); c.size = c.adult * sp.birth; c.hunger = 80; c.morph = e.morph; }
+      if (n > 0) logEvent(`🦐 ${sp.name}孵出了 ${n} 隻小蝦`);
+    }
+  }
+  if (e.mode === 'walk' && e.moltT <= 0) { e.mode = 'molt'; e.moltProg = 0; return; }
+  if (e.swarmT > 0 && e.mode !== 'swarm') { e.mode = 'swarm'; e.think = 0; }
+  if (e.mode === 'swarm' || e.mode === 'swim') {               // 游泳（公蝦狂游時更快、更亂）
+    if (e.mode === 'swarm') {
+      e.swarmT -= dt; e.state = '狂游尋找母蝦';
+      if (e.think <= 0 || dist(e, P(e.tx, e.ty)) < 10) { const f = e.swarmTo && !e.swarmTo.dead ? e.swarmTo : e; e.tx = f.x + rand(-120, 120); e.ty = clamp(f.y - rand(10, 140), wy + 12, TANK.floor - 10); e.think = rand(.4, .9); }
+      if (e.swarmT <= 0) toGround();
+    } else { e.state = '游泳'; if (e.think <= 0 || dist(e, P(e.tx, e.ty)) < 8) toGround(); }
+    e.think -= dt;
+    const spd = e.mode === 'swarm' ? 70 : 32, a = Math.atan2(e.ty - e.y, e.tx - e.x);
+    let nx = e.x + Math.cos(a) * spd * dt, ny = e.y + Math.sin(a) * spd * dt;
+    nx = clamp(nx, TANK.left + 8, TANK.right - 8); ny = clamp(ny, wy + 8, TANK.floor - 4);
+    if (solidAt(nx, ny)) { nx = e.x; ny = e.y - 20 * dt; e.think = 0; }
+    if (Math.abs(nx - e.x) > .05) e.dir = Math.sign(nx - e.x);
+    e.x = nx; e.y = ny; e.curl = lerp(e.curl || 0, -.15, ease(dt, 6));
+    return;
+  }
+  if (e.mode === 'fall') {                                     // 沉回地面
+    e.vy = Math.min((e.vy || 0) + 60 * dt, 40); const g = groundY(e.x, e.y - 2, 4);
+    e.y = Math.min(e.y + e.vy * dt, g); e.state = '沉下來'; e.curl = lerp(e.curl || 0, 0, ease(dt, 4));
+    if (e.y >= g - .5) { e.mode = 'walk'; e.think = rand(1, 3); }
+    return;
+  }
+  // 走路／夾食
+  const g = groundY(e.x, e.y - 6, 10);
+  if (g > e.y + 4) { toGround(); return; }
+  e.y = g; e.curl = lerp(e.curl || 0, 0, ease(dt, 4));
+  if (e.y < wy + 2) { e.dir *= -1; e.x += e.dir * 3; }
+  e.think -= dt;
+  const food = e.hunger < sp.huntBelow ? findPrey(e, 150, t => t.y > wy && Math.abs(t.y - e.y) < 40) : null;
+  if (food) e.dir = Math.sign(food.x - e.x) || e.dir;
+  if (e.think <= 0) {
+    e.think = rand(1.5, 4);
+    const r = Math.random();
+    if (r < .18) {                                             // 短距離游一下（換個地方）
+      e.mode = 'swim'; e.tx = clamp(e.x + rand(-160, 160), TANK.left + 20, TANK.right - 20); e.ty = clamp(e.y - rand(30, 120), wy + 12, TANK.floor - 10); e.think = 2.5; return;
+    }
+    e.picking = r < .6; if (r > .85) e.dir *= -1;
+  }
+  if (e.picking && !food) {                                    // 原地用小螯夾食
+    e.state = '用小螯夾食';
+    e.hunger = Math.min(100, e.hunger + eatAlgae(.002 * dt) * 40 + .07 * dt);   // 藻類＋生物膜（蝦整天都在夾食生物膜）
+  } else {
+    const nx = e.x + e.dir * sp.speed * s * dt, ng = groundY(nx, e.y - 6, 12);
+    if (nx < TANK.left + 8 || nx > TANK.right - 8 || ng < wy + 4 || ng - e.y > 20 || solidAt(nx + e.dir * 8, e.y - 6)) {
+      if (Math.random() < .5) { e.mode = 'swim'; e.tx = clamp(e.x + e.dir * rand(40, 120), TANK.left + 20, TANK.right - 20); e.ty = clamp(e.y - rand(40, 100), wy + 12, TANK.floor - 10); e.think = 2.5; }   // 遇到障礙就游過去
+      else e.dir *= -1;
+      return;
+    }
+    e.x = nx; e.y = ng; e.dist = (e.dist || 0) + sp.speed * s * dt;
+    e.state = food ? '走向飼料' : '走動';
+    if (food && dist(e, food) < 8) eat(e, food);
+  }
 }
