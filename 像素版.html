@@ -31,6 +31,9 @@
     <div class="grp"><span>鏡頭</span><button data-z="1" class="on">1x</button><button data-z="2">2x</button><button data-z="4">4x</button></div>
     <div class="grp"><span>速度</span><button data-speed="0">⏸</button><button data-speed="1" class="on">1x</button><button data-speed="2">2x</button><button data-speed="5">5x</button><button data-speed="10">10x</button></div>
     <div class="grp"><button id="feed">🍤 餵食</button><button id="night">🌙 日夜快轉</button></div>
+    <div class="grp"><span>比例</span><button data-cs="1" class="on">1x</button><button data-cs="1.5">1.5x</button><button data-cs="2">2x</button></div>
+    <div class="grp"><span>燈光</span><button data-light="day" class="on">明亮</button><button data-light="aqua">藍光</button><button data-light="glow">夜光</button></div>
+    <div class="grp"><button data-opt="mute">背景淡化</button><button data-opt="bright">亮色細線</button><button data-opt="hybrid">混合光影</button></div>
     <div class="grp"><a href="index.html">回正式版</a></div>
     <span id="info"></span>
   </header>
@@ -57,6 +60,7 @@ loadPreset('planted');
 function fit() {
   const st = document.getElementById('stage').getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
   scale = Math.max(1, Math.floor(Math.min(st.width * dpr / PXW, st.height * dpr / PXH)));
+  cv.width = PXW * scale; cv.height = PXH * scale;                     // 畫布用實際像素（混合光影要平滑）
   cv.style.width = PXW * scale / dpr + 'px'; cv.style.height = PXH * scale / dpr + 'px';
 }
 window.addEventListener('resize', fit); new ResizeObserver(fit).observe(document.getElementById('stage')); fit();
@@ -78,6 +82,16 @@ document.getElementById('night').onclick = e => {                     // 日夜�
   const on = world.settings.dayCycle !== 'fast'; world.settings.dayCycle = on ? 'fast' : 'off'; e.target.classList.toggle('on', on);
 };
 
+// 畫面選項
+function syncOpt() {
+  document.querySelectorAll('[data-cs]').forEach(b => b.classList.toggle('on', +b.dataset.cs === PXOPT.cscale));
+  document.querySelectorAll('[data-light]').forEach(b => b.classList.toggle('on', b.dataset.light === PXOPT.light));
+  document.querySelectorAll('[data-opt]').forEach(b => b.classList.toggle('on', !!PXOPT[b.dataset.opt]));
+}
+document.querySelectorAll('[data-cs]').forEach(b => b.onclick = () => { PXOPT.cscale = +b.dataset.cs; syncOpt(); });
+document.querySelectorAll('[data-light]').forEach(b => b.onclick = () => { PXOPT.light = b.dataset.light; syncOpt(); });
+document.querySelectorAll('[data-opt]').forEach(b => b.onclick = () => { PXOPT[b.dataset.opt] = !PXOPT[b.dataset.opt]; syncOpt(); });
+
 // 畫面操作：拖曳移動、點一下餵食、滾輪縮放
 const toPx = ev => { const r = cv.getBoundingClientRect(); return P((ev.clientX - r.left) / r.width * PXW, (ev.clientY - r.top) / r.height * PXH); };
 let drag = null;
@@ -98,6 +112,10 @@ cv.addEventListener('wheel', ev => { ev.preventDefault(); const p = toPx(ev), zs
   if (q.has('tod')) { world.tod = +q.get('tod'); world.settings.dayCycle = 'normal'; }
   if (q.has('z')) { setZoom(+q.get('z')); const f = q.get('focus') && world.ents.find(e => e.type === q.get('focus'));
     if (f) { PXCAM.x = f.x - PXW / ppu() / 2; PXCAM.y = f.y - PXH / ppu() * .6; camClampPx(); } }
+  if (q.has('cs')) PXOPT.cscale = +q.get('cs');
+  if (q.has('light')) PXOPT.light = q.get('light');
+  for (const k of ['mute', 'bright', 'hybrid']) if (q.has(k)) PXOPT[k] = true;
+  syncOpt();
   if (q.has('warm')) for (let i = 0; i < +q.get('warm') * 60; i++) step(STEP); }
 
 // 主迴圈
@@ -106,7 +124,7 @@ function frame(now) {
   const real = Math.min(.1, (now - last) / 1000); last = now;
   if (!document.hidden && speed > 0) { acc += real * speed; let n = 0; while (acc >= STEP && n < 30) { step(STEP); acc -= STEP; n++; } if (n >= 30) acc = 0; }
   const t0 = performance.now();
-  renderPixel(); presentPixel(ctx);
+  renderPixel(); presentPixel(ctx, scale);
   drawMs += performance.now() - t0; fpsN++;
   if (now - fpsT > 1000) { document.getElementById('info').textContent = `${Math.round(fpsN * 1000 / (now - fpsT))} FPS・繪圖 ${(drawMs / fpsN).toFixed(1)} ms・畫面 640×360 × ${scale} 倍・${todText ? todText() : ''}`; fpsN = 0; drawMs = 0; fpsT = now; }
   requestAnimationFrame(frame);

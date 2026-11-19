@@ -7,6 +7,15 @@
 // =====================================================================
 
 const PXW = 640, PXH = 360;
+// 畫面選項（像素版上的切換開關）
+const PXOPT = {
+  cscale: 1,          // 生物比例：1／1.5／2（只影響畫面，模擬不變）
+  mute: false,        // 背景淡化：背景、造景、水草往水色靠、降低對比
+  bright: false,      // 亮色細線：觸角、腳、口鬚改用亮色
+  light: 'day',       // 燈光：day 明亮（跟著日夜）／aqua 水族館藍光／glow 夜光
+  hybrid: false,      // 混合光影：放大後再疊平滑的半透明光束、暗角、水面光暈
+};
+const CREATURE = 9;   // 生物的格子在 PXB.tag 標成 9（燈光模式下保持明亮）
 const PXCAM = { z: 1, x: 0, y: 0 };                                   // x, y：畫面左上角的世界座標
 const ppu = () => .5 * PXCAM.z;                                       // 每個世界單位幾格
 const AX = wx => (wx - PXCAM.x) * ppu(), AY = wy => (wy - PXCAM.y) * ppu();
@@ -89,17 +98,31 @@ class PixBuf {
     if (this.x1 < 0) return;
     const w = this.w;
     for (let y = this.y0; y <= this.y1; y++) for (let x = this.x0, i = y * w + this.x0; x <= this.x1; x++, i++)
-      if (this.d[i]) { dst.d[i] = this.d[i]; this.d[i] = 0; this.tag[i] = 0; }
+      if (this.d[i]) { dst.d[i] = this.d[i]; dst.tag[i] = this.blitTag; this.d[i] = 0; this.tag[i] = 0; }
     this.resetBox();
   }
 }
 const PXB = new PixBuf(PXW, PXH);                                     // 主畫面
 const SPR = new PixBuf(PXW, PXH);                                     // 精靈暫存（每隻生物先畫在這裡、加外框，再貼上主畫面）
+SPR.blitTag = 0;
 const LAYER = { back: { key: '', d: new Uint32Array(PXW * PXH) }, decor: { key: '', d: new Uint32Array(PXW * PXH) }, front: { key: '', d: new Uint32Array(PXW * PXH) } };
-function sprite(draw, top, other) { draw(SPR); if (top) SPR.outline(top, other); SPR.blitTo(PXB); }
+function sprite(draw, top, other, tag = 0) { draw(SPR); if (top) SPR.outline(top, other); SPR.blitTag = tag; SPR.blitTo(PXB); }
+const live = (draw, top, other) => sprite(draw, top, other, CREATURE);   // 生物用（標記成 CREATURE）
+// 背景淡化：顏色往水的中間色靠、降低對比
+const _mute = new Map();
+function muteColor(v, k = .38) {
+  let m = _mute.get(v); if (m !== undefined) return m;
+  const r = v & 255, g = (v >> 8) & 255, b = (v >> 16) & 255, wr = 0x7c, wg = 0xb4, wb = 0xc8;
+  m = ((255 << 24) | (Math.round(lerp(b, wb, k)) << 16) | (Math.round(lerp(g, wg, k)) << 8) | Math.round(lerp(r, wr, k))) >>> 0;
+  _mute.set(v, m); return m;
+}
+const muteHex = h => PXOPT.mute ? mixColor(h, '#7cb4c8', .38) : h;
 function layerFill(L, key, draw, opaque) {                            // 靜態圖層：內容沒變就直接用上次的結果
+  key += '|' + PXOPT.mute;
   if (L.key !== key) {
-    const tmp = new PixBuf(PXW, PXH); draw(tmp); L.d.set(tmp.d); L.key = key;
+    const tmp = new PixBuf(PXW, PXH); draw(tmp);
+    if (PXOPT.mute) for (let i = 0; i < tmp.d.length; i++) if (tmp.d[i]) tmp.d[i] = muteColor(tmp.d[i]);
+    L.d.set(tmp.d); L.key = key;
   }
   if (opaque) PXB.d.set(L.d);
   else { const s = L.d, d = PXB.d; for (let i = 0; i < s.length; i++) if (s[i]) d[i] = s[i]; }
@@ -228,7 +251,7 @@ function drawPxFilterBody(B, d) {
   R(d.x - 3, y0 + d.h, 6, 70, M[1]); R(d.x - 6, y0 + d.h + 70, 12, 16, M[3]);
 }
 function drawPxPlant(d) {                                              // 水草：會擺動，每幀畫
-  const wy = world.waterY, L = PXPAL.leaf, s = ppu();
+  const wy = world.waterY, L = PXPAL.leaf.map(muteHex), s = ppu();
   sprite(B => {
     for (let k = 0; k < 4; k++) {
       const pts = [], hk = d.h * (.7 + .3 * Math.sin(d.seed + k * 2.1));
@@ -244,11 +267,11 @@ function drawPxPlant(d) {                                              // 水草
         B.poly(leaf, (x, y) => y < AY(p.y) - .3 * s ? L[k % 2 ? 1 : 0] : L[k % 2 ? 2 : 1]);
       }
     }
-  }, PXPAL.leaf[3], PXPAL.leaf[4]);
+  }, L[3], L[4]);
 }
 function drawPxFloater(d) {
   const wy = world.waterY; if (wy >= TANK.floor - 4) return;
-  const r = rng(d.seed), n = Math.round(d.w / 16), L = PXPAL.leaf;
+  const r = rng(d.seed), n = Math.round(d.w / 16), L = PXPAL.leaf.map(muteHex);
   for (let i = 0; i < n; i++) {                                          // 根
     const x = d.x - d.w / 2 + r() * d.w, len = 10 + r() * 22, sw = Math.sin(world.t * 1.2 + i) * 3;
     PXB.path([P(x, wy + 2), P(x + sw * .5, wy + len * .5), P(x + sw, wy + len)].map(p => P(AX(p.x), AY(p.y))), (x2, y2) => (x2 + y2) & 1 ? C('#dfe8d4') : 0);
@@ -289,13 +312,13 @@ const PX_FISH = {
 };
 function drawPxFish(e) {
   const sp = SPECIES[e.type]; if (sp.cory) return drawPxCory(e);
-  const lk = sp.look, R = fishRig(e), n = R.nodes, tb = n[FISH_N - 1], k = e.size * sp.len / 64, s = ppu() * k;
+  const lk = sp.look, R = fishRig(e), n = R.nodes, tb = n[FISH_N - 1], k = e.size * sp.len / 64, s = ppu() * k * PXOPT.cscale;
   const shape = lk.shape, pal = PX_FISH[shape === 'tetra' ? 'tetra' : 'guppy'], Rm = pal.ramp;
   const juv = e.size < e.adult * .6, male = e.sex === 'm' && !juv;
   const T = mapper(e.x, e.y, s, R.sx, e.dead ? -1 : 1);
   const ct = Math.cos(R.tailRot), st = Math.sin(R.tailRot);
   const TT = q => T(P(tb.x + q.x * R.tailSx * ct - q.y * st, tb.y + q.x * R.tailSx * st + q.y * ct));
-  sprite(B => {
+  live(B => {
     // 尾鰭
     let tail;
     if (shape === 'guppy') {
@@ -336,18 +359,18 @@ function drawPxFish(e) {
   }, Rm[3], pal.ol);
   // 眼睛（外框之後畫）
   const eye = T(P(n[0].x - 1, n[0].y - 2.5 * (lk.hScale || 1)));
-  PXB.disc(eye.x, eye.y, Math.max(.7, 3.6 * s), C(PXPAL.black));
-  if (s > .5) PXB.set(eye.x - s, eye.y - s * 1.2, C('#ffffff'));
+  PXB.disc(eye.x, eye.y, Math.max(.7, 3.6 * s), C(PXPAL.black), CREATURE);
+  if (s > .5) PXB.set(eye.x - s, eye.y - s * 1.2, C('#ffffff'), CREATURE);
 }
 
 // 鼠魚
 function drawPxCory(e) {
-  const sp = SPECIES[e.type], M = PX_CORY[e.morph || 0], Rm = M.ramp, k = e.size * sp.len / 64, s = ppu() * k;
+  const sp = SPECIES[e.type], M = PX_CORY[e.morph || 0], Rm = M.ramp, k = e.size * sp.len / 64 * PXOPT.cscale, s = ppu() * k;
   const sx = Math.abs(e.sx === undefined ? e.dir : e.sx) < .2 ? .2 * Math.sign(e.sx || e.dir) : (e.sx === undefined ? e.dir : e.sx);
   const T = mapper(e.x, e.y + (e.dead ? 12 * k : 0), s, sx, e.dead ? -1 : 1, e.tilt || 0, 30, -4);
   const swing = Math.sin(e.phase) * (e.amp || .5) * .22, ct = Math.cos(swing), st = Math.sin(swing);
   const TT = q => T(P(-26.5 + q.x * ct - q.y * st, -7 + q.x * st + q.y * ct));
-  sprite(B => {
+  live(B => {
     B.poly([P(1, -2.6), P(-6, -6), P(-14, -11.5), P(-11, -6), P(-9.5, -.2), P(-11, 6), P(-14, 10.5), P(-6, 5), P(1, 2.4)].map(TT), M.fin);   // 尾鰭
     B.poly([P(12, -21), P(7, -37), P(3.5, -35), P(-1, -27), P(-3, -20.6)].map(T), M.panda || M.fin);   // 背鰭
     B.line(T(P(12, -21)).x, T(P(12, -21)).y, T(P(7.3, -36.6)).x, T(P(7.3, -36.6)).y, M.panda ? M.panda : M.finDk);
@@ -373,12 +396,13 @@ function drawPxCory(e) {
   }, Rm[3], Rm[4]);
   // 眼睛、口鬚、胸鰭（外框之後）
   const wink = e.winkT > 0 ? Math.sin(Math.PI * e.winkT / .4) : 0, ec = T(P(22.3, -13));
-  PXB.disc(ec.x, ec.y, Math.max(.8, 3.7 * s), C(M.ring), 0);
-  PXB.disc(ec.x, ec.y + wink * 1.5 * s, Math.max(.6, (2.6 - wink * .4) * s), C(M.eye), 0);
-  if (s > .5 && wink < .5) PXB.set(ec.x - .8 * s, ec.y - 1 * s, C('#ffffff'));
-  if (s > .45) for (const [dx, len, ang] of [[0, 3.6, 1.15], [-1.8, 2.6, 1.75]]) { const a = T(P(31 + dx, -4.4)), b = T(P(31 + dx + Math.cos(ang) * len, -4.4 + Math.sin(ang) * len)); PXB.line(a.x, a.y, b.x, b.y, C(M.finDk)); }
+  PXB.disc(ec.x, ec.y, Math.max(.8, 3.7 * s), C(M.ring), CREATURE);
+  PXB.disc(ec.x, ec.y + wink * 1.5 * s, Math.max(.6, (2.6 - wink * .4) * s), C(M.eye), CREATURE);
+  if (s > .5 && wink < .5) PXB.set(ec.x - .8 * s, ec.y - 1 * s, C('#ffffff'), CREATURE);
+  const barbel = C(PXOPT.bright ? '#fff4dc' : M.finDk);
+  if (s > .45) for (const [dx, len, ang] of [[0, 3.6, 1.15], [-1.8, 2.6, 1.75]]) { const a = T(P(31 + dx, -4.4)), b = T(P(31 + dx + Math.cos(ang) * len, -4.4 + Math.sin(ang) * len)); PXB.line(a.x, a.y, b.x, b.y, barbel, CREATURE); }
   const pc = T(P(18.5, -4.6)), pt = T(P(9, 0));
-  PXB.line(pc.x, pc.y, pt.x, pt.y, C(M.finDk));
+  PXB.line(pc.x, pc.y, pt.x, pt.y, C(PXOPT.bright ? M.fin : M.finDk), CREATURE);
 }
 
 // ---------------------------------------------------------------------
@@ -466,37 +490,38 @@ function pxShrimpDetails(B, st, T, S, g, R) {                         // 外框�
   B.disc(eye.x, eye.y, Math.max(.7, S * 1.3), C('#140a10'), 2);
   if (S >= 1.5) B.set(eye.x - S * .5, eye.y - S * .6, C('#ffffff'), 2);
   const thick = S >= 2.6 ? 2 : 1, stroke = (pts, c, w = thick) => { for (let k = 0; k < w; k++) B.path(pts.map(T).map(p => P(p.x, p.y + k)), c); };
-  for (const pl of R.pleo) if (S >= .8) stroke([pl.root, pl.tip], g.leg, 1);
+  const legC = PXOPT.bright && !g.molt ? g.hi : g.leg, legC2 = PXOPT.bright && !g.molt ? g.li : g.sh;
+  for (const pl of R.pleo) if (S >= .8) stroke([pl.root, pl.tip], legC, 1);
   if (st.berried) for (let k = 0; k < 14; k++) {
     const sg = R.ab[k % 4], f = hash2(k, 1), m = P(lerp(sg.a.x, sg.b.x, f), lerp(sg.a.y, sg.b.y, f)), n = P(Math.cos(sg.ang - Math.PI / 2), Math.sin(sg.ang - Math.PI / 2));
     const c = T(P(m.x + n.x * (sg.h + .5 + hash2(k, 2) * 1.3), m.y + n.y * (sg.h + .5 + hash2(k, 2) * 1.3)));
     B.disc(c.x, c.y, Math.max(.6, S * .55), C(hash2(k, 3) < .3 ? '#bf7a16' : '#f2b232'), 2);
   }
-  for (const L of R.legs) { stroke([L.root, L.knee], g.leg); stroke([L.knee, L.foot], g.sh); }
-  if (S >= .6) for (const a of R.antennule) stroke(a, g.leg, 1);
-  B.path(R.antenna[0].map(T), (x, y) => C((Math.floor((x + y) / Math.max(2, S * 1.5)) % 2) ? g.leg : g.sh));
+  for (const L of R.legs) { stroke([L.root, L.knee], legC); stroke([L.knee, L.foot], legC2); }
+  if (S >= .6) for (const a of R.antennule) stroke(a, legC, 1);
+  B.path(R.antenna[0].map(T), (x, y) => C((Math.floor((x + y) / Math.max(2, S * 1.5)) % 2) ? legC : legC2));
 }
 function drawPxShrimp(e) {
-  const k = e.size * SPECIES[e.type].len / 40, S = ppu() * k;
+  const k = e.size * SPECIES[e.type].len / 40 * PXOPT.cscale, S = ppu() * k;
   const moving = e.mode === 'walk' && e.state === '走動' || e.state === '走向飼料';
   const st = { t: world.t + e.id * .7, act: e.state === '用小螯夾食' ? 'pick' : (e.mode === 'swim' || e.mode === 'swarm' || e.mode === 'flip' || e.mode === 'fall') ? 'swim' : moving ? 'walk' : 'still',
                walk: (e.dist || 0) * .55, curl: e.curl || 0, grade: e.sex === 'm' ? Math.max(0, (e.morph || 0) - 1) : (e.morph || 0), sex: e.sex, berried: (e.preg || 0) > 0, adult: e.size >= e.adult * .6 };
   const g = PX_SHRIMP[st.grade], T = mapper(e.x, e.y, S, e.dir, 1);
   let R;
-  sprite(B => { R = pxShrimpSprite(B, st, T, S, g); B.outline(g.dk, g.ol); pxShrimpDetails(B, st, T, S, g, R); }, null);
+  live(B => { R = pxShrimpSprite(B, st, T, S, g); B.outline(g.dk, g.ol); pxShrimpDetails(B, st, T, S, g, R); }, null);
 }
 function drawPxMolts() {
   for (const m of world.molts) {
     if (m.t > 34 && ((m.t * 6) | 0) % 2) continue;                       // 快消失時閃一下
-    const S = ppu() * m.size, T = mapper(m.x, m.y, S, m.dir, 1), st = { t: 1, act: 'still', walk: 0, curl: .1, grade: 0 };
-    sprite(B => { pxShrimpSprite(B, st, T, S, PX_MOLT); B.outline(PX_MOLT.sh, PX_MOLT.ol); }, null);
+    const S = ppu() * m.size * PXOPT.cscale, T = mapper(m.x, m.y, S, m.dir, 1), st = { t: 1, act: 'still', walk: 0, curl: .1, grade: 0 };
+    live(B => { pxShrimpSprite(B, st, T, S, PX_MOLT); B.outline(PX_MOLT.sh, PX_MOLT.ol); }, null);
   }
 }
 
 // 斑馬螺
 function drawPxSnail(e) {
-  const s = ppu() * e.size, T = mapper(e.x, e.y, s, e.dir, 1), und = Math.sin(e.phase * 3) * .8;
-  sprite(B => {
+  const s = ppu() * e.size * PXOPT.cscale, T = mapper(e.x, e.y, s, e.dir, 1), und = Math.sin(e.phase * 3) * .8;
+  live(B => {
     B.poly([P(-11, 0), P(-12, -2.5), P(4, -3.5), P(12 + und, -2.5), P(14 + und, 0)].map(T), (x, y) => y < T(P(0, -1.5)).y ? '#a09a8c' : '#7a7468');   // 肉足
     const shell = ellipsePts(-1, -8, 11, 8, -.15, 18).map(T), cx = T(P(-1, -8));
     B.poly(shell, (x, y) => {                                            // 金黃色殼＋黑色斑馬紋（依殼上的位置算）
@@ -504,12 +529,12 @@ function drawPxSnail(e) {
       return stripe ? '#2a1e0c' : (ly < -2.5 ? '#f0cc62' : ly < 3 ? '#d8b04a' : '#b08a2a');
     });
   }, '#6a5420', '#3a2c0e');
-  const a = T(P(11 + und, -2.5)), b = T(P(16 + und, -7)); PXB.line(a.x, a.y, b.x, b.y, C('#6e6a60'));
-  const ey = T(P(11.5 + und, -3.2)); PXB.set(ey.x, ey.y, C('#111111'));
+  const a = T(P(11 + und, -2.5)), b = T(P(16 + und, -7)); PXB.line(a.x, a.y, b.x, b.y, C(PXOPT.bright ? '#d8d2c4' : '#6e6a60'), CREATURE);
+  const ey = T(P(11.5 + und, -3.2)); PXB.set(ey.x, ey.y, C('#111111'), CREATURE);
 }
 
 // 飼料、卵、粒子
-function drawPxFood(f) { const r = Math.max(.6, 2.4 * ppu()); PXB.disc(AX(f.x), AY(f.y), r, C(PXPAL.food[1])); if (r > 1.2) PXB.set(AX(f.x) - r * .3, AY(f.y) - r * .3, C(PXPAL.food[0])); }
+function drawPxFood(f) { const r = Math.max(.6, 2.4 * ppu()); PXB.disc(AX(f.x), AY(f.y), r, C(PXPAL.food[1]), CREATURE); if (r > 1.2) PXB.set(AX(f.x) - r * .3, AY(f.y) - r * .3, C(PXPAL.food[0]), CREATURE); }
 function drawPxNest(e) {
   const n = Math.max(1, e.count), s = ppu();
   for (let i = 0; i < n; i++) {
@@ -524,8 +549,8 @@ function drawPxParticles() {
     const x = AX(p.x), y = AY(p.y), k = 1 - p.t / p.life;
     if (p.type === 'bubble') {
       const r = p.r * s;
-      if (r < 1.1) PXB.set(x, y, bub);
-      else { for (let a = 0; a < 6.28; a += 1 / r) PXB.set(x + Math.cos(a) * r, y + Math.sin(a) * r, bub); PXB.set(x - r * .4, y - r * .4, wht); }
+      if (r < 1.1) PXB.set(x, y, bub, CREATURE);
+      else { for (let a = 0; a < 6.28; a += 1 / r) PXB.set(x + Math.cos(a) * r, y + Math.sin(a) * r, bub, CREATURE); PXB.set(x - r * .4, y - r * .4, wht, CREATURE); }
     } else if (p.type === 'dust') { if (bayer(x | 0, y | 0) < k * .7) PXB.disc(x, y, Math.max(.6, p.r * s * .7), dust, 0); }
     else if (p.type === 'ripple') { if (k > .2) { const r = p.r * s; PXB.set(x - r, y, wht); PXB.set(x + r, y, wht); if (r > 3) { PXB.set(x - r + 1, y, wht); PXB.set(x + r - 1, y, wht); } } }
     else if (p.type === 'drop') PXB.set(x, y, C('#e8f6ff'));
@@ -549,7 +574,8 @@ function renderPixel() {
   PXCAM.x = cx / ppu(); PXCAM.y = cy / ppu();                            // 鏡頭對齊格子，畫面才不會抖
   const view = [z, cx, cy, W, H].join(','), wkey = Math.round(world.waterY) + ',' + Math.round(world.water.algae / 5) + ',' + Math.round(world.water.dirt / 8);
   layerFill(LAYER.back, view + '|' + wkey, drawPxBack, true);
-  drawPxShafts();
+  PXB.tag.fill(0);
+  if (!PXOPT.hybrid && PXOPT.light === 'day') drawPxShafts();          // 混合模式改用平滑的光束（畫在放大之後）
   for (const d of world.decor) if (d.type === 'plant') drawPxPlant(d);
   layerFill(LAYER.decor, view + '|' + wkey + '|' + world.decor.map(d => [d.type, d.x | 0, d.y | 0, d.w | 0, d.h | 0, (d.rot || 0).toFixed(2)].join(':')).join(';'), B => {
     for (const d of world.decor) {
@@ -575,19 +601,63 @@ function renderPixel() {
   for (const d of world.decor) if (d.type === 'floater') drawPxFloater(d);
   drawPxParticles();
   drawPxSurface();
+  if (PXOPT.light === 'glow') drawPxPlankton();
+}
+// 夜光：發光的浮游生物（慢慢漂、一閃一閃）
+function drawPxPlankton() {
+  const wy = world.waterY, c1 = C('#8ff8ff'), c2 = C('#3fb8e8'), r = rng(42);
+  for (let i = 0; i < 70; i++) {
+    const bx = r() * W, by = wy + 10 + r() * (TANK.floor - wy - 20), sp = 3 + r() * 6, ph = r() * 6;
+    const x = AX(((bx + world.t * sp) % (TANK.right - TANK.left)) + TANK.left), y = AY(by + Math.sin(world.t * .7 + ph) * 8);
+    const tw = Math.sin(world.t * 2 + ph * 3);
+    if (tw > -.3) PXB.set(x, y, tw > .6 ? c1 : c2, CREATURE);
+  }
 }
 // 輸出到畫布（夜晚整體偏藍變暗）
-let PX_IMG = null, PX_OUT = null;
-function presentPixel(ctx) {
-  if (!PX_IMG) { PX_IMG = ctx.createImageData(PXW, PXH); PX_OUT = new Uint32Array(PX_IMG.data.buffer); }
-  const L = daylight(), d = PXB.d;
-  if (L >= .999) PX_OUT.set(d);
-  else {
-    const mr = lerp(.42, 1, L), mg = lerp(.5, 1, L), mb = lerp(.78, 1, L);
-    for (let i = 0; i < d.length; i++) {
-      const v = d[i], r = (v & 255) * mr, g = ((v >> 8) & 255) * mg, b = ((v >> 16) & 255) * mb;
-      PX_OUT[i] = (255 << 24 | (b << 16) | (g << 8) | r) >>> 0;
-    }
+// 燈光：背景和生物各乘一組顏色（生物像被燈照亮）；明亮模式跟著日夜
+function lightMul() {
+  if (PXOPT.light === 'aqua') return { bg: [.34, .52, .92], fg: [.95, .98, 1.06], add: [0, 6, 22] };
+  if (PXOPT.light === 'glow') return { bg: [.16, .24, .46], fg: [.8, .86, 1], add: [0, 2, 10] };
+  const L = daylight(), m = [lerp(.42, 1, L), lerp(.5, 1, L), lerp(.78, 1, L)];
+  return { bg: m, fg: m, add: [0, 0, 0] };
+}
+let PX_IMG = null, PX_OUT = null, PX_SMALL = null;
+function presentPixel(ctx, scale = 1) {
+  if (!PX_IMG) { PX_SMALL = document.createElement('canvas'); PX_SMALL.width = PXW; PX_SMALL.height = PXH; PX_IMG = PX_SMALL.getContext('2d').createImageData(PXW, PXH); PX_OUT = new Uint32Array(PX_IMG.data.buffer); }
+  const { bg, fg, add } = lightMul(), d = PXB.d, tg = PXB.tag;
+  if (bg[0] === 1 && bg[1] === 1 && bg[2] === 1 && fg[0] === 1) PX_OUT.set(d);
+  else for (let i = 0; i < d.length; i++) {
+    const v = d[i], m = tg[i] === CREATURE ? fg : bg;
+    const r = Math.min(255, (v & 255) * m[0] + add[0]), g = Math.min(255, ((v >> 8) & 255) * m[1] + add[1]), b = Math.min(255, ((v >> 16) & 255) * m[2] + add[2]);
+    PX_OUT[i] = (255 << 24 | (b << 16) | (g << 8) | r) >>> 0;
   }
-  ctx.putImageData(PX_IMG, 0, 0);
+  PX_SMALL.getContext('2d').putImageData(PX_IMG, 0, 0);
+  ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(PX_SMALL, 0, 0, PXW * scale, PXH * scale);              // 整數倍放大（不平滑）
+  if (PXOPT.hybrid) drawHybrid(ctx, scale);
+}
+// 混合光影：在放大後的畫面上疊平滑、半透明的光（不是像素）
+function drawHybrid(ctx, k) {
+  const wy = world.waterY, L = PXOPT.light === 'day' ? daylight() : PXOPT.light === 'aqua' ? .6 : .25;
+  const X = wx => AX(wx) * k, Y = wy2 => AY(wy2) * k;
+  ctx.save();
+  ctx.globalCompositeOperation = 'screen';
+  if (wy < TANK.floor && L > 0) for (let x0 = TANK.left + 80; x0 < TANK.right; x0 += 260) {   // 光束：上亮下淡
+    const sway = Math.sin(world.t * .3 + x0 * .01) * 30, w = 50 + Math.sin(x0) * 20;
+    const g = ctx.createLinearGradient(0, Y(wy), 0, Y(TANK.floor));
+    const tint = PXOPT.light === 'glow' ? '120,220,255' : PXOPT.light === 'aqua' ? '140,200,255' : '255,250,230';
+    g.addColorStop(0, `rgba(${tint},${.22 * L})`); g.addColorStop(1, `rgba(${tint},0)`);
+    ctx.fillStyle = g; ctx.beginPath();
+    ctx.moveTo(X(x0 + sway), Y(wy)); ctx.lineTo(X(x0 + sway + w), Y(wy)); ctx.lineTo(X(x0 + sway * 2 + w * 2.2 + 60), Y(TANK.floor)); ctx.lineTo(X(x0 + sway * 2 - 30), Y(TANK.floor)); ctx.closePath(); ctx.fill();
+  }
+  if (wy < TANK.floor) {                                                 // 水面下的光暈
+    const g = ctx.createLinearGradient(0, Y(wy), 0, Y(wy + 120));
+    g.addColorStop(0, `rgba(220,245,255,${.25 * Math.max(.3, L)})`); g.addColorStop(1, 'rgba(220,245,255,0)');
+    ctx.fillStyle = g; ctx.fillRect(0, Y(wy), PXW * k, Y(wy + 120) - Y(wy));
+  }
+  ctx.globalCompositeOperation = 'source-over';
+  const vg = ctx.createRadialGradient(PXW * k / 2, PXH * k * .45, PXH * k * .35, PXW * k / 2, PXH * k / 2, PXW * k * .62);   // 暗角
+  vg.addColorStop(0, 'rgba(0,0,0,0)'); vg.addColorStop(1, `rgba(0,8,20,${PXOPT.light === 'day' ? .28 : .5})`);
+  ctx.fillStyle = vg; ctx.fillRect(0, 0, PXW * k, PXH * k);
+  ctx.restore();
 }
