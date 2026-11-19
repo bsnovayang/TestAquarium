@@ -7,7 +7,7 @@ const UI = { sel: null, drag: null, mode: 'edit', speed: 1 };
 // 物件面板：用頁籤分類（物件變多時比較好找）
 const PALETTE = [
   { cat: '造景', items: ['mound', 'boulder', 'rock', 'wood', 'plant', 'carpet', 'fern', 'floater', 'bubbler', 'filter'] },
-  { cat: '水中生物', items: ['guppy', 'neon', 'neontetra', 'redtail', 'cherry', 'nerite'] },
+  { cat: '水中生物', items: ['guppy', 'neon', 'neontetra', 'cory', 'redtail', 'cherry', 'nerite'] },
   { cat: '兩棲爬蟲', items: ['frog', 'goldfrog', 'tadpole', 'turtle', 'gecko'] },
   { cat: '昆蟲', items: ['mosquito', 'larva'] },
   { cat: '迷你版', items: ['whale'] },
@@ -41,9 +41,10 @@ function drawThumb(cv, type) {
   } else {
     const e = makeEnt(type, 0, 0, false);
     e.size = e.adult = 1; e.dir = 1; e.amp = .3; e.mode = type === 'turtle' ? 'walk' : 'sit';
-    const conf = { guppy: [36, 22, .55], neon: [33, 22, .6], neontetra: [33, 22, .7], redtail: [37, 22, .17], turtle: [30, 38, .45], frog: [32, 38, .7], goldfrog: [31, 38, .66], tadpole: [34, 22, 1.5],
+    const conf = { cory: [33, 34, .5], guppy: [36, 22, .55], neon: [33, 22, .6], neontetra: [33, 22, .7], redtail: [37, 22, .17], turtle: [30, 38, .45], frog: [32, 38, .7], goldfrog: [31, 38, .66], tadpole: [34, 22, 1.5],
                    gecko: [38, 34, .38], mosquito: [32, 22, 2], nerite: [33, 34, 1.3], cherry: [30, 34, 1.5], larva: [32, 24, 2], whale: [32, 22, .036], cricket: [30, 30, 1.6], fly: [32, 22, 4] }[type];
     if (type === 'larva') e.phase = 1;
+    if (type === 'cory') { e.morph = 2; e.cm = 'rest'; }             // 縮圖固定用熊貓鼠（最好認）
     if (e.sex) { e.sex = type === 'cherry' ? 'f' : 'm'; e.morph = type === 'cherry' ? 1 : 0; e.size = e.adult = 1; }
     if (type === 'tadpole') { e.size = 1; e.meta = .3; }
     if (type === 'whale') { e.amp = .4; e.wmode = 'cruise'; }
@@ -285,6 +286,7 @@ function updatePanels(force) {
         ${sp.hungerTime ? `<div class="kv"><span>飽食度</span><b data-f="hunger"></b></div><div class="bar"><i data-f="hungerBar"></i></div>` : ''}
         <div class="kv"><span>生命值</span><b data-f="hp"></b></div><div class="bar"><i data-f="hpBar" style="background:#e05a7a"></i></div>
         ${sp.sexed ? '<div class="kv"><span>性別／品系</span><b data-f="sex"></b></div>' : ''}
+        ${sp.morphs === 'cory' ? '<div class="kv"><span>品系</span><b data-f="morph"></b></div>' : ''}
         <div class="kv"><span>成體體型</span><b data-f="size"></b></div>
         <input type="range" class="sizeSlider" data-f="sizeSlider" min="0.3" max="3" step="0.05">
         <div class="kv"><span>實際長度</span><b data-f="len"></b></div>
@@ -297,6 +299,7 @@ function updatePanels(force) {
     const surf = o.kind === 'gecko' ? (o.surface === 'glass' ? '（背面玻璃）' : '（陸地）') : '';
     f('state').textContent = `${o.dead ? '💀 ' : ''}${o.state || '—'}${surf}${o.sick ? '（水質太差，生病中）' : ''}`;
     if (f('sex')) f('sex').textContent = (o.sex === 'm' ? '♂ 公' : '♀ 母') + '・' + (sp.morphs === 'shrimp' ? SHRIMP_GRADES : GUPPY_MORPHS)[o.morph || 0].name + (o.preg > 0 ? (o.kind === 'shrimp' ? `・抱卵 ${Math.round(o.preg * 100)}%` : `・懷孕 ${Math.round(o.preg * 100)}%`) : '');
+    if (f('morph')) f('morph').textContent = CORY_MORPHS[o.morph || 0].name;
     if (f('hunger')) { f('hunger').textContent = Math.round(o.hunger) + '%'; f('hungerBar').style.width = clamp(o.hunger, 0, 100) + '%'; f('hungerBar').style.background = o.hunger < 25 ? '#e0603a' : '#4caf50'; }
     f('hp').textContent = Math.round(o.hp); f('hpBar').style.width = clamp(o.hp, 0, 100) + '%';
     const base = sp.scale || 1, grown = o.size / o.adult;

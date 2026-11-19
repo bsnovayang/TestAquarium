@@ -37,6 +37,112 @@ function schoolCenter(e) {
   for (const o of entsOfType(e.type)) if (o !== e && o.type === e.type && !o.dead && dist(o, e) < 300) { sx += o.x; sy += o.y; n++; }
   return n ? P(sx / n, sy / n) : null;
 }
+// ---------------------------------------------------------------------
+// 鼠魚：在缸底成群翻沙、休息、偶爾衝上水面吸氣
+// cm（模式）：sink 沉下來／forage 缸底覓食／rest 休息／gulp 上去吸氣／swim 游到某處／flee 逃跑
+// ---------------------------------------------------------------------
+function coryMouth(e) { return P(e.x + e.dir * SPECIES[e.type].len * .46 * e.size, e.y - 3 * e.size); }
+function updCory(e, dt) {
+  const sp = SPECIES[e.type], wy = world.waterY, s = e.size, L = sp.len * s;
+  e.sx = lerp(e.sx === undefined ? e.dir : e.sx, e.dir, ease(dt, 7));   // 轉身動畫
+  if (e.winkT > 0) e.winkT -= dt; else if (Math.random() < dt / 10) e.winkT = .4;   // 眨眼（眼球往下轉）
+  if (e.gulpT === undefined) e.gulpT = rand(40, 200);
+  e.gulpT -= dt;
+  // 掠食者或紅尾黑鯊靠近：貼著底部衝開
+  let threat = null;
+  for (const o of threatsTo(e)) if (o !== e && !o.dead && Math.abs(o.x - e.x) < 110 && Math.abs(o.y - e.y) < 110 && canEat(o, e)) { threat = o; break; }
+  if (!threat && e.scaredT > 0) { e.scaredT -= dt; threat = e.scaredBy; }
+  e.fleeReal = !!threat;
+  if (threat && e.cm !== 'flee' && e.cm !== 'gulp') { e.cm = 'flee'; e.fleeT = rand(.8, 1.3); e.dir = Math.sign(e.x - threat.x) || e.dir; }
+  const g = groundY(e.x, e.y - 8, 14);
+  const swimTo = (tx, ty, spd) => {                            // 游向目標，碰到地形就往上繞
+    const dx = tx - e.x, dy = ty - e.y, d = Math.hypot(dx, dy) || 1;
+    let nx = e.x + dx / d * spd * dt, ny = e.y + dy / d * spd * dt;
+    if (solidAt(nx, ny - 4)) { nx = e.x; ny = e.y - spd * .6 * dt; }
+    e.x = clamp(nx, TANK.left + L * .5, TANK.right - L * .5); e.y = clamp(ny, wy + 8, TANK.floor);
+    if (Math.abs(dx) > 2) e.dir = Math.sign(dx);
+    e.tilt = lerp(e.tilt, clamp(Math.atan2(dy, Math.abs(dx) + 1) * .8, -.9, .7), ease(dt, 6));
+    fishAnim(e, dt, spd > sp.speed * 1.5 ? 6 : 3.5, .8);
+    return d;
+  };
+  if (e.gulpT <= 0 && e.cm !== 'flee' && e.cm !== 'gulp' && wy < TANK.floor - 40) { e.cm = 'gulp'; e.gulpT = rand(150, 330); e.gulpFor = 0; e.tx = e.x + e.dir * rand(30, 80); }
+
+  if (e.cm === 'flee') {
+    e.fleeT -= dt; e.state = '受驚衝開';
+    swimTo(e.x + e.dir * 80, Math.min(g, e.y) - 25, sp.dash);
+    if (e.fleeT <= 0) e.cm = 'sink';
+    return;
+  }
+  if (e.cm === 'gulp') {                                       // 衝上水面吸一口空氣（腸呼吸）
+    e.state = '衝上水面吸氣';
+    e.gulpFor = (e.gulpFor || 0) + dt;
+    if (e.gulpFor > 3 && e.gulpFor < 3 + dt * 1.5 && solidAt(e.x, e.y - 12)) e.tx = e.x + (e.x > W / 2 ? -1 : 1) * rand(80, 160);   // 上面被擋住：換個地方
+    if (e.gulpFor > 12) { e.cm = 'sink'; e.vy = 0; return; }   // 安全網：上不去就算了
+    if (swimTo(e.tx, wy + 4, sp.dash * .8) < 6) { bubbles(e.x + e.dir * L * .4, wy + 3, 2); ripple(e.x, wy, .4); e.cm = 'sink'; e.vy = 0; }
+    return;
+  }
+  if (e.cm === 'swim') {
+    e.state = '游到別處';
+    if (swimTo(e.tx, e.ty, sp.speed * 1.4) < 6 || (e.think -= dt) < -4) { e.cm = 'sink'; e.vy = 0; }
+    return;
+  }
+  if (e.cm !== 'forage' && e.cm !== 'rest') {                  // 沉回底部（慢慢滑下去）
+    e.vy = Math.min((e.vy || 0) + 50 * dt, 45);
+    e.y = Math.min(e.y + e.vy * dt, g); e.state = '沉下來';
+    e.x = clamp(e.x + e.dir * 10 * dt, TANK.left + L * .5, TANK.right - L * .5);
+    e.tilt = lerp(e.tilt, .15, ease(dt, 3)); fishAnim(e, dt, 2, .5);
+    if (e.y >= g - .5) { e.cm = 'forage'; e.think = rand(.5, 2); e.vy = 0; }
+    return;
+  }
+  // 在底部
+  if (g > e.y + 3) { e.cm = 'sink'; return; }                  // 腳下的東西被移走了
+  e.y = g;
+  if (e.y < wy + 6) { e.cm = 'swim'; e.tx = e.x - e.dir * 120; e.ty = TANK.floor - 10; e.dir *= -1; return; }   // 走到水面以上：回頭
+  e.think -= dt;
+  if (e.cm === 'rest') {
+    e.state = isNight() ? '在底部睡覺' : '停在底部休息';
+    e.tilt = lerp(e.tilt, 0, ease(dt, 4)); fishAnim(e, dt, 1, .15);
+    if (e.think <= 0) { e.cm = 'forage'; e.think = rand(2, 5); }
+    return;
+  }
+  // 覓食：找沉到底部的飼料、孑孓；沒有就跟著同伴，邊走邊用口鬚翻沙
+  const mouth = coryMouth(e);
+  const food = e.hunger < sp.huntBelow ? findPrey(e, sp.sight, t => (t.kind === 'food' || t.kind === 'larva') && t.y > e.y - 140, mouth) : null;   // 也看得到正在沉下來的飼料，先到下面等
+  if (e.think <= 0) {
+    e.think = rand(1.5, 4);
+    const r = Math.random(), c = schoolCenter(e);
+    e.sift = r < .45;                                           // 原地翻沙
+    if (r > .9) { e.cm = 'rest'; e.think = rand(4, isNight() ? 16 : 9); return; }
+    if (c && Math.abs(c.x - e.x) > 90) e.dir = Math.sign(c.x - e.x);   // 離群太遠：往同伴那邊
+    else if (r > .75) e.dir *= -1;
+  }
+  if (food) { e.dir = Math.sign(food.x - e.x) || e.dir; e.sift = false; }
+  else {                                                       // 成群但不疊在一起：太近就往旁邊走開一點
+    let near = null, nd = L * .5;
+    for (const o of entsOfType(e.type)) if (o !== e && !o.dead && o.cm === 'forage' && Math.abs(o.y - e.y) < 20) { const d = Math.abs(o.x - e.x); if (d < nd) { nd = d; near = o; } }
+    if (near && (near.id < e.id || nd < L * .2)) { e.dir = Math.sign(e.x - near.x) || (e.id % 2 ? 1 : -1); e.sift = false; }
+  }
+  if (e.sift && !food) {
+    e.state = '用口鬚翻沙找食物';
+    e.tilt = lerp(e.tilt, .42 + Math.sin(world.t * 9 + e.id) * .06, ease(dt, 6));   // 頭往下鑽
+    e.hunger = Math.min(100, e.hunger + .22 * dt);              // 翻到碎屑、小蟲（鼠魚靠吃剩的東西和底沙裡的小生物維生）
+    fishAnim(e, dt, 3, .35);
+    if (Math.random() < dt * 1.2) dust(mouth.x, e.y - 1, .35);
+    return;
+  }
+  const spd = (food ? sp.speed * 1.3 : sp.speed) * Math.min(1, s / e.adult + .3);
+  const nx = e.x + e.dir * spd * dt, ng = groundY(nx + e.dir * L * .3, e.y - 8, 14);
+  if (nx < TANK.left + L * .5 || nx > TANK.right - L * .5 || e.y - ng > 10 || ng < wy + 6 || solidAt(nx + e.dir * L * .5, e.y - 8 * s)) {
+    if (Math.random() < .5 && e.y - ng > 10 && ng > wy + 20) { e.cm = 'swim'; e.tx = e.x + e.dir * rand(60, 120); e.ty = ng - 10; e.think = 3; }   // 遇到石頭：游上去
+    else { e.dir *= -1; e.think = rand(1, 3); }
+    return;
+  }
+  e.x = nx; e.y = groundY(e.x, e.y - 8, 14); e.dist = (e.dist || 0) + spd * dt;
+  e.tilt = lerp(e.tilt, 0, ease(dt, 6)); fishAnim(e, dt, 3.2, .6);
+  e.state = food ? '游向' + entName(food) : '在底部覓食';
+  if (food && dist(mouth, food) < 10) eat(e, food);
+}
+
 function fishWander(e) {
   const sp = SPECIES[e.type], wy = world.waterY;
   let tx, ty, tries = 0;
@@ -74,6 +180,7 @@ function updFish(e, dt) {
     return;
   }
   if (e.wasOut) { e.wasOut = false; if (e.vy > 60) splash(e.x, wy, .4 * e.size * sp.len / 64); }
+  if (sp.cory) return updCory(e, dt);                          // 鼠魚：缸底的行為另外寫
   if (e.vy > 0) { e.vy = lerp(e.vy, 0, ease(dt, 4)); e.y += e.vy * dt; }   // 掉進水裡的減速
 
   e.think -= dt;
@@ -93,11 +200,13 @@ function updFish(e, dt) {
   }
   if (sp.territorial) territorialTick(e, dt);
   const head = fishHead(e);
-  const prey = e.hunger < sp.huntBelow && !e.chasing ? findPrey(e, sp.sight, t => {
+  let prey = e.hunger < sp.huntBelow && !e.chasing ? findPrey(e, sp.sight, t => {
     if (t.kind === 'food') return t.y > wy;
     if (t.kind === 'mosquito') return t.y > wy - 24 && t.y < wy + 4;           // 停在水面的蚊子
     return !inPlant(t) || dist(head, t) < sp.sight * .3;                       // 躲在水草裡的孑孓、蝌蚪、魚苗比較難發現
   }, head) : null;
+  if (!prey && e.hunger < sp.huntBelow && !e.chasing && world.food.length)    // 餵食時整缸的魚都會游過來（看得到遠處落下的飼料）
+    prey = findPrey(e, sp.sight * 6, t => t.kind === 'food' && t.y > wy, head);
   let tgt;
   if (e.chasing) { e.tx = e.chasing.x; e.ty = e.chasing.y; e.mode = 'chase'; tgt = sp.dash; e.state = '驅趕入侵者'; }
   else if (threat) { e.tx = e.x + (e.x - threat.x) * 2; e.ty = e.y + (e.y - threat.y); e.mode = 'flee'; tgt = sp.dash; e.state = '逃離' + threatName; }
@@ -852,6 +961,14 @@ function tickBreed(e, dt) {
     Object.assign(nest, { of: e.type, medium: 'water', hatch: b.hatch, count: Math.min(room, Math.round(rand(...b.count))) });
     e.hunger -= 15;
     logEvent(`🥚 ${sp.name}在水中產下卵（${nest.count} 顆）`);
+  } else if (b.how === 'stick') {                             // 鼠魚：把卵黏在玻璃上（真實的鼠魚會用腹鰭夾著卵去黏）
+    if (e.cm !== 'forage' && e.cm !== 'rest') { e.breedT = 10; return; }
+    const room = capFor('fish') - countKind('fish');
+    if (room <= 0) return;
+    const nest = makeEnt('nest', clamp(e.x + rand(-60, 60), TANK.left + 30, TANK.right - 30), rand(wy + 40, Math.max(wy + 41, TANK.floor - 40)));
+    Object.assign(nest, { of: e.type, medium: 'glass', hatch: b.hatch, morph: e.morph, count: Math.min(room, Math.round(rand(...b.count))) });
+    e.hunger -= 15;
+    logEvent(`🥚 ${sp.name}把卵黏在玻璃上（${nest.count} 顆）`);
   } else if (b.how === 'eggs') {                              // 烏龜、壁虎：在陸地上產蛋
     const onLand = e.kind === 'turtle' ? (e.mode === 'walk' || e.mode === 'bask') : e.surface === 'ground';
     if (!onLand) { e.breedT = 15; return; }
@@ -897,6 +1014,8 @@ function updNest(e, dt) {
   if (e.medium === 'water') {
     if (wy >= TANK.floor - 10) { kill(e, '水乾了'); return; }
     e.y = lerp(e.y, wy + 20, ease(dt, 2));
+  } else if (e.medium === 'glass') {                          // 黏在玻璃上的卵：水位降到下面就乾掉
+    if (e.y < wy + 4) { kill(e, '露出水面乾掉了'); return; }
   } else {
     e.y = groundY(e.x, e.y - 6, 8);
     if (e.y > wy + 4) { kill(e, '泡水了'); return; }
@@ -914,12 +1033,14 @@ function updNest(e, dt) {
     } else {
       const c = makeEnt(e.of, e.x + rand(-12, 12), e.y - 4);
       c.size = c.adult * sp.birth; c.hunger = 80;
+      if (e.morph !== undefined && sp.morphs === 'cory') c.morph = e.morph;   // 小魚和親魚同一個品系
       if (c.kind === 'gecko') { c.surface = 'ground'; c.y = e.y; c.mode = 'walk'; }
       if (c.kind === 'turtle') { c.mode = 'walk'; c.y = e.y; c.wantWater = true; }
     }
   }
   logEvent(sp.kind === 'frog' ? `🐸 ${sp.name}的卵孵出 ${e.count} 隻蝌蚪` : `🐣 ${sp.name}的蛋孵化了（${e.count} 隻）`);
   emit('hatch', { kind: sp.kind, type: e.of || e.type, n: e.count });
+  if (sp.kind === 'fish') emit('fishBirth', { type: e.of, n: e.count });
   e.removed = true;
 }
 

@@ -7,7 +7,7 @@
 const PRESETS = [
   {
     id: 'planted', name: '水草魚缸', desc: '高水位、水草和沉木，看魚群游、求偶和生小魚',
-    tank: 'standard', level: .88, mosq: 'off', icons: ['guppy', 'neon', 'nerite'],
+    tank: 'standard', level: .88, mosq: 'off', icons: ['guppy', 'neon', 'cory'],
     build(B) {
       B.decor('rock', 300, B.floor + 8, { w: 120, h: 70 });
       B.decor('rock', 380, B.floor + 8, { w: 80, h: 45 });
@@ -19,7 +19,9 @@ const PRESETS = [
       B.ent('nerite', 330, B.floor - 70); B.ent('nerite', 700, B.floor - 30);
       for (let i = 0; i < 6; i++) B.ent('cherry', B.rx(560, 860), B.floor - 40, { sex: i < 2 ? 'm' : 'f' });   // 櫻花蝦 2 公 4 母
       for (let i = 0; i < 6; i++) B.ent('guppy', B.rx(500, 900), B.ry(.3, .8), { sex: i % 2 ? 'f' : 'm' });
-      for (let i = 0; i < 8; i++) B.ent('neon', B.rx(600, 900), B.ry(.3, .6));
+      for (let i = 0; i < 6; i++) B.ent('neon', B.rx(600, 900), B.ry(.3, .6));
+      const cm = Math.floor(Math.random() * CORY_MORPHS.length);
+      for (let i = 0; i < 4; i++) B.ent('cory', B.rx(420, 980), B.floor - 30, { morph: cm });   // 鼠魚一小群（同一品系）
     },
   },
   {
@@ -125,6 +127,7 @@ function presetBuilder() {
     ent(type, x, y, opt = {}) {
       const e = makeEnt(type, X(x), TANK.floor - (668 - y) * sy);
       if (opt.sex && SPECIES[type].sexed) setSex(e, opt.sex);
+      if (opt.morph !== undefined) e.morph = opt.morph;
       return e;
     },
     onLand(type, x) { const e = makeEnt(type, X(x), TANK.top + 60); e.y = highestTop(X(x)) - 1; return e; },

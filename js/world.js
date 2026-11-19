@@ -170,6 +170,7 @@ function makeEnt(type, x, y, push = true) {
   if (sp.kind === 'gecko') { e.tailLen = 1; e.regrown = false; }
   if (sp.sexed) { e.morph = Math.floor(Math.random() * (sp.morphs === 'shrimp' ? SHRIMP_GRADES : GUPPY_MORPHS).length); setSex(e, Math.random() < .5 ? 'm' : 'f'); }
   if (sp.kind === 'shrimp') { e.moltT = rand(...sp.molt) * rand(.2, 1); e.mode = 'fall'; e.curl = 0; }
+  if (sp.morphs === 'cory') { e.morph = Math.floor(Math.random() * CORY_MORPHS.length); e.cm = 'sink'; e.tilt = 0; }
   if (push) { world.ents.push(e); afterDrop(e); }
   return e;
 }
@@ -177,7 +178,7 @@ function makeEnt(type, x, y, push = true) {
 function afterDrop(e) {
   const wy = world.waterY;
   e.vx = e.vy = e.v = 0; e.turning = false; e.turnT = 0;
-  if (e.kind === 'fish') { e.mode = 'cruise'; e.tx = e.x; e.ty = e.y; }
+  if (e.kind === 'fish') { e.mode = 'cruise'; e.tx = e.x; e.ty = e.y; if (SPECIES[e.type].cory) { e.cm = 'sink'; e.vy = 0; } }
   if (e.kind === 'turtle') e.mode = e.y > wy + 4 ? 'swim' : 'fall';
   if (e.kind === 'frog') e.mode = 'jump';
   if (e.kind === 'gecko') { if (e.y > wy - 24) e.y = Math.max(TANK.top + 20, wy - 30); initChain(e, -Math.PI / 2); }

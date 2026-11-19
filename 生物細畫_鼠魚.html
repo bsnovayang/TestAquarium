@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>鼠魚細畫</title>
+<style>
+  :root { --bg:#1d2124; --panel:#262b2f; --ink:#e8e6e1; --muted:#9aa0a4; --line:#3a4146; --accent:#4fb89f; }
+  @media (prefers-color-scheme: light) { :root:not([data-theme="dark"]) { --bg:#e9e6df; --panel:#fbfaf7; --ink:#2b2b2b; --muted:#6f6f6f; --line:#d8d2c5; --accent:#2f8f78; } }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.6 system-ui, "Microsoft JhengHei", "PingFang TC", sans-serif; }
+  main { max-width: 1200px; margin: 0 auto; padding: 16px; }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  h2 { font-size: 16px; margin: 22px 0 8px; }
+  p.lead { color: var(--muted); margin: 0 0 12px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
+  figure { margin: 0; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 8px; }
+  figcaption { font-weight: 600; margin-bottom: 4px; }
+  figcaption small { font-weight: 400; color: var(--muted); }
+  canvas { display: block; width: 100%; border-radius: 6px; background: linear-gradient(#7cb8cc 0 78%, #c8b285 78%); }
+  ul { margin: 6px 0; padding-left: 20px; }
+  .src a { color: var(--accent); }
+</style>
+</head>
+<body>
+<main>
+  <h1>鼠魚細畫</h1>
+  <p class="lead">依真實鼠魚（<i>Corydoras</i>）的結構重畫。下方的圖直接使用遊戲裡的繪圖程式。</p>
+
+  <h2>結構標示</h2>
+  <figure><canvas id="anatomy" width="1100" height="520"></canvas></figure>
+
+  <h2>品系</h2>
+  <div class="grid" id="morphs"></div>
+
+  <h2>行為</h2>
+  <div class="grid">
+    <figure><figcaption>用口鬚翻沙 <small>頭往下鑽，口鬚在底沙裡探找食物</small></figcaption><canvas id="sift" width="360" height="220"></canvas></figure>
+    <figure><figcaption>衝上水面吸氣 <small>偶爾快速游上去吸一口空氣（腸呼吸），再滑回底部</small></figcaption><canvas id="gulp" width="360" height="220"></canvas></figure>
+    <figure><figcaption>眨眼 <small>沒有眼瞼，眼球往下轉，看起來像在眨眼</small></figcaption><canvas id="wink" width="360" height="220"></canvas></figure>
+    <figure><figcaption>休息 <small>用胸鰭的硬棘撐在地上，停著不動</small></figcaption><canvas id="rest" width="360" height="220"></canvas></figure>
+    <figure><figcaption>黏在玻璃上的卵 <small>一顆顆分開黏著；快孵化時看得到眼點</small></figcaption><canvas id="eggs" width="360" height="220"></canvas></figure>
+    <figure><figcaption>小魚 <small>孵出來就會在底部覓食，品系和親魚一樣（已放大顯示）</small></figcaption><canvas id="juv" width="360" height="220"></canvas></figure>
+  </div>
+
+  <h2>參考的真實特徵</h2>
+  <ul>
+    <li><b>身體構造</b>：屬於美鯰科（甲鯰）。身體兩側沒有一般的鱗片，而是<b>上下兩排骨板</b>互相交錯；背部拱起、腹部扁平，適合貼著底部</li>
+    <li><b>口鬚</b>：嘴巴朝下，嘴邊有 3 對口鬚，用來在底沙裡找食物</li>
+    <li><b>硬棘</b>：背鰭、胸鰭的第一根是硬棘（受威脅時會豎起來）；脂鰭前緣也有小棘</li>
+    <li><b>腸呼吸</b>：可以吞下空氣、用腸子吸收氧氣，所以會不時衝上水面吸一口再回到底部</li>
+    <li><b>眨眼</b>：沒有眼瞼，眼球會往下轉，看起來像在眨眼</li>
+    <li><b>群居</b>：喜歡成群行動，建議 6 隻以上一起養</li>
+    <li><b>繁殖</b>：公魚和母魚呈「T 字形」交配，母魚用腹鰭夾著卵，再一顆顆黏到玻璃或水草上；約 3～5 天孵化（遊戲中縮短為 40 秒）</li>
+    <li><b>品系</b>：青銅鼠（<i>C. aeneus</i>，體側帶藍綠色金屬光澤）、白子鼠（青銅鼠的白化，紅眼）、熊貓鼠（<i>C. panda</i>，眼睛和背鰭、尾柄有黑斑；其實是另一個種，遊戲裡當成品系）</li>
+    <li><b>遊戲中的設定</b>：溫和、不吃蝦也不吃魚苗；吃沉到底部的飼料、孑孓，平常靠翻沙找碎屑和小生物維生；會被烏龜吃、被紅尾黑鯊驅趕</li>
+  </ul>
+  <p class="src">資料來源：
+    <a href="https://en.wikipedia.org/wiki/Corydoras">Wikipedia：Corydoras</a>、
+    <a href="https://www.seriouslyfish.com/species/corydoras-aeneus/">Seriously Fish：C. aeneus</a>、
+    <a href="https://www.seriouslyfish.com/species/corydoras-panda/">Seriously Fish：C. panda</a>
+  </p>
+</main>
+
+<script src="js/core.js"></script>
+<script src="js/species.js"></script>
+<script src="js/world.js"></script>
+<script src="js/effects.js"></script>
+<script src="js/water.js"></script>
+<script src="js/creatures.js"></script>
+<script src="js/draw.js"></script>
+<script>
+world.waterY = -99999;
+function makeC(extra = {}) {
+  const e = makeEnt('cory', 0, 0, false);
+  Object.assign(e, { dir: 1, sx: 1, id: 3, phase: 0, amp: .5, pec: 0, tilt: 0, cm: 'forage', morph: 0, state: '在底部覓食' }, extra);
+  e.size = e.adult = 1;
+  return e;
+}
+const V = [
+  { id: 'anatomy', e: makeC(), sc: 6.6, labels: true },
+  { id: 'sift', e: makeC({ state: '用口鬚翻沙找食物' }), sc: 2.8, sift: true },
+  { id: 'gulp', e: makeC({ cm: 'gulp' }), sc: 2.8, gulp: true },
+  { id: 'wink', e: makeC({ morph: 2 }), sc: 2.8, wink: true },
+  { id: 'rest', e: makeC({ cm: 'rest', morph: 1 }), sc: 2.8 },
+  { id: 'eggs', sc: 3, eggs: true },
+  { id: 'juv', e: makeC({ morph: 2 }), sc: 2.8 / .3 * .45, juv: true },
+].map(v => ({ ...v, ctx: document.getElementById(v.id).getContext('2d') }));
+V.find(v => v.juv).e.size = .3;
+CORY_MORPHS.forEach((m, i) => {
+  const f = document.createElement('figure');
+  f.innerHTML = `<figcaption>${m.name}</figcaption><canvas width="320" height="200"></canvas>`;
+  document.getElementById('morphs').appendChild(f);
+  V.push({ e: makeC({ morph: i, id: 10 + i }), sc: 2.6, ctx: f.querySelector('canvas').getContext('2d') });
+});
+const nest = makeEnt('nest', 0, 0, false); Object.assign(nest, { of: 'cory', medium: 'glass', count: 9, hatch: 40, t: 30 });
+const LABELS = [
+  ['口鬚（3 對）', 33, -1.5, 14, 14], ['眼睛（會「眨眼」）', 22.3, -13, 14, -26], ['鰓蓋', 17, -8.5, 8, 22],
+  ['背鰭（第一根是硬棘）', 9, -30, 14, -10], ['上下兩排骨板', 2, -12, -2, -30], ['脂鰭（前緣有小棘）', -19.5, -15.5, -12, -24],
+  ['尾鰭（叉狀）', -36, -7, -16, 16], ['胸鰭硬棘', 13, -1.5, 6, 26], ['腹鰭', -1, -.5, -6, 26], ['臀鰭', -16, -1.5, -16, 24],
+];
+let last = performance.now();
+function frame(now) {
+  const dt = Math.min(.05, (now - last) / 1000); last = now;
+  world.t += dt;
+  for (const v of V) {
+    const c = v.ctx, cw = c.canvas.width, ch = c.canvas.height, e = v.e;
+    c.setTransform(1, 0, 0, 1, 0, 0); c.clearRect(0, 0, cw, ch);
+    G.begin(c);
+    if (v.eggs) {                                                    // 玻璃上的卵
+      c.setTransform(v.sc, 0, 0, v.sc, cw / 2, ch * .42); nest.t = 26 + (Math.sin(world.t * .5) + 1) * 7; drawNest(nest);
+      continue;
+    }
+    e.phase += dt * (v.gulp ? 30 : 12); e.pec += dt * 5;
+    if (v.sift) e.tilt = .42 + Math.sin(world.t * 9) * .06;
+    if (v.gulp) e.tilt = -.55;
+    if (v.wink) e.winkT = (world.t % 2.2) < .4 ? .4 - (world.t % 2.2) : 0;
+    const y0 = v.gulp ? ch * .42 : ch * .78;
+    c.setTransform(v.sc, 0, 0, v.sc, cw / 2 - 4 * v.sc * e.size, y0);
+    drawCory(e);
+    if (v.labels) {
+      c.setTransform(1, 0, 0, 1, 0, 0);
+      const ox = cw / 2 - 4 * v.sc * e.size, oy = y0, k = v.sc * e.size * SPECIES.cory.len / 64;
+      c.font = '15px system-ui, "Microsoft JhengHei", sans-serif'; c.textBaseline = 'middle';
+      for (const [text, lx, ly, dx, dy] of LABELS) {
+        const px = ox + lx * k, py = oy + ly * k, tx = px + dx * 4, ty = py + dy * 3;
+        c.strokeStyle = 'rgba(20,20,20,.75)'; c.lineWidth = 1.2; c.beginPath(); c.moveTo(px, py); c.lineTo(tx, ty); c.stroke();
+        c.fillStyle = '#ff9f1c'; c.beginPath(); c.arc(px, py, 3.5, 0, 7); c.fill();
+        const w = c.measureText(text).width, bx = clamp(tx - (dx < 0 ? w + 10 : 0), 2, cw - w - 12);
+        c.fillStyle = 'rgba(255,255,255,.92)'; c.fillRect(bx, ty - 11, w + 10, 22); c.fillStyle = '#222'; c.textAlign = 'left'; c.fillText(text, bx + 5, ty);
+      }
+    }
+  }
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

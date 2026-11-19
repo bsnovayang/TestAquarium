@@ -34,6 +34,14 @@ const SPECIES = {
     look: { shape: 'tetra', redFull: false, body: ['#4a5560', '#b9c6cf', '#eef2f4'], tail: ['#d7e1e7', '#c4d0d8', '#aebcc6'], tailType: 'fork',
             fin: 'rgba(220,230,236,.55)', hScale: .72, stripe: '#2fd3ff', belly: '#ff3348' },
   },
+  cory: {
+    // 鼠魚（Corydoras，約 5 cm）：身體兩側兩排骨板、口鬚 3 對、背鰭和胸鰭有硬棘；在缸底成群翻沙找食物，
+    // 偶爾衝上水面吸一口空氣（腸呼吸），會「眨眼」（眼球往下轉）；把卵黏在玻璃或水草上
+    name: '鼠魚', kind: 'fish', len: 95, speed: 22, dash: 110, sight: 160, hungerTime: 1400, huntBelow: 80, hit: 30,
+    cory: true, school: true, morphs: 'cory',
+    growTime: 200, birth: .3, breed: { how: 'stick', cool: [200, 320], count: [6, 12], hatch: 40 },
+    look: { shape: 'cory', hScale: 1 },
+  },
   redtail: {
     name: '紅尾黑鯊', kind: 'fish', len: 216, speed: 30, dash: 120, sight: 180, hungerTime: 1000, huntBelow: 75, hit: 34,
     growTime: 300, birth: .3, territorial: true, bottom: true, grazer: true,   // 地盤性、待在底層、會啃食藻類；水族缸內幾乎不繁殖
@@ -89,6 +97,12 @@ const GUPPY_MORPHS = [
 ];
 
 // 櫻花蝦色級：普通（半透明帶紅斑）→ 櫻花 → 極火（全身鮮紅不透明）
+// 鼠魚品系（熊貓鼠其實是另一個種，遊戲裡當成品系處理）
+const CORY_MORPHS = [
+  { name: '青銅鼠', body: ['#5e5236', '#9a8760', '#e6d2ae'], sheen: 'rgba(60,175,140,.5)', cheek: 'rgba(235,130,60,.4)', fin: 'rgba(225,205,170,.5)', eye: '#151515', ring: '#c9a860' },
+  { name: '白子鼠', body: ['#d4ad98', '#efd2c0', '#fff3eb'], sheen: 'rgba(255,185,165,.4)', cheek: 'rgba(255,150,140,.3)', fin: 'rgba(255,238,228,.6)', eye: '#d42a3a', ring: '#f6c4bc' },
+  { name: '熊貓鼠', body: ['#c9bba8', '#ece2d4', '#fffaf3'], sheen: 'rgba(255,220,195,.3)', cheek: 'rgba(255,170,150,.25)', fin: 'rgba(250,246,238,.6)', eye: '#151515', ring: '#ddd0b4', panda: true },
+];
 const SHRIMP_GRADES = [
   { name: '普通', color: '#e04a3a', opacity: .55, speckle: true },
   { name: '櫻花', color: '#e8302a', opacity: .8,  speckle: true },
@@ -96,7 +110,7 @@ const SHRIMP_GRADES = [
 ];
 
 // 族群上限（以標準缸為準，大缸依面積放大）
-const CAPS = { mosquito: 30, larva: 80, fish: 16, frog: 6, tadpole: 30, turtle: 3, gecko: 4, shrimp: 20 };
+const CAPS = { mosquito: 30, larva: 80, fish: 20, frog: 6, tadpole: 30, turtle: 3, gecko: 4, shrimp: 20 };
 
 const DECOR_TYPES = {
   rock:    { name: '石頭',   w: 150, h: 80,  solid: true },

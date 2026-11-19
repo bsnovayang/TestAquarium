@@ -452,7 +452,96 @@ function drawFishLOD(e) {
   G.circle(n[0].x - 1, n[0].y - 2.5 * (lk.hScale || 1), 4, '#111');
   G.restore();
 }
+// ---------------------------------------------------------------------
+// 鼠魚（局部座標身長 64，頭在 +x，y = 0 是腹部貼地的位置）
+// 結構：拱起的背、平的腹部、往下斜的吻部、嘴邊 3 對口鬚；身體兩側上下兩排骨板；
+// 高背鰭（第一根是硬棘）、脂鰭（前緣有小棘）、叉狀尾鰭；胸鰭有硬棘，休息時撐在地上
+// ---------------------------------------------------------------------
+const CORY_TOP = [[32, -6.5], [29.5, -12], [24, -17.5], [16, -20.5], [8, -21.5], [0, -20.5], [-9, -17.5], [-17, -13.5], [-23, -10.5], [-27, -9.6]];
+const CORY_BOT = [[-27, -4.6], [-21, -3.4], [-10, -1.8], [2, -.8], [14, -1], [23, -2.2], [29, -3.6], [32, -5]];
+function coryBodyY(x, top) {                                       // 在輪廓上插值（畫骨板用）
+  const A = top ? CORY_TOP : CORY_BOT.slice().reverse();
+  for (let i = 0; i < A.length - 1; i++) {
+    const [x0, y0] = A[i], [x1, y1] = A[i + 1];
+    if ((x <= x0 && x >= x1) || (x >= x0 && x <= x1)) return lerp(y0, y1, (x - x0) / ((x1 - x0) || 1));
+  }
+  return A[A.length - 1][1];
+}
+function drawCory(e) {
+  const sp = SPECIES[e.type], M = CORY_MORPHS[e.morph || 0], k = e.size * sp.len / 64;
+  const sx = Math.abs(e.sx === undefined ? e.dir : e.sx) < .15 ? .15 * Math.sign(e.sx || e.dir) : (e.sx === undefined ? e.dir : e.sx);
+  G.save(); G.tf(e.x, e.y, 0, sx * k, (e.dead ? -1 : 1) * k);
+  if (e.dead) { G.alpha(.65); G.tf(0, 12); }
+  const tilt = e.tilt || 0;                                        // 正 = 頭往下（翻沙），負 = 頭往上（衝上水面）
+  G.tf(30, -4, tilt); G.tf(-30, 4);                                // 以嘴巴為支點轉
+  if (fishLodOn && sp.len * e.size * screenScale() < FISH_LOD_PX) {   // 畫面上很小：簡化版
+    G.poly([P(-26, -7), P(-36, -13), P(-34, -7), P(-36, -1)], M.fin);
+    G.poly([...CORY_TOP, ...CORY_BOT].map(([x, y]) => P(x, y)), M.body[1]);
+    G.circle(22, -13, 3.4, M.eye); G.restore(); return;
+  }
+  const swing = Math.sin(e.phase) * (e.amp || .5) * .22, rest = e.cm === 'rest' || e.cm === 'forage';
+  // 尾鰭（叉狀，半透明，有細斑點）
+  G.save(); G.tf(-26.5, -7, swing);
+  G.poly(chaikin([P(1, -2.6), P(-6, -6), P(-14, -11.5), P(-11, -6), P(-9.5, -.2), P(-11, 6), P(-14, 10.5), P(-6, 5), P(1, 2.4)], true, 1), M.fin, 'rgba(90,70,50,.25)', .5);
+  for (let r = -3; r <= 3; r++) G.line([P(-1, r * .6), P(-12 + Math.abs(r) * .6, r * 3.3)], .35, 'rgba(90,70,50,.25)');
+  if (!M.panda && M.name !== '白子鼠') for (const [x, y] of [[-7, -5], [-10, -8], [-6, 3], [-10, 6], [-4, -1]]) G.circle(x, y, .7, 'rgba(70,55,35,.45)');
+  G.restore();
+  // 遠側的胸鰭、腹鰭（淡一點）
+  G.save(); G.alpha(.5);
+  G.poly([P(18, -4), P(8, rest ? .4 : 2), P(12, -3)], M.fin);
+  G.restore();
+  // 背鰭（高，第一根硬棘）、脂鰭、臀鰭
+  const dors = [P(12, -21), P(7, -37), P(3.5, -35), P(-1, -27), P(-3, -20.6)];
+  G.poly(chaikin(dors, true, 1), M.panda ? 'rgba(25,25,25,.85)' : M.fin, 'rgba(80,60,40,.3)', .5);
+  G.line([P(12, -21), P(7.3, -36.6)], 1.3, M.panda ? '#151515' : 'rgba(120,95,60,.75)');
+  for (const f of [.3, .55, .8]) G.line([P(lerp(12, -3, f), -21 + f * .4), P(lerp(7, -1, f), lerp(-37, -27, f))], .35, 'rgba(80,60,40,.35)');
+  G.poly([P(-17, -13.4), P(-19.5, -17.6), P(-23.5, -11)], M.fin, 'rgba(80,60,40,.3)', .5);   // 脂鰭
+  G.line([P(-17, -13.4), P(-19.5, -17.6)], .8, 'rgba(120,95,60,.6)');
+  G.poly([P(-12, -2.6), P(-19, .6), P(-20, -3.6)], M.fin);         // 臀鰭
+  // 身體
+  const ol = chaikin([...CORY_TOP, ...CORY_BOT].map(([x, y]) => P(x, y)), true, 2);
+  G.poly(ol, { lin: [0, -21, 0, 0, [[0, M.body[0]], [.5, M.body[1]], [1, M.body[2]]]] }, 'rgba(60,45,30,.4)', .7);
+  G.save(); G.alpha(.9); G.poly(ellipsePts(-1, -11.5, 20, 4.2, .1, 18), M.sheen); G.restore();   // 側面的金屬光澤
+  G.poly(ellipsePts(22, -8.5, 6, 4, -.3, 14), M.cheek);            // 鰓蓋的顏色
+  // 兩排骨板：上排和下排在體側中線交錯
+  const midY = x => lerp(-12.2, -7, (24 - x) / 50);
+  for (let i = 0; i < 9; i++) {
+    const x = 15 - i * 4.8, x2 = x - 2.4;
+    G.line(chaikin([P(x + 1.2, coryBodyY(x + 1.2, true) + .6), P(x - .4, (coryBodyY(x, true) + midY(x)) / 2), P(x, midY(x))], false, 1), .45, 'rgba(60,45,30,.4)');
+    G.line(chaikin([P(x2, midY(x2)), P(x2 - .6, (midY(x2) + coryBodyY(x2, false)) / 2), P(x2 + .6, coryBodyY(x2, false) - .5)], false, 1), .45, 'rgba(60,45,30,.35)');
+  }
+  const mid = []; for (let x = 24; x >= -26; x -= 2.4) mid.push(P(x, midY(x) + ((Math.round((24 - x) / 2.4)) % 2 ? .6 : -.6)));
+  G.line(mid, .5, 'rgba(60,45,30,.4)');
+  // 熊貓鼠：眼睛的黑色眼罩、背鰭下的黑斑、尾柄的黑點
+  if (M.panda) {
+    G.poly(chaikin([P(24.5, -18.6), P(19.5, -19), P(19, -12), P(20.5, -6.5), P(25, -6), P(26, -12)], true, 1), 'rgba(20,20,20,.88)');
+    G.poly(chaikin([P(11, -20.8), P(-1, -20.3), P(1, -15), P(9, -15.5)], true, 1), 'rgba(20,20,20,.75)');
+    G.poly(ellipsePts(-24, -7.2, 3, 2.6, 0, 12), 'rgba(20,20,20,.85)');
+  }
+  // 鰓蓋線、眼睛（眨眼時眼球往下轉，看到上面一圈）
+  G.line(arcPts(20.5, -9, 8.5, Math.PI * .62, Math.PI * 1.25), .7, 'rgba(60,45,30,.45)');
+  const wink = e.winkT > 0 ? Math.sin(Math.PI * e.winkT / .4) : 0;
+  G.circle(22.3, -13, 3.7, M.ring);
+  G.circle(22.3, -13 + wink * 1.5, 2.6 - wink * .4, M.eye);
+  if (wink < .5) G.circle(21.5, -14, .8, 'rgba(255,255,255,.85)');
+  // 口鬚（3 對，往下垂；翻沙時會動）
+  const bw = e.state === '用口鬚翻沙找食物' ? Math.sin(world.t * 14 + e.id) * .8 : 0;
+  for (const [dx, len, ang] of [[0, 3.6, 1.15], [-.8, 3.1, 1.45], [-1.8, 2.6, 1.75]]) {
+    const ox = 31 + dx, oy = -4.4, a = ang + bw * .2;
+    G.line(chaikin([P(ox, oy), P(ox + Math.cos(a) * len * .5 + .3, oy + Math.sin(a) * len * .5), P(ox + Math.cos(a) * len + bw * .3, oy + Math.sin(a) * len)], false, 1), .55, 'rgba(110,90,65,.8)');
+  }
+  // 近側的胸鰭（硬棘）、腹鰭
+  const pec = rest ? .35 : Math.sin(e.pec || 0) * .25;
+  G.save(); G.tf(18.5, -4.6, pec);
+  G.poly(chaikin([P(0, 0), P(-10, 4.4), P(-7.5, .8), P(-3, -1)], true, 1), M.fin, 'rgba(80,60,40,.3)', .5);
+  G.line([P(0, 0), P(-10, 4.4)], .9, 'rgba(120,95,60,.6)');
+  G.restore();
+  G.poly([P(3, -1.6), P(-5, 1.4), P(-3.5, -2)], M.fin);
+  G.restore();
+}
+
 function drawFish(e) {
+  if (SPECIES[e.type].cory) return drawCory(e);
   if (fishLodOn && SPECIES[e.type].len * e.size * screenScale() < FISH_LOD_PX) return drawFishLOD(e);
   const shape = (SPECIES[e.type].look || {}).shape;
   if (shape === 'shark') return drawSharkFish(e);
@@ -948,6 +1037,13 @@ function drawNest(e) {
       const a = i * 2.4, r = 3 + Math.sqrt(i) * 4.2, x = Math.cos(a) * r, y = Math.sin(a) * r * .7;
       G.save(); G.alpha(.5); G.circle(x, y, 4.2, '#d8ecd8'); G.restore();
       G.circle(x, y, 1.6, '#1d2414');
+    }
+  } else if (e.medium === 'glass') {                            // 鼠魚的卵：一顆顆黏在玻璃上，半透明米色
+    for (let i = 0; i < n; i++) {
+      const a = i * 2.39996, r = Math.sqrt(i) * 5.5, x = Math.cos(a) * r, y = Math.sin(a) * r;
+      G.save(); G.alpha(.75); G.circle(x, y, 2.6, '#f2e6c8', 'rgba(150,130,90,.6)', .5); G.restore();
+      G.circle(x - .6, y - .7, .7, 'rgba(255,255,255,.8)');
+      if (e.t > e.hatch * .6) G.circle(x + .3, y + .3, .6, '#3a3020');   // 快孵化：看得到眼點
     }
   } else {
     const big = e.of === 'turtle', rx = big ? 6.5 : 3.6, ry = big ? 5 : 3;
