@@ -1,0 +1,433 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>立體魚缸 DEMO</title>
+<style>
+  :root { --bg:#1d2124; --panel:#262b2f; --panel2:#2e3439; --ink:#e8e6e1; --muted:#9aa0a4; --line:#3a4146; --accent:#4fb89f; }
+  @media (prefers-color-scheme: light) { :root:not([data-theme="dark"]) { --bg:#e9e6df; --panel:#fbfaf7; --panel2:#f1eee8; --ink:#2b2b2b; --muted:#6f6f6f; --line:#d8d2c5; --accent:#2f8f78; } }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.6 system-ui, "Microsoft JhengHei", "PingFang TC", sans-serif; }
+  main { max-width: 1100px; margin: 0 auto; padding: 16px; }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  p.lead { color: var(--muted); margin: 0 0 12px; }
+  .bar { display: flex; flex-wrap: wrap; gap: 8px 18px; align-items: center; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; margin-bottom: 10px; }
+  .grp { display: flex; gap: 4px; align-items: center; }
+  .grp > span { color: var(--muted); margin-right: 2px; }
+  button { font: inherit; color: var(--ink); background: var(--panel2); border: 1px solid var(--line); border-radius: 6px; padding: 3px 12px; cursor: pointer; }
+  button.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .stage { background: #0e1214; border-radius: 10px; padding: 8px; }
+  canvas { display: block; width: 100%; aspect-ratio: 16 / 9; image-rendering: pixelated; border-radius: 6px; cursor: grab; touch-action: none; }
+  #desc { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 10px 14px; margin-top: 10px; }
+  #desc b { color: var(--accent); }
+  #desc ul { margin: 4px 0; padding-left: 20px; }
+  .hide { display: none !important; }
+  #err { color: #ff9a7a; }
+</style>
+</head>
+<body>
+<main>
+  <h1>立體魚缸 DEMO</h1>
+  <p class="lead">同一個小魚缸（底沙、石頭、沉木、水草）加一隻孔雀魚，用三種方式做成立體。畫面都是 320×180 的低解析度再放大（像素風）。</p>
+  <div class="bar">
+    <div class="grp"><button data-mode="A" class="on">A. 2.5D</button><button data-mode="B">B. 像素體素</button><button data-mode="C">C. 3D 引擎＋像素</button></div>
+    <div class="grp" id="ctlRot"><button id="auto" class="on">自動轉動</button></div>
+    <div class="grp" id="ctlPitch"><span>俯角</span><input id="pitch" type="range" min="0" max="1.2" step=".05" value=".45"></div>
+    <span id="err"></span>
+  </div>
+  <div class="stage"><canvas id="cv" width="320" height="180"></canvas><canvas id="gl" class="hide" width="320" height="180"></canvas></div>
+  <div id="desc"></div>
+</main>
+
+<script src="js/core.js"></script>
+<script src="js/species.js"></script>
+<script src="js/voxfish.js"></script>
+<script>
+'use strict';
+(() => {                                                             // 包起來：core.js 已經有全域的 W、H
+const W = 320, H = 180, cv = document.getElementById('cv'), ctx = cv.getContext('2d');
+const img = ctx.createImageData(W, H), BUF = new Uint32Array(img.data.buffer), ZB = new Float32Array(W * H);
+const rgb = h => hex(h), P32 = c => ((255 << 24) | (c[2] << 16) | (c[1] << 8) | c[0]) >>> 0;
+const mix3 = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t].map(Math.round);
+const rng = seed => { let s = Math.floor(seed * 9973) % 2147483647 || 7; return () => (s = s * 16807 % 2147483647) / 2147483647; };
+const h2 = (x, y, s = 0) => { const n = Math.sin(x * 127.1 + y * 311.7 + s * 74.7) * 43758.5453; return n - Math.floor(n); };
+function vn(x, y, s) { const xi = Math.floor(x), yi = Math.floor(y), fx = x - xi, fy = y - yi, u = fx * fx * (3 - 2 * fx), v = fy * fy * (3 - 2 * fy); return lerp(lerp(h2(xi, yi, s), h2(xi + 1, yi, s), u), lerp(h2(xi, yi + 1, s), h2(xi + 1, yi + 1, s), u), v); }
+const WATER = rgb('#4c9cbc'), WATER_DK = rgb('#2c6a8c'), SAND = ['#e2cfa4', '#d0b98c', '#b89e72', '#9a8258'].map(rgb), STONE = ['#cfd4d5', '#a9afb1', '#868d90', '#666d70', '#4a5053'].map(rgb);
+const MOSS = ['#9cc46a', '#6e9c48', '#4c7a34'].map(rgb), WOOD = ['#b8946a', '#8e6a44', '#6a4a2c', '#4a3220'].map(rgb), LEAF = ['#9cd870', '#6cb658', '#4a9448', '#2e6c36'].map(rgb);
+const LIGHTW = (() => { const v = [-.4, .8, .45], l = Math.hypot(...v); return v.map(c => c / l); })();
+const BY = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5].map(v => (v + .5) / 16);
+const tone = (ramp, d, x, y, off = 0) => ramp[clamp(Math.floor((1 - d) * (ramp.length - .5) + off + (BY[(y & 3) * 4 + (x & 3)] - .5) * .45), 0, ramp.length - 1)];
+let mode = 'A', auto = true, pitch = .45, yaw = .6, mouse = { x: 0, y: 0 }, cam = { x: 0, y: 0 };
+const FISH_LEN = 110;                                                // voxfish 的魚全長（局部單位）
+
+// 拖曳轉動（B、C）／滑鼠位置（A）
+let drag = null;
+cv.addEventListener('pointerdown', e => { drag = { x: e.clientX, yaw }; cv.setPointerCapture(e.pointerId); });
+cv.addEventListener('pointermove', e => {
+  const r = cv.getBoundingClientRect(); mouse.x = ((e.clientX - r.left) / r.width - .5) * 2; mouse.y = ((e.clientY - r.top) / r.height - .5) * 2;
+  if (drag && mode !== 'A') { yaw = drag.yaw + (e.clientX - drag.x) * .01; auto = false; document.getElementById('auto').classList.remove('on'); }
+});
+cv.addEventListener('pointerup', () => drag = null);
+cv.addEventListener('pointerleave', () => { if (mode === 'A') { mouse.x = 0; mouse.y = 0; } });
+document.getElementById('auto').onclick = e => { auto = !auto; e.target.classList.toggle('on', auto); };
+document.getElementById('pitch').oninput = e => { pitch = +e.target.value; };
+
+// 效能：魚的立體資料依「密度＋游泳姿勢（16 格）」快取，不要每幀重算（每幀重算會產生上千個物件，垃圾回收會卡頓）
+const VCACHE = new Map();
+function fishVox(dens, phase) {
+  const d = Math.round(dens * 20) / 20, k = ((Math.floor(phase / (Math.PI * 2) * 16) % 16) + 16) % 16, key = d + ':' + k;
+  let V = VCACHE.get(key);
+  if (!V) { V = buildVoxels('guppy', k / 16 * Math.PI * 2, .5, d); VCACHE.set(key, V); if (VCACHE.size > 96) VCACHE.delete(VCACHE.keys().next().value); }
+  return V;
+}
+// 魚的游動路線（三個 DEMO 共用）：在缸裡前後左右繞，回傳位置與朝向
+function fishPath(t, X, Y, Z) {
+  const p = (tt) => [X[0] + X[1] * Math.sin(tt * .32), Y[0] + Y[1] * Math.sin(tt * .5), Z[0] + Z[1] * Math.sin(tt * .21 + 1.2)];
+  const a = p(t), b = p(t + .05), yawF = Math.atan2(b[2] - a[2], b[0] - a[0]);
+  return { x: a[0], y: a[1], z: a[2], yaw: yawF };
+}
+// 把一隻 voxfish 畫進緩衝區：proj(x,y,z) → [X, Y, depth, 每格幾像素]；深度大 = 近
+function splatFish(V, f, scale, proj, fog) {
+  const c = Math.cos(f.yaw), s = Math.sin(f.yaw);
+  for (const v of V.vox) {
+    // 魚的局部（ix 頭尾、iy 上下、iz 左右）→ 世界：頭朝 yaw 方向（x-z 平面）
+    const lx = v.ix * scale, ly = v.iy * scale, lz = v.iz * scale;
+    const wx = f.x + lx * c - lz * s, wz = f.z + lx * s + lz * c, wy = f.y + ly;
+    const pr = proj(wx, wy, wz); if (!pr) continue;
+    const n = [v.n[0] * c - v.n[2] * s, v.n[1], v.n[0] * s + v.n[2] * c];
+    let col = shadeColor(v, n, pr[0] | 0, pr[1] | 0);
+    if (fog) col = mix3(col, WATER, fog(wz));
+    plot(pr[0], pr[1], pr[2], pr[3], P32(col));
+  }
+}
+let MASK = null;                                                      // 不是 null 時，plot 會順便標記「物件」的格子（給外框用）
+function plot(X, Y, depth, size, c) {                                // 方塊點（z 緩衝）
+  const sz = Math.max(1, Math.ceil(size)), x0 = Math.round(X - sz / 2), y0 = Math.round(Y - sz / 2);
+  for (let yy = y0; yy < y0 + sz; yy++) for (let xx = x0; xx < x0 + sz; xx++) {
+    if (xx < 0 || yy < 0 || xx >= W || yy >= H) continue;
+    const i = yy * W + xx; if (depth > ZB[i]) { ZB[i] = depth; BUF[i] = c; if (MASK) MASK[i] = 1; }
+  }
+}
+function outlineBuf(mask) {                                          // 只對「物件」加外框（mask 1 的格子）
+  const src = BUF.slice();
+  for (let y = 1; y < H - 1; y++) for (let x = 1; x < W - 1; x++) {
+    const i = y * W + x; if (mask[i]) continue;
+    for (const j of [i - 1, i + 1, i - W, i + W]) if (mask[j]) { const v = src[j]; BUF[i] = ((255 << 24) | ((((v >> 16) & 255) * .4) << 16) | ((((v >> 8) & 255) * .4) << 8) | ((v & 255) * .4)) >>> 0; break; }
+  }
+}
+
+// =====================================================================
+// A. 2.5D：透視的玻璃盒＋放在不同深度的平面（石頭、水草）＋立體的魚
+// 世界：x -80..80、y -48..48（上為正）、z 0（前玻璃）..60（後）
+// =====================================================================
+const A = { D: 170, f: 300 / 160 * 170 };
+function projA(x, y, z) { const s = A.f / (z + A.D); return [160 + (x - cam.x) * s, 90 - (y - cam.y) * s, -z, s]; }
+// 平面物件：在局部格子上定義「形狀函式」，每幀依透視大小重新點陣化（不會模糊）
+// 形狀函式：結果放在 SH_C（色階）、SH_D（亮度），回傳 true／false（不要每個像素都 new 一個物件，垃圾回收會卡）
+let SH_C = null, SH_D = 0;
+function shapeRock(u, v) {                                           // u -1..1、v 0..1（下到上）
+  if (Math.abs(u) >= 1) return false;
+  const top = Math.pow(1 - u * u, .55) * (1 + (vn(u * 4, 0, 3) - .5) * .25);
+  if (v > top) return false;
+  if (v > top - .08 && vn(u * 5, 1, 9) > .45) { SH_C = MOSS; SH_D = .8; return true; }
+  SH_C = STONE; SH_D = clamp((v / top) * .6 + (u + 1) * .25 + (vn(u * 6, v * 6, 4) - .5) * .5, 0, 1); return true;
+}
+function shapePlant(u, v, t, seed) {                                 // 幾根莖，往上擺動
+  for (let k = 0; k < 4; k++) {
+    const h = .75 + .25 * Math.sin(seed + k * 2.1);
+    if (v > h) continue;
+    const x0 = (k - 1.5) * .28 + Math.sin(t * 1.3 + k + seed) * .25 * v + Math.sin(v * 5 + k) * .06, du = u - x0;
+    if (Math.abs(du) < .045) { SH_C = LEAF; SH_D = .35 + (k % 2) * .2; return true; }
+    const node = Math.round(v * 12), side = node % 2 ? 1 : -1;
+    if (Math.abs(v - node / 12) < .03 && du * side > 0 && Math.abs(du) < .22 * (1 - v * .4)) { SH_C = LEAF; SH_D = du * side < .1 ? .85 : .6; return true; }
+  }
+  return false;
+}
+const A_OBJ = [
+  { kind: 'plant', x: 34, z: 50, w: 46, h: 70, seed: 1 },
+  { kind: 'rock', x: -32, z: 40, w: 58, h: 34 },
+  { kind: 'wood', x: 18, z: 28 },
+  { kind: 'plant', x: -58, z: 16, w: 40, h: 62, seed: 4 },
+  { kind: 'plant', x: 66, z: 4, w: 30, h: 52, seed: 7, front: true },
+];
+function drawA(t) {
+  cam.x = lerp(cam.x, mouse.x * 34, .08); cam.y = lerp(cam.y, -mouse.y * 18, .08);
+  const fogA = z => .08 + z / 60 * .42;
+  const bgKey = Math.round(cam.x * 4) + ',' + Math.round(cam.y * 4);
+  if (A.bgKey === bgKey) { BUF.set(A.bg); ZB.set(A.bz); }              // 視角沒變：直接用上次的背景
+  else {
+  BUF.fill(P32(rgb('#0e1214'))); ZB.fill(-1e9);
+  // 背景：後玻璃上的岩壁＋水（逐像素反推）
+  for (let Y = 0; Y < H; Y++) for (let X = 0; X < W; X++) {
+    // 後面 z = 60 的平面
+    const s = A.f / (60 + A.D), x = cam.x + (X - 160) / s, y = cam.y + (90 - Y) / s;
+    if (x < -80 || x > 80 || y < -48 || y > 48) continue;
+    const wall = y < -10 + Math.sin(x * .07) * 14 + Math.sin(x * .19) * 6;
+    const c = y > 36 ? rgb('#dfe9e4') : wall ? mix3(STONE[3], WATER_DK, .55) : mix3(WATER, WATER_DK, (36 - y) / 84);
+    BUF[Y * W + X] = P32(c); ZB[Y * W + X] = -60;
+  }
+  // 底沙：y = -40 的地板（從後往前）
+  for (let Y = 0; Y < H; Y++) {
+    const dy = 90 - Y; if (Math.abs(dy) < .01) continue;
+    const z = (-40 - cam.y) * A.f / dy - A.D; if (z < 0 || z > 60) continue;
+    for (let X = 0; X < W; X++) {
+      const x = cam.x + (X - 160) * (z + A.D) / A.f; if (x < -80 || x > 80) continue;
+      const g = h2(Math.floor(x * 1.5), Math.floor(z * 1.5), 2), c = SAND[clamp(Math.floor(z / 22 + (g < .12 ? 1 : 0) + BY[(Y & 3) * 4 + (X & 3)] * .6), 0, 3)];
+      BUF[Y * W + X] = P32(mix3(c, WATER, fogA(z) * .7)); ZB[Y * W + X] = -z;
+    }
+  }
+  A.bg = BUF.slice(); A.bz = ZB.slice(); A.bgKey = bgKey;
+  }
+  // 物件與魚：依深度從後往前畫
+  const f = fishPath(t, [0, 52], [2, 10], [30, 24]);
+  const items = A_OBJ.map(o => ({ z: o.z, o })).concat([{ z: f.z, fish: f }]).sort((a, b) => b.z - a.z);
+  const mask = new Uint8Array(W * H);
+  for (const it of items) {
+    if (it.fish) {                                                    // 立體的魚：每格依透視大小
+      const s = A.f / (f.z + A.D), V = fishVox(clamp(s * 30 / FISH_LEN, .12, 1.2), t * 9), scale = 1 / (Math.round(clamp(s * 30 / FISH_LEN, .12, 1.2) * 20) / 20) * 30 / FISH_LEN;
+      MASK = mask; splatFish(V, f, scale, projA, z => fogA(z) * .6); MASK = null;
+      continue;
+    }
+    const o = it.o, s = A.f / (o.z + A.D);
+    if (o.kind === 'wood') {                                          // 沉木：斜的長條
+      const a = [o.x - 30, -40, o.z], b = [o.x + 26, -8, o.z], pa = projA(...a), pb = projA(...b), r = 3.2 * s;
+      const len = Math.hypot(pb[0] - pa[0], pb[1] - pa[1]), nx = -(pb[1] - pa[1]) / len, ny = (pb[0] - pa[0]) / len;
+      for (let k = 0; k <= len; k += .5) for (let w = -r; w <= r; w += .5) {
+        const X = Math.round(pa[0] + (pb[0] - pa[0]) * k / len + nx * w), Y = Math.round(pa[1] + (pb[1] - pa[1]) * k / len + ny * w);
+        if (X < 0 || Y < 0 || X >= W || Y >= H) continue;
+        const c = WOOD[clamp(Math.floor((w / r + 1) * 1.6 + (Math.sin(k * .6) > .8 ? 1 : 0)), 0, 3)];
+        BUF[Y * W + X] = P32(mix3(c, WATER, fogA(o.z))); mask[Y * W + X] = 1;
+      }
+      continue;
+    }
+    const base = projA(o.x, -40, o.z), pw = o.w * s, ph = o.h * s;
+    if (o.kind === 'rock' && o.cacheKey === bgKey) {                     // 石頭不會動：視角沒變就貼上次的結果
+      for (let k = 0; k < o.cache.length; k += 2) { BUF[o.cache[k]] = o.cache[k + 1]; mask[o.cache[k]] = 1; }
+      continue;
+    }
+    const rec = o.kind === 'rock' ? [] : null;
+    for (let Y = Math.floor(base[1] - ph); Y <= Math.ceil(base[1]); Y++) for (let X = Math.floor(base[0] - pw / 2); X <= Math.ceil(base[0] + pw / 2); X++) {
+      if (X < 0 || Y < 0 || X >= W || Y >= H) continue;
+      const u = (X - base[0]) / (pw / 2), v = (base[1] - Y) / ph;
+      if (!(o.kind === 'rock' ? shapeRock(u, v) : shapePlant(u, v, t, o.seed))) continue;
+      let c = tone(SH_C, SH_D, X, Y);
+      if (o.front) c = mix3(c, rgb('#16302a'), .55);                   // 前景：暗的剪影
+      else c = mix3(c, WATER, fogA(o.z));
+      BUF[Y * W + X] = P32(c); mask[Y * W + X] = 1;
+      if (rec) rec.push(Y * W + X, BUF[Y * W + X]);
+    }
+    if (rec) { o.cache = rec; o.cacheKey = bgKey; }
+  }
+  outlineBuf(mask);
+  // 水面（y = 38）：半透明，前緣一條亮線
+  for (let Y = 0; Y < H; Y++) {
+    const dy = 90 - Y; if (Math.abs(dy) < .01) continue;
+    const z = (38 - cam.y) * A.f / dy - A.D; if (z < 0 || z > 60) continue;
+    for (let X = 0; X < W; X++) {
+      const x = cam.x + (X - 160) * (z + A.D) / A.f; if (x < -80 || x > 80) continue;
+      const i = Y * W + X, v = BUF[i], c = [v & 255, (v >> 8) & 255, (v >> 16) & 255];
+      BUF[i] = P32(mix3(c, rgb('#cfeaf2'), .55 + (Math.sin(x * .3 + t * 2 + z * .2) > .8 ? .2 : 0)));
+    }
+  }
+  // 玻璃盒的邊
+  const C8 = [[-80, -48, 0], [80, -48, 0], [80, 48, 0], [-80, 48, 0], [-80, -48, 60], [80, -48, 60], [80, 48, 60], [-80, 48, 60]].map(p => projA(...p));
+  const E = [[4, 5], [5, 6], [6, 7], [7, 4], [0, 4], [1, 5], [2, 6], [3, 7], [0, 1], [1, 2], [2, 3], [3, 0]];
+  E.forEach(([a, b], k) => line(C8[a], C8[b], k < 8 ? P32(rgb('#7f9ea8')) : P32(rgb('#d8f0f4'))));
+  ctx.putImageData(img, 0, 0);
+}
+function line(a, b, c) { const n = Math.ceil(Math.hypot(b[0] - a[0], b[1] - a[1])); for (let i = 0; i <= n; i++) { const X = Math.round(a[0] + (b[0] - a[0]) * i / n), Y = Math.round(a[1] + (b[1] - a[1]) * i / n); if (X >= 0 && Y >= 0 && X < W && Y < H) BUF[Y * W + X] = c; } }
+
+// =====================================================================
+// B. 像素體素魚缸：整個缸是一格一格的方塊，可以繞著轉
+// 格子：X 96、Y 60（上）、Z 48；水面 y = 46
+// =====================================================================
+const B = { X: 96, Y: 60, Z: 48, water: 46, vox: null };
+function buildTankVoxels() {
+  const { X, Y, Z } = B, map = new Map(), key = (x, y, z) => (x * 64 + y) * 64 + z;
+  const put = (x, y, z, c, d = 0) => { if (x >= 0 && y >= 0 && z >= 0 && x < X && y < Y && z < Z) map.set(key(x, y, z), { x, y, z, c, d }); };
+  const sandH = (x, z) => 4 + Math.round(vn(x * .12, z * .12, 1) * 3);
+  for (let x = 0; x < X; x++) for (let z = 0; z < Z; z++) { const hh = sandH(x, z); for (let y = 0; y < hh; y++) put(x, y, z, SAND, (h2(x, z * 7 + y, 3) < .15 ? .3 : 0) + y / hh * .2); }
+  for (const r of [{ x: 30, z: 30, rx: 15, ry: 12, rz: 11 }, { x: 74, z: 13, rx: 8, ry: 6, rz: 7 }]) {   // 石頭
+    const by = sandH(r.x, r.z) - 2;
+    for (let x = r.x - r.rx - 2; x <= r.x + r.rx + 2; x++) for (let y = by; y <= by + r.ry * 2; y++) for (let z = r.z - r.rz - 2; z <= r.z + r.rz + 2; z++) {
+      const e = ((x - r.x) / r.rx) ** 2 + ((y - by) / r.ry) ** 2 + ((z - r.z) / r.rz) ** 2 + (vn(x * .2, y * .2 + z * .13, 5) - .5) * .5;
+      if (e <= 1 && y >= by) put(x, y, z, y > by + r.ry * .9 && vn(x * .3, z * .3, 9) > .5 ? MOSS : STONE, vn(x * .3, y * .3 + z, 6) * .5);
+    }
+  }
+  const a = [48, 7, 38], b = [88, 30, 16], R = 2.6;                     // 沉木（斜的圓柱）
+  for (let k = 0; k <= 1; k += .01) { const c = a.map((v, i) => v + (b[i] - v) * k); for (let dx = -R; dx <= R; dx++) for (let dy = -R; dy <= R; dy++) for (let dz = -R; dz <= R; dz++) if (dx * dx + dy * dy + dz * dz <= R * R) put(Math.round(c[0] + dx), Math.round(c[1] + dy), Math.round(c[2] + dz), WOOD, Math.sin(k * 40) > .85 ? .4 : 0); }
+  const r = rng(7);                                                     // 水草：莖往上、兩側長葉子
+  for (const [px, pz] of [[12, 12], [16, 14], [62, 38], [66, 34], [86, 40], [20, 40], [44, 10]]) {
+    let x = px, z = pz, hgt = 26 + Math.floor(r() * 14);
+    for (let y = sandH(px, pz); y < sandH(px, pz) + hgt; y++) {
+      if (r() < .25) x += r() < .5 ? 1 : -1; if (r() < .2) z += r() < .5 ? 1 : -1;
+      put(x, y, z, LEAF, .3);
+      if (y % 3 === 0) { const s = y % 6 === 0 ? 1 : -1; put(x + s, y, z, LEAF, .1); put(x + 2 * s, y + 1, z, LEAF, 0); put(x, y, z + s, LEAF, .15); }
+    }
+  }
+  // 只保留表面的格子，並算法線（朝向空格的方向）
+  const out = [];
+  for (const v of map.values()) {
+    let n = [0, 0, 0], open = 0;
+    for (const [dx, dy, dz] of [[1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [0, 0, 1], [0, 0, -1]]) if (!map.has(key(v.x + dx, v.y + dy, v.z + dz))) { n[0] += dx; n[1] += dy; n[2] += dz; open++; }
+    if (!open) continue;
+    const l = Math.hypot(...n) || 1; v.n = n.map(c => c / l); out.push(v);
+  }
+  return out;
+}
+function drawB(t) {
+  if (!B.vox) B.vox = buildTankVoxels();
+  if (auto) yaw += .004;
+  BUF.fill(P32(rgb('#0e1214'))); ZB.fill(-1e9);
+  const sc = 2.15, cy_ = Math.cos(yaw), sy_ = Math.sin(yaw), cp = Math.cos(pitch), sp = Math.sin(pitch);
+  const proj = (x, y, z) => {                                           // 正交投影：繞垂直軸轉 yaw、再往下看 pitch
+    const xc = x - B.X / 2, yc = y - B.Y / 2 + 6, zc = z - B.Z / 2;
+    const xr = xc * cy_ - zc * sy_, zr = xc * sy_ + zc * cy_;
+    return [160 + xr * sc, 96 - (yc * cp - zr * sp) * sc, yc * sp + zr * cp, sc];
+  };
+  const rot = n => { const xr = n[0] * cy_ - n[2] * sy_, zr = n[0] * sy_ + n[2] * cy_; return [xr, n[1] * cp - zr * sp, n[1] * sp + zr * cp]; };
+  const L = (() => { const v = [-.35, .8, .5], l = Math.hypot(...v); return v.map(c => c / l); })();   // 燈：跟著鏡頭（讓轉到哪一面都看得清楚）
+  const mask = new Uint8Array(W * H);
+  {                                                                     // 水體：把水的盒子投影成多邊形，先塗上水色（後面才不會是黑的）
+    const pts = [];
+    for (const x of [0, B.X]) for (const y of [0, B.water]) for (const z of [0, B.Z]) { const p = proj(x, y, z); pts.push([p[0], p[1]]); }
+    pts.sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+    const cr = (o, a, b) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]), lo = [], up = [];
+    for (const p of pts) { while (lo.length >= 2 && cr(lo[lo.length - 2], lo[lo.length - 1], p) <= 0) lo.pop(); lo.push(p); }
+    for (const p of pts.slice().reverse()) { while (up.length >= 2 && cr(up[up.length - 2], up[up.length - 1], p) <= 0) up.pop(); up.push(p); }
+    const hull = lo.slice(0, -1).concat(up.slice(0, -1));
+    for (let Y = 0; Y < H; Y++) {
+      const xs = []; for (let i = 0, j = hull.length - 1; i < hull.length; j = i++) { const a = hull[i], b = hull[j]; if ((a[1] <= Y + .5 && b[1] > Y + .5) || (b[1] <= Y + .5 && a[1] > Y + .5)) xs.push(a[0] + (Y + .5 - a[1]) / (b[1] - a[1]) * (b[0] - a[0])); }
+      xs.sort((a, b) => a - b);
+      for (let k = 0; k + 1 < xs.length; k += 2) for (let X = Math.max(0, Math.ceil(xs[k])); X <= Math.min(W - 1, Math.floor(xs[k + 1])); X++) BUF[Y * W + X] = P32(mix3(WATER, WATER_DK, Y / H * .8));
+    }
+  }
+  for (const v of B.vox) {
+    const pr = proj(v.x, v.y, v.z), n = rot(v.n), d = clamp(n[0] * L[0] + n[1] * L[1] + n[2] * L[2], 0, 1);
+    let c = tone(v.c, d * .85 + .1, pr[0] | 0, pr[1] | 0, v.d);
+    if (v.y < B.water) c = mix3(c, WATER, .22 + (B.water - v.y) / B.water * .18);   // 水裡偏藍
+    plot(pr[0], pr[1], pr[2], sc + .3, P32(c));
+  }
+  for (let i = 0; i < mask.length; i++) mask[i] = ZB[i] > -1e8 ? 1 : 0;
+  const f = fishPath(t, [48, 28], [30, 6], [24, 12]), V = fishVox(.3, t * 9);
+  // 魚的朝向（世界 x-z），需要轉成投影前的座標
+  splatFish(V, { x: f.x, y: f.y, z: f.z, yaw: f.yaw }, 1, (x, y, z) => proj(x, y, z), () => .18);
+  for (let i = 0; i < mask.length; i++) mask[i] = ZB[i] > -1e8 ? 1 : 0;
+  outlineBuf(mask);
+  // 水面：每個像素反推和水面（y = water）的交點；比既有的格子近就疊一層淡藍
+  for (let Y = 0; Y < H; Y++) for (let X = 0; X < W; X++) {
+    // 解：螢幕 (X,Y) 在 y = water 平面上的世界座標
+    const yc = B.water - B.Y / 2 + 6, zr = (yc * cp - (96 - Y) / sc) / sp, xr = (X - 160) / sc;
+    if (!isFinite(zr)) continue;
+    const xc = xr * cy_ + zr * sy_, zc = -xr * sy_ + zr * cy_;
+    if (Math.abs(xc) > B.X / 2 || Math.abs(zc) > B.Z / 2) continue;
+    const depth = yc * sp + zr * cp, i = Y * W + X;
+    if (depth > ZB[i]) { const v = BUF[i], c = [v & 255, (v >> 8) & 255, (v >> 16) & 255]; BUF[i] = P32(mix3(c, rgb('#d6f2fa'), .16 + (Math.sin(xc * .5 + t * 2 + zc * .3) > .85 ? .22 : 0))); }
+  }
+  // 玻璃缸的邊
+  const C8 = [[0, 0, 0], [B.X, 0, 0], [B.X, 0, B.Z], [0, 0, B.Z], [0, B.Y - 6, 0], [B.X, B.Y - 6, 0], [B.X, B.Y - 6, B.Z], [0, B.Y - 6, B.Z]].map(p => proj(...p));
+  for (const [a, b] of [[0, 1], [1, 2], [2, 3], [3, 0], [4, 5], [5, 6], [6, 7], [7, 4], [0, 4], [1, 5], [2, 6], [3, 7]]) line(C8[a], C8[b], P32(rgb('#9fc4cc')));
+  ctx.putImageData(img, 0, 0);
+}
+
+// =====================================================================
+// C. three.js：低多邊形 3D 場景，用 320×180 算圖再放大
+// =====================================================================
+const Cst = { ready: false };
+function initC() {
+  if (Cst.ready || Cst.failed) return;
+  if (typeof THREE === 'undefined') { Cst.failed = true; document.getElementById('err').textContent = '載入 three.js 失敗（需要網路）'; return; }
+  const gl = document.getElementById('gl'), R = new THREE.WebGLRenderer({ canvas: gl, antialias: false });
+  R.setPixelRatio(1); R.setSize(W, H, false); R.setClearColor(0x0e1214);
+  const S = new THREE.Scene(); S.fog = new THREE.Fog(0x3c88a8, 150, 330);
+  const camC = new THREE.PerspectiveCamera(38, W / H, 1, 500);
+  S.add(new THREE.AmbientLight(0x8aa8c0, .8)); const sun = new THREE.DirectionalLight(0xffffff, 1.05); sun.position.set(-30, 80, 40); S.add(sun);
+  const flat = (color, extra = {}) => new THREE.MeshLambertMaterial({ color, flatShading: true, ...extra });
+  // 底沙（起伏＋格子顏色）
+  const sg = new THREE.PlaneGeometry(96, 48, 24, 12); sg.rotateX(-Math.PI / 2);
+  const cols = []; const pos = sg.attributes.position;
+  for (let i = 0; i < pos.count; i++) { pos.setY(i, vn(pos.getX(i) * .1, pos.getZ(i) * .1, 1) * 3); const c = new THREE.Color(h2(i, 3) < .2 ? 0xb89e72 : 0xd8c294); cols.push(c.r, c.g, c.b); }
+  sg.setAttribute('color', new THREE.Float32BufferAttribute(cols, 3)); sg.computeVertexNormals();
+  S.add(new THREE.Mesh(sg, new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true })));
+  // 石頭（不規則的多面體，頂部長青苔）
+  for (const [x, z, r, sy] of [[-18, 6, 12, .8], [26, -11, 6, .7]]) {
+    const g = new THREE.DodecahedronGeometry(r, 1), p = g.attributes.position, cc = [];
+    for (let i = 0; i < p.count; i++) { const k = 1 + (vn(p.getX(i) * .3, p.getY(i) * .3 + p.getZ(i) * .2, 5) - .5) * .35; p.setXYZ(i, p.getX(i) * k, p.getY(i) * k * sy, p.getZ(i) * k); const c = new THREE.Color(p.getY(i) > r * sy * .6 ? 0x6e9c48 : 0x8a9294); cc.push(c.r, c.g, c.b); }
+    g.setAttribute('color', new THREE.Float32BufferAttribute(cc, 3)); g.computeVertexNormals();
+    const m = new THREE.Mesh(g, new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true })); m.position.set(x, r * sy * .45, z); S.add(m);
+  }
+  // 沉木
+  const wd = new THREE.Mesh(new THREE.CylinderGeometry(2.2, 2.8, 44, 7), flat(0x7a5434)); wd.position.set(14, 8, 4); wd.rotation.set(0, .45, 1.2); S.add(wd);
+  // 水草（會擺動）
+  Cst.plants = [];
+  for (const [x, z, h] of [[-36, -12, 30], [-32, -9, 24], [16, 14, 34], [20, 10, 28], [38, 16, 22], [-26, 16, 26]]) {
+    const grp = new THREE.Group(); grp.position.set(x, 1, z);
+    const stem = new THREE.Mesh(new THREE.CylinderGeometry(.35, .5, h, 4), flat(0x3f8a42)); stem.position.y = h / 2; grp.add(stem);
+    for (let y = 3; y < h; y += 2.6) { const lf = new THREE.Mesh(new THREE.ConeGeometry(.9, 4.2, 4), flat(y > h * .8 ? 0x9cd870 : 0x5fae54)); lf.position.set(0, y, 0); lf.rotation.set(0, y, (y % 5.2 < 2.6 ? 1 : -1) * 1.1); lf.translateY(2); grp.add(lf); }
+    S.add(grp); Cst.plants.push({ grp, ph: x * .1 });
+  }
+  // 水（半透明的盒子）、水面、玻璃邊
+  const water = new THREE.Mesh(new THREE.BoxGeometry(96, 38, 48), new THREE.MeshLambertMaterial({ color: 0x3aa0c8, transparent: true, opacity: .1, depthWrite: false })); water.position.y = 19; S.add(water);
+  const surf = new THREE.Mesh(new THREE.PlaneGeometry(96, 48), new THREE.MeshLambertMaterial({ color: 0xcfefff, transparent: true, opacity: .3, depthWrite: false, side: THREE.DoubleSide })); surf.rotation.x = -Math.PI / 2; surf.position.y = 38; S.add(surf);
+  const edges = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(96, 46, 48)), new THREE.LineBasicMaterial({ color: 0xa8d0d8 })); edges.position.y = 23; S.add(edges);
+  // 孔雀魚（低多邊形）：身體、尾鰭、背鰭、兩片胸鰭、眼睛
+  const fish = new THREE.Group();
+  const bg = new THREE.SphereGeometry(1, 10, 8); bg.scale(5, 2.1, 1.1);
+  const bc = []; const bp = bg.attributes.position;
+  for (let i = 0; i < bp.count; i++) { const y = bp.getY(i), x = bp.getX(i); const c = new THREE.Color(y > 1 ? 0x6e8aa2 : y < -.9 ? 0xf2f6f8 : (x < -1 && x > -3.5 && Math.abs(y) < .9 ? 0xff8a3a : 0xb4c9d8)); bc.push(c.r, c.g, c.b); }
+  bg.setAttribute('color', new THREE.Float32BufferAttribute(bc, 3));
+  fish.add(new THREE.Mesh(bg, new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true })));
+  const tailShape = new THREE.Shape(); tailShape.moveTo(0, 0); tailShape.lineTo(-7, 4.5); tailShape.lineTo(-8, 0); tailShape.lineTo(-7, -4.5); tailShape.lineTo(0, 0);
+  const tail = new THREE.Mesh(new THREE.ShapeGeometry(tailShape), flat(0xf2702e, { side: THREE.DoubleSide })); tail.position.x = -4.6; fish.add(tail);
+  const dorsal = new THREE.Mesh(new THREE.ShapeGeometry(new THREE.Shape([new THREE.Vector2(1, 0), new THREE.Vector2(-3, 3), new THREE.Vector2(-3, 0)])), flat(0xffc04d, { side: THREE.DoubleSide })); dorsal.position.set(0, 1.8, 0); fish.add(dorsal);
+  const pecs = [1, -1].map(sd => { const p = new THREE.Mesh(new THREE.ShapeGeometry(new THREE.Shape([new THREE.Vector2(0, 0), new THREE.Vector2(-2.6, .8), new THREE.Vector2(-2.6, -.8)])), flat(0xcfe8f6, { side: THREE.DoubleSide })); p.position.set(2.6, -.4, sd * .9); fish.add(p); return { p, sd }; });
+  for (const sd of [1, -1]) { const e = new THREE.Mesh(new THREE.SphereGeometry(.45, 6, 4), flat(0x111111)); e.position.set(3.6, .45, sd * .85); fish.add(e); }
+  fish.scale.setScalar(1.5); S.add(fish);
+  Object.assign(Cst, { R, S, camC, fish, tail, pecs, ready: true });
+}
+function drawC(t) {
+  initC(); if (!Cst.ready) return;
+  if (auto) yaw += .004;
+  const r = 118, el = .12 + pitch * .8;
+  Cst.camC.position.set(Math.sin(yaw) * Math.cos(el) * r, 20 + Math.sin(el) * r, Math.cos(yaw) * Math.cos(el) * r); Cst.camC.lookAt(0, 16, 0);
+  for (const p of Cst.plants) p.grp.rotation.z = Math.sin(t * 1.3 + p.ph) * .08;
+  const f = fishPath(t, [0, 30], [20, 6], [0, 12]); Cst.fish.position.set(f.x, f.y, f.z); Cst.fish.rotation.y = -f.yaw;
+  Cst.tail.rotation.y = Math.sin(t * 9) * .55;
+  for (const { p, sd } of Cst.pecs) p.rotation.y = sd * (.6 + Math.sin(t * 8 + (sd > 0 ? 0 : Math.PI)) * .5);
+  Cst.R.render(Cst.S, Cst.camC);
+}
+
+// =====================================================================
+const DESC = {
+  A: `<b>A. 2.5D</b>：正側面的魚缸，但每樣東西都有「深度」。魚缸畫成透視的玻璃盒；石頭、水草是放在不同深度的平面；魚是立體的，會在缸裡前後游（從水草後面經過、越遠越小越偏水色）。<ul><li><b>移動滑鼠</b>：視角微微偏移，前後層錯開（適合桌面放置模式）</li><li>模擬幾乎不用改（深度先只影響畫面）</li></ul>`,
+  B: `<b>B. 像素體素魚缸</b>：整個缸是一格一格的小方塊（約 96×60×48 格），魚用每幀產生的立體資料。<ul><li><b>拖曳</b>可以轉一圈、<b>俯角</b>滑桿從側面看到從上面看</li><li>模擬要變成 3D（魚有前後位置、碰撞與捕食都要算深度）；格子數量大時網頁效能是挑戰</li></ul>`,
+  C: `<b>C. 3D 引擎＋像素</b>：用 three.js 做低多邊形場景，用 320×180 算圖再放大成像素（不平滑）。<ul><li><b>拖曳</b>旋轉、<b>俯角</b>調整；光影、霧、半透明的水都是引擎幫忙算的</li><li>最接近之後移植到 Godot／Unity 時的做法；這裡的模型很陽春，正式做會用美術做的模型</li></ul>`,
+};
+function setMode(m) {
+  mode = m; document.querySelectorAll('[data-mode]').forEach(b => b.classList.toggle('on', b.dataset.mode === m));
+  document.getElementById('desc').innerHTML = DESC[m];
+  document.getElementById('cv').classList.toggle('hide', m === 'C'); document.getElementById('gl').classList.toggle('hide', m !== 'C');
+  document.getElementById('ctlRot').classList.toggle('hide', m === 'A'); document.getElementById('ctlPitch').classList.toggle('hide', m === 'A');
+  if (m === 'C' && !setMode.wired) {                                   // C 的畫布在另一個 canvas 上：滑鼠事件轉給主畫布（只加一次）
+    setMode.wired = true; const gl = document.getElementById('gl');
+    gl.addEventListener('pointerdown', e => { drag = { x: e.clientX, yaw }; });
+    gl.addEventListener('pointermove', e => { if (drag) { yaw = drag.yaw + (e.clientX - drag.x) * .01; auto = false; document.getElementById('auto').classList.remove('on'); } });
+    gl.addEventListener('pointerup', () => drag = null);
+  }
+}
+document.querySelectorAll('[data-mode]').forEach(b => b.onclick = () => setMode(b.dataset.mode));
+{ const q = new URLSearchParams(location.search); setMode(q.get('mode') || 'A'); if (q.has('yaw')) { yaw = +q.get('yaw'); auto = false; } if (q.has('pitch')) pitch = +q.get('pitch'); if (q.has('mx')) { mouse.x = +q.get('mx'); mouse.y = +(q.get('my') || 0); cam.x = mouse.x * 34; cam.y = -mouse.y * 18; } }
+window.__demo = { setMode, drawA, drawB, drawC };                     // 測試用（量效能）
+const T0 = performance.now();
+function frame(now) {
+  const q = new URLSearchParams(location.search), t = q.has('t') ? +q.get('t') : (now - T0) / 1000;
+  if (mode === 'A') drawA(t); else if (mode === 'B') drawB(t); else drawC(t);
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+})();
+</script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.149.0/build/three.min.js"></script>
+</body>
+</html>

@@ -1,0 +1,320 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>像素堆疊測試</title>
+<style>
+  :root { --bg:#1d2124; --panel:#262b2f; --panel2:#2e3439; --ink:#e8e6e1; --muted:#9aa0a4; --line:#3a4146; --accent:#4fb89f; }
+  @media (prefers-color-scheme: light) { :root:not([data-theme="dark"]) { --bg:#e9e6df; --panel:#fbfaf7; --panel2:#f1eee8; --ink:#2b2b2b; --muted:#6f6f6f; --line:#d8d2c5; --accent:#2f8f78; } }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.6 system-ui, "Microsoft JhengHei", "PingFang TC", sans-serif; }
+  main { max-width: 1240px; margin: 0 auto; padding: 16px; }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  h2 { font-size: 16px; margin: 22px 0 8px; }
+  p.lead { color: var(--muted); margin: 0 0 12px; }
+  .bar { display: flex; flex-wrap: wrap; gap: 8px 18px; align-items: center; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; position: sticky; top: 0; z-index: 2; }
+  .grp { display: flex; gap: 4px; align-items: center; }
+  .grp > span { color: var(--muted); margin-right: 2px; }
+  button { font: inherit; color: var(--ink); background: var(--panel2); border: 1px solid var(--line); border-radius: 6px; padding: 3px 10px; cursor: pointer; }
+  button.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+  input[type=range] { width: 110px; }
+  .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  @media (max-width: 800px) { .pair { grid-template-columns: 1fr; } }
+  figure { margin: 0; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 8px; }
+  figcaption { font-weight: 600; margin-bottom: 4px; }
+  figcaption small { font-weight: 400; color: var(--muted); }
+  canvas { display: block; width: 100%; border-radius: 6px; image-rendering: pixelated; }
+  #slices { display: flex; flex-wrap: wrap; gap: 6px; }
+  #slices canvas { width: auto; height: 48px; background: #86c0d2; }
+  ul { margin: 6px 0; padding-left: 20px; }
+  table { border-collapse: collapse; width: 100%; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+  th, td { text-align: left; padding: 6px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--muted); font-weight: 600; }
+</style>
+</head>
+<body>
+<main>
+  <h1>像素堆疊（Sprite Stacking）測試</h1>
+  <p class="lead">用程式每一幀產生一隻「有厚度」的魚（一格一格的方塊），再用兩種方式畫出來：側面轉身、俯視堆疊（參考文章的做法）。</p>
+
+  <div class="bar">
+    <div class="grp"><span>魚</span><button data-fish="guppy" class="on">孔雀魚（公）</button><button data-fish="neon">紅蓮燈</button></div>
+    <div class="grp"><span>密度</span><button data-den=".38">粗</button><button data-den=".55" class="on">中</button><button data-den=".8">細</button></div>
+    <div class="grp"><button id="light" class="on">立體燈光</button><button id="explode">拆開切片</button></div>
+    <div class="grp"><span>俯角</span><input id="squash" type="range" min=".45" max="1" step=".05" value=".75"><b id="squashV">0.75</b></div>
+    <div class="grp"><span>切片間距</span><input id="spacing" type="range" min=".25" max="2" step=".25" value=".5"><b id="spacingV">0.5</b></div>
+  </div>
+
+  <h2>側面：轉身</h2>
+  <div class="pair">
+    <figure><figcaption>現在的做法 <small>左右壓扁 → 翻面</small></figcaption><canvas id="flip" width="520" height="260"></canvas></figure>
+    <figure><figcaption>立體轉身 <small>同一份立體資料，真的轉過去（看得到正面、背面的寬度）</small></figcaption><canvas id="turn" width="520" height="260"></canvas></figure>
+  </div>
+
+  <h2>俯視：像素堆疊（文章的用法）</h2>
+  <div class="pair">
+    <figure><figcaption>繞圈游 <small>每片橫切面轉同一個角度、往上疊</small></figcaption><canvas id="top" width="520" height="340"></canvas></figure>
+    <figure><figcaption>單隻慢慢轉 <small>可以看出堆疊的層次</small></figcaption><canvas id="spin" width="520" height="340"></canvas></figure>
+  </div>
+
+  <h2>切片長什麼樣 <small style="color:var(--muted);font-weight:400">從下（腹部）到上（背鰭），每一片都是「從上往下看」的橫切面</small></h2>
+  <div id="slices"></div>
+
+  <h2>觀察</h2>
+  <table>
+    <tr><th></th><th>效果</th><th>限制</th></tr>
+    <tr><td>側面轉身</td><td>轉到一半看得到魚的正面、背面和厚度，比壓扁翻面自然</td><td>轉身時間很短（約 0.4 秒），在全景小尺寸時差別不大；放大看才明顯</td></tr>
+    <tr><td>俯視堆疊</td><td>像低解析度的立體模型，任意角度旋轉，邊緣還是清楚的像素</td><td>我們的魚缸是正側面，俯視只有在另外做「俯視模式」時用得到；慢慢轉時像素會跳</td></tr>
+    <tr><td>擺尾、身體彎曲</td><td>每一幀重新產生立體資料，擺尾、彎身都能動（不用手畫切片）</td><td>每隻魚每幀要算一次立體資料，生物多時要注意效能</td></tr>
+    <tr><td>薄的東西</td><td>魚鰭從側面看很清楚</td><td>從正面、正上方看時只剩一兩格（文章也提到）</td></tr>
+  </table>
+</main>
+
+<script src="js/core.js"></script>
+<script src="js/species.js"></script>
+<script>
+'use strict';
+// =====================================================================
+// 1. 立體資料：每一幀依姿勢產生一隻魚的體素（x 頭尾、y 上下、z 左右）
+// =====================================================================
+const hex = h => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
+const RAMPS = [];                                                    // 每種材質一組色階（亮 → 暗）
+const ramp = cols => { RAMPS.push(cols.map(hex)); return RAMPS.length - 1; };
+const MAT = {
+  guppyBody: ramp(['#f2f8fb', '#c8d8e4', '#9cb2c4', '#6e8aa2', '#465e74']),
+  fin: ramp(['#eef4f8', '#d6e2ea', '#b8c8d4', '#94a8b8', '#708898']),
+  pec: ramp(['#e6f6ff', '#bfe2f4', '#94c4e0', '#6c9ec0', '#4c7ca0']),   // 胸鰭（淡藍、半透明感）
+  eye: ramp(['#3a3a40', '#141418', '#0c0c10', '#060608', '#000000']),
+  eyeHi: ramp(['#ffffff', '#ffffff', '#ffffff', '#f0f0f0', '#e0e0e0']),
+  silver: ramp(['#f6fafc', '#d4dde3', '#a8b6c0', '#788894', '#4a5864']),
+  red: ramp(['#ff96a4', '#ff4a5e', '#e02a40', '#b01c30', '#7a1222']),
+  blue: ramp(['#d6fcff', '#58e2ff', '#22a8dc', '#1474a8', '#0c4a74']),
+};
+let TAIL = [], PATCH = [];
+function setMorph(m) {                                               // 孔雀魚品系的尾巴顏色
+  RAMPS.length = 7;
+  const M = GUPPY_MORPHS[m];
+  TAIL = [ramp([mixHex(M.tail[0], '#ffffff', .3), M.tail[0], M.tail[1], M.tail[2], mixHex(M.tail[2], '#000000', .4)]),
+          ramp([M.tail[0], M.tail[1], M.tail[2], mixHex(M.tail[2], '#000000', .3), mixHex(M.tail[2], '#000000', .55)])];
+  PATCH = [ramp([mixHex(M.patch[0], '#ffffff', .3), M.patch[0], mixHex(M.patch[0], '#000000', .2), mixHex(M.patch[0], '#000000', .4), mixHex(M.patch[0], '#000000', .6)]),
+           ramp([mixHex(M.patch[1], '#ffffff', .3), M.patch[1], mixHex(M.patch[1], '#000000', .2), mixHex(M.patch[1], '#000000', .4), mixHex(M.patch[1], '#000000', .6)])];
+}
+function mixHex(a, b, t) { const A = hex(a), B = hex(b); return '#' + A.map((v, i) => Math.round(v + (B[i] - v) * t).toString(16).padStart(2, '0')).join(''); }
+setMorph(0);
+
+const GUPPY_TAIL = [[0, -3], [-14, -10], [-30, -22], [-40, -25], [-44, -12], [-45.5, 0], [-44, 12], [-40, 25], [-30, 22], [-14, 10], [0, 3]];
+const FORK_TAIL = [[2, -3], [-10, -9], [-18, -14], [-14, -4], [-9, 0], [-14, 4], [-18, 14], [-10, 9], [2, 3]];
+function inPoly(px, py, poly) { let c = false; for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) { const [xi, yi] = poly[i], [xj, yj] = poly[j]; if (((yi > py) !== (yj > py)) && px < (xj - xi) * (py - yi) / (yj - yi) + xi) c = !c; } return c; }
+
+// 局部座標（和遊戲的魚一樣，身長約 64，頭在 +x）；y 往上為正
+function fishShape(kind, phase, amp) {
+  const guppy = kind === 'guppy', hs = guppy ? 1 : .72;
+  const h = s => (2.5 + 13.5 * Math.pow(Math.max(0, Math.sin(Math.PI * Math.min(1, s * 1.05 + .1))), .75) * (1 - .6 * s)) * hs;   // 身體高（半）
+  const w = s => h(s) * (guppy ? .42 : .48) + .6;                     // 身體寬（半）：魚是側扁的
+  const zc = s => amp * 5 * s * s * Math.sin(phase - s * 2.2);        // 左右擺動（真實的魚是左右擺）
+  const sOf = x => (32 - x) / 60;                                     // x → 身體位置（0 頭、1 尾柄）
+  const tailYaw = amp * .55 * Math.cos(phase - 2.2);
+  // 胸鰭：左右各一片，從鰓後方往後、往外伸出，左右交替划水
+  const pecS = .2, pecLen = guppy ? 12 : 9, pecW = guppy ? 4 : 3.2;
+  const pecs = [1, -1].map(side => {
+    const flap = .7 + Math.sin(phase * .9 + (side > 0 ? 0 : Math.PI)) * .55;        // 張開的角度（左右交替）
+    const base = [32 - pecS * 60, -h(pecS) * .05, zc(pecS) + side * w(pecS) * .9];   // 身體側面中間（從上面也看得到）
+    const dir = [-Math.cos(flap), -.08, side * Math.sin(flap)], dl = Math.hypot(...dir), D = dir.map(v => v / dl);   // 鰭的方向（往後、往外）
+    const up = [0, 1, 0], N = [D[1] * up[2] - D[2] * up[1], D[2] * up[0] - D[0] * up[2], D[0] * up[1] - D[1] * up[0]], nl = Math.hypot(...N) || 1;
+    const Nn = N.map(v => v / nl), E = [Nn[1] * D[2] - Nn[2] * D[1], Nn[2] * D[0] - Nn[0] * D[2], Nn[0] * D[1] - Nn[1] * D[0]];   // E：鰭的寬度方向
+    return { base, D, N: Nn, E };
+  });
+  const tail = guppy ? GUPPY_TAIL : FORK_TAIL;
+  return {
+    bounds: { x0: guppy ? -76 : -48, x1: 34, y0: -26, y1: 26, z0: -12, z1: 12 },
+    // 這個點是什麼材質？回傳 [材質, 色階偏移, 法線]（或 null）
+    sample(x, y, z, half) {
+      const s = sOf(x);
+      if (s >= 0 && s <= 1) {                                          // 身體：橢圓截面
+        const H = h(s), Wd = w(s), dz = z - zc(s), e = (y / H) ** 2 + (dz / Wd) ** 2;
+        if (e <= 1) {
+          const n = [x > 26 ? (x - 26) / 6 : 0, y / (H * H), dz / (Wd * Wd)], nl = Math.hypot(...n) || 1;
+          const N = n.map(v => v / nl);
+          // 眼睛：頭部兩側
+          const ex = x - 24.5, ey = y - 2.6 * hs, ez = Math.abs(dz) - (Wd - .6);
+          if (ex * ex + ey * ey < (3.3 * hs + .6) ** 2 && ez > -1.2) return [ex * ex + ey * ey < 1.1 && ey > 0 ? MAT.eyeHi : MAT.eye, 0, N];
+          if (guppy) {
+            if (s > .48 && s < .82 && y > -.35 * H && y < .45 * H && Math.abs(dz) > Wd * .5) return [PATCH[0], 0, N];   // 公魚身上的彩斑
+            if (Math.abs(s - .4) < .05 && Math.abs(y - .1 * H) < 2 && Math.abs(dz) > Wd * .5) return [PATCH[1], 0, N];
+          } else {
+            if (y < -.08 * H && y > -.92 * H && s > (kind === 'neon' ? .08 : .45) && s < .95) return [MAT.red, y < -.55 * H ? 1 : 0, N];   // 紅色（下半）
+            if (y > .08 * H && y < .5 * H && s > .08 && s < .95 && Math.abs(dz) > Wd * .3) return [MAT.blue, 0, N];        // 金屬藍條紋
+          }
+          return [guppy ? MAT.guppyBody : MAT.silver, y > .45 * H ? 1 : y < -.4 * H ? -1 : 0, N];   // 背部暗、腹部亮
+        }
+        // 背鰭、臀鰭：薄片
+        const fz = Math.abs(z - zc(s)) <= half;
+        if (fz) {
+          const top = h(s), dH = guppy ? 9 : 7;
+          if (s > .3 && s < .6 && y > top && y < top + dH * (1 - Math.abs(s - .42) / .2)) return [guppy ? TAIL[0] : MAT.fin, 1, [0, 0, 1], true];
+          if (s > .55 && s < .78 && y < -top && y > -top - 6 * (1 - Math.abs(s - .65) / .14)) return [guppy ? TAIL[0] : MAT.fin, 1, [0, 0, 1], true];
+        }
+      }
+      for (const f of pecs) {                                           // 胸鰭：薄的半透明扇形
+        const r = [x - f.base[0], y - f.base[1], z - f.base[2]];
+        const u = r[0] * f.D[0] + r[1] * f.D[1] + r[2] * f.D[2], dn = r[0] * f.N[0] + r[1] * f.N[1] + r[2] * f.N[2], v = r[0] * f.E[0] + r[1] * f.E[1] + r[2] * f.E[2];
+        if (u >= 0 && u <= pecLen && Math.abs(dn) <= half * 1.3 && Math.abs(v) <= pecW * Math.sqrt(Math.max(0, 1 - (u / pecLen) ** 2)) * (u < 1.5 ? .6 : 1))
+          return [MAT.pec, u > pecLen * .75 || Math.abs(v) > pecW * .75 ? 2 : 0, f.N, true];   // 邊緣較深
+      }
+      if (s > 1) {                                                      // 尾鰭：薄片，跟著尾柄擺動
+        const tx = x - (32 - 60), base = zc(1), tz = base + tailYaw * (-tx) * .7;
+        if (Math.abs(z - tz) <= half * 1.2 && inPoly(tx, y, tail)) {
+          const r = Math.hypot(tx, y) / (guppy ? 46 : 18);
+          return [guppy ? (r > .72 ? TAIL[1] : TAIL[0]) : MAT.fin, guppy ? (r > .72 ? 1 : r < .4 ? -1 : 0) : 0, [0, 0, 1], true];
+        }
+      }
+      return null;
+    },
+  };
+}
+// 產生體素：dens = 每單位幾格
+function buildVoxels(kind, phase, amp, dens) {
+  const sh = fishShape(kind, phase, amp), b = sh.bounds, half = .8 / dens;   // 鰭厚約 1.5 格（太薄轉起來會斷掉）
+  const nx = Math.ceil((b.x1 - b.x0) * dens), ny = Math.ceil((b.y1 - b.y0) * dens), nz = Math.ceil((b.z1 - b.z0) * dens);
+  const vox = [];
+  for (let iy = 0; iy < ny; iy++) for (let iz = 0; iz < nz; iz++) for (let ix = 0; ix < nx; ix++) {
+    const x = b.x0 + (ix + .5) / dens, y = b.y0 + (iy + .5) / dens, z = b.z0 + (iz + .5) / dens;
+    const r = sh.sample(x, y, z, half);
+    if (r) vox.push({ ix: ix - (nx >> 1), iy: iy - (ny >> 1), iz: iz - (nz >> 1), m: r[0], off: r[1], n: r[2], two: !!r[3] });   // 整數格（查表才對得上）
+  }
+  return { vox, nx, ny, nz };
+}
+
+// =====================================================================
+// 2. 上色：依表面朝向算亮暗（燈從左上前方來）
+// =====================================================================
+const LIGHT = (() => { const v = [-.45, .75, .5], l = Math.hypot(...v); return v.map(c => c / l); })();
+const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5].map(v => (v + .5) / 16);
+function shadeColor(v, nWorld, px, py) {
+  const R = RAMPS[v.m];
+  if (!OPT.light) return R[clamp(1 + v.off, 0, 4)];                   // 平塗（文章建議的做法）
+  let d = nWorld[0] * LIGHT[0] + nWorld[1] * LIGHT[1] + nWorld[2] * LIGHT[2];
+  if (v.two) d = Math.abs(d) * .8 + .15;                              // 薄的鰭：兩面一樣亮（不然轉的時候會出現條紋）
+  const t = (1 - d) * 1.6 + .4 + v.off + (v.two ? 0 : (BAYER[(py & 3) * 4 + (px & 3)] - .5) * .5);   // 鰭不抖色
+  return R[clamp(Math.floor(t), 0, 4)];
+}
+// 外框：整隻畫完再加一次（文章提到：每片各自加外框會有雜點）
+function outline(img, w, h) {
+  const src = img.slice();
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    const i = y * w + x; if (src[i]) continue;
+    let nb = 0;
+    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const xx = x + dx, yy = y + dy; if (xx >= 0 && yy >= 0 && xx < w && yy < h && src[yy * w + xx]) { nb = src[yy * w + xx]; break; } }
+    if (nb) img[i] = ((255 << 24) | ((((nb >> 16) & 255) * .35) << 16) | ((((nb >> 8) & 255) * .35) << 8) | ((nb & 255) * .35)) >>> 0;
+  }
+}
+const pack = c => ((255 << 24) | (c[2] << 16) | (c[1] << 8) | c[0]) >>> 0;
+
+// 側面：繞垂直軸轉 yaw（0 = 朝右），用深度緩衝取最前面的格子
+function renderSide(V, yaw, W, H) {
+  const img = new Uint32Array(W * H), zb = new Float32Array(W * H).fill(-1e9), c = Math.cos(yaw), s = Math.sin(yaw), cx = W / 2, cy = H / 2;
+  for (const v of V.vox) {
+    const xr = v.ix * c - v.iz * s, zr = v.ix * s + v.iz * c;            // 轉到世界：z 朝向觀眾
+    const X = Math.round(cx + xr), Y = Math.round(cy - v.iy);
+    if (X < 0 || Y < 0 || X >= W || Y >= H) continue;
+    const i = Y * W + X; if (zr <= zb[i]) continue; zb[i] = zr;
+    const n = [v.n[0] * c - v.n[2] * s, v.n[1], v.n[0] * s + v.n[2] * c];
+    img[i] = pack(shadeColor(v, n, X, Y));
+  }
+  for (let y = 1; y < H - 1; y++) for (let x = 1; x < W - 1; x++) {   // 補單格破洞（轉成斜的時候）
+    const i = y * W + x; if (img[i]) continue;
+    const a = img[i - 1], b = img[i + 1], u = img[i - W], d = img[i + W];
+    if ((a && b) && (u || d)) img[i] = a; else if (u && d && (a || b)) img[i] = u;
+  }
+  outline(img, W, H);
+  return img;
+}
+// 俯視堆疊：每一片（同一個高度）轉同一個角度、壓扁，往上疊（從下往上畫）
+function renderStack(V, heading, W, H, squash, spacing, img, cx, cy) {
+  const c = Math.cos(heading), s = Math.sin(heading);
+  const byY = new Map(); for (const v of V.vox) { if (!byY.has(v.iy)) byY.set(v.iy, []); byY.get(v.iy).push(v); }
+  const levels = [...byY.keys()].sort((a, b) => a - b);
+  for (const ly of levels) {
+    // 這一片先畫成一張小圖（x × z），再用反向取樣轉進畫面（不會有破洞）
+    const sl = byY.get(ly), map = new Map();
+    for (const v of sl) map.set(v.ix + ',' + v.iz, v);
+    const lift = (ly - levels[0]) * spacing;
+    const R = Math.hypot(V.nx, V.nz) / 2 + 1;
+    for (let Y = Math.floor(cy - R * squash - lift); Y <= Math.ceil(cy + R * squash - lift); Y++) for (let X = Math.floor(cx - R); X <= Math.ceil(cx + R); X++) {
+      if (X < 0 || Y < 0 || X >= W || Y >= H) continue;
+      const wx = X - cx, wz = (Y - cy + lift) / squash;                  // 畫面 → 世界（俯視：z 往下）
+      const ix = Math.round(wx * c + wz * s), iz = Math.round(-wx * s + wz * c);
+      const v = map.get(ix + ',' + iz); if (!v) continue;
+      const n = [v.n[0] * c - v.n[2] * s, v.n[1], v.n[0] * s + v.n[2] * c];
+      img[Y * W + X] = pack(shadeColor(v, [n[0], n[1] * .9 + .3, n[2] * .4], X, Y));   // 俯視時光從上方來
+    }
+  }
+}
+
+// =====================================================================
+// 3. 畫面
+// =====================================================================
+const OPT = { fish: 'guppy', den: .55, light: true, explode: false, squash: .75, spacing: .5 };
+document.querySelectorAll('[data-fish]').forEach(b => b.onclick = () => { OPT.fish = b.dataset.fish; document.querySelectorAll('[data-fish]').forEach(x => x.classList.toggle('on', x === b)); slicesDirty = true; });
+document.querySelectorAll('[data-den]').forEach(b => b.onclick = () => { OPT.den = +b.dataset.den; document.querySelectorAll('[data-den]').forEach(x => x.classList.toggle('on', x === b)); slicesDirty = true; });
+document.getElementById('light').onclick = e => { OPT.light = !OPT.light; e.target.classList.toggle('on', OPT.light); slicesDirty = true; };
+document.getElementById('explode').onclick = e => { OPT.explode = !OPT.explode; e.target.classList.toggle('on', OPT.explode); };
+for (const id of ['squash', 'spacing']) { const el = document.getElementById(id); el.oninput = () => { OPT[id] = +el.value; document.getElementById(id + 'V').textContent = el.value; }; }
+
+function blit(ctx, img, W, H, bg) {
+  const c = document.createElement('canvas'); c.width = W; c.height = H; const cc = c.getContext('2d');
+  const id = cc.createImageData(W, H), out = new Uint32Array(id.data.buffer), b = pack(hex(bg));
+  for (let i = 0; i < img.length; i++) out[i] = img[i] || b;
+  cc.putImageData(id, 0, 0); ctx.imageSmoothingEnabled = false; ctx.drawImage(c, 0, 0, ctx.canvas.width, ctx.canvas.height);
+}
+let slicesDirty = true;
+function drawSlices(V) {                                             // 顯示每一片橫切面
+  const box = document.getElementById('slices'); box.innerHTML = '';
+  const byY = new Map(); for (const v of V.vox) { if (!byY.has(v.iy)) byY.set(v.iy, []); byY.get(v.iy).push(v); }
+  for (const ly of [...byY.keys()].sort((a, b) => a - b)) {
+    const W = V.nx + 2, H = V.nz + 2, img = new Uint32Array(W * H);
+    for (const v of byY.get(ly)) { const X = Math.round(v.ix + W / 2), Y = Math.round(v.iz + H / 2); if (X >= 0 && Y >= 0 && X < W && Y < H) img[Y * W + X] = pack(shadeColor(v, [v.n[0], v.n[1] * .9 + .3, v.n[2] * .4], X, Y)); }
+    const c = document.createElement('canvas'); c.width = W; c.height = H; box.appendChild(c);
+    const cc = c.getContext('2d'), id = cc.createImageData(W, H); new Uint32Array(id.data.buffer).set(img.map(p => p || pack([134, 192, 210]))); cc.putImageData(id, 0, 0);
+  }
+}
+const t0 = performance.now();
+function frame(now) {
+  const FREEZE = new URLSearchParams(location.search).get('t');     // 測試用：?t=1.8 停在某個時間
+  const t = FREEZE !== null ? +FREEZE : (now - t0) / 1000, phase = t * 9, amp = .55, kind = OPT.fish;
+  const V = buildVoxels(kind, phase, amp, OPT.den);
+  if (slicesDirty) { drawSlices(V); slicesDirty = false; }
+  // 轉身的時間軸：朝右 1.5 秒 → 轉 0.6 秒 → 朝左 1.5 秒 → 轉回來
+  const cyc = t % 4.2, turnP = cyc < 1.5 ? 0 : cyc < 2.1 ? (cyc - 1.5) / .6 : cyc < 3.6 ? 1 : 1 - (cyc - 3.6) / .6;
+  const ease = p => p * p * (3 - 2 * p), yaw = ease(turnP) * Math.PI;
+  // 側面大小：讓整隻魚剛好放進畫面
+  const SW = Math.ceil(V.nx * 1.35), SH = Math.ceil(SW / 2);
+  // 立體轉身
+  blit(document.getElementById('turn').getContext('2d'), renderSide(V, yaw, SW, SH), SW, SH, '#86c0d2');
+  // 現在的做法：側面圖左右壓扁、翻面（和遊戲裡 sx 動畫一樣）
+  const side = renderSide(V, 0, SW, SH), sx = Math.cos(yaw), flipImg = new Uint32Array(SW * SH);
+  for (let y = 0; y < SH; y++) for (let x = 0; x < SW; x++) {
+    const u = (x - SW / 2) / (Math.abs(sx) < .15 ? .15 * Math.sign(sx || 1) : sx) + SW / 2;
+    const ux = Math.round(u); if (ux >= 0 && ux < SW) flipImg[y * SW + x] = side[y * SW + ux];
+  }
+  blit(document.getElementById('flip').getContext('2d'), flipImg, SW, SH, '#86c0d2');
+  // 俯視：三隻繞圈游
+  const TW = Math.ceil(V.nx * 2.6), TH = Math.ceil(TW * 340 / 520), top = new Uint32Array(TW * TH);
+  const spacing = OPT.spacing * (OPT.explode ? 4 : 1);
+  const fishes = [0, 2.1, 4.2].map((o, i) => { const a = t * .5 + o, r = TW * .27; return { x: TW / 2 + Math.cos(a) * r, y: TH * .55 + Math.sin(a) * r * OPT.squash * .8, head: a + Math.PI / 2, depth: Math.sin(a) }; });
+  fishes.sort((a, b) => a.depth - b.depth);                              // 遠的先畫（依接地點排序）
+  for (const f of fishes) renderStack(buildVoxels(kind, phase + f.head * 3, amp, OPT.den), f.head, TW, TH, OPT.squash, spacing, top, f.x, f.y);
+  outline(top, TW, TH);
+  blit(document.getElementById('top').getContext('2d'), top, TW, TH, '#5f9fb8');
+  // 單隻慢慢轉
+  const PW = Math.ceil(V.nx * 1.6), PH = Math.ceil(PW * 340 / 520), spin = new Uint32Array(PW * PH);
+  renderStack(V, t * .6, PW, PH, OPT.squash, spacing, spin, PW / 2, PH * .62);
+  outline(spin, PW, PH);
+  blit(document.getElementById('spin').getContext('2d'), spin, PW, PH, '#5f9fb8');
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
