@@ -1078,6 +1078,217 @@ function drawPxTurtle(e) {
   for (const [L, ft] of nearFeet) claws(L, ft);
 }
 
+// ---------------------------------------------------------------------
+// 青蛙（鈴蟾、金線蛙；共用 frogRig）
+// ---------------------------------------------------------------------
+function drawPxFrog(e) {
+  const R = frogRig(e), sz = e.size * PXOPT.cscale, u = R.u, juv = R.juvenile, lk = SPECIES[e.type].look || {}, D = PXOPT.detail, S = ppu() * sz;
+  const green = juv ? '#6f7d3c' : lk.green[0], green2 = juv ? '#8e9a52' : lk.green[1], dark = '#1f3a17';
+  const orange = juv ? (lk.bellySpots ? '#e0a03a' : '#e6e0bc') : lk.belly;
+  const limbBase = juv ? '#647236' : mixColor(lk.green[0], '#000000', .12), limbFarBase = juv ? '#4c5828' : mixColor(lk.green[0], '#000000', .35);
+  const limb = lk.unkenColor === false ? limbBase : mixColor(limbBase, orange, u * .55), limbFar = mixColor(limbFarBase, '#b8441f', u * .55);
+  const ax = 1 + (1 - R.squash) * .5, ay = R.squash, ct = Math.cos(R.tilt), st = Math.sin(R.tilt);
+  const T = p => { const x = p.x * ax, y = p.y * ay, qx = x * ct - y * st, qy = R.sink + x * st + y * ct; return P(AX(e.x + e.dir * qx * sz), AY(e.y + qy * sz)); };
+  const hind = (B, pts, col, webbed) => {
+    const [hip, knee, ankle, heel, toe] = pts;
+    pxThick(B, T(hip), T(knee), Math.max(1, 4.8 * S), col); pxThick(B, T(knee), T(ankle), Math.max(1, 3.5 * S), col); pxThick(B, T(ankle), T(heel), Math.max(1, 2.4 * S), col);
+    const a = Math.atan2(toe.y - heel.y, toe.x - heel.x), len = Math.hypot(toe.x - heel.x, toe.y - heel.y);
+    const tips = [-.32, -.1, .12, .34].map(o => P(heel.x + Math.cos(a + o) * len, heel.y + Math.sin(a + o) * len));
+    if (webbed) B.poly([heel, ...tips].map(T), u > .3 ? '#e8572a' : mixColor(col, '#9fd0de', .3), 4);
+    for (const t of tips) { const h = T(heel), q = T(t); B.line(h.x, h.y, q.x, q.y, C(col), 1); }
+    if (lk.legBands !== false && D && S >= .8) for (const [p0, p1] of [[hip, knee], [knee, ankle]]) for (const f of [.35, .7]) {   // 腿上的黑色橫紋
+      const p = P(lerp(p0.x, p1.x, f), lerp(p0.y, p1.y, f)), an = Math.atan2(p1.y - p0.y, p1.x - p0.x) + Math.PI / 2, a2 = T(P(p.x - Math.cos(an) * 1.8, p.y - Math.sin(an) * 1.8)), b2 = T(P(p.x + Math.cos(an) * 1.8, p.y + Math.sin(an) * 1.8));
+      B.lineOn(a2.x, a2.y, b2.x, b2.y, C('#1d2a14'), 1);
+    }
+  };
+  const front = (B, pts, col) => {
+    const [sh, el, wr, tip] = pts; pxThick(B, T(sh), T(el), Math.max(1, 3.3 * S), col); pxThick(B, T(el), T(wr), Math.max(1, 3.3 * S), col);
+    if (S >= .5) { const a = Math.atan2(tip.y - wr.y, tip.x - wr.x); for (const o of [-.5, -.15, .2, .55]) { const w = T(wr), q = T(P(wr.x + Math.cos(a + o) * 3.4, wr.y + Math.sin(a + o) * 3.4)); B.line(w.x, w.y, q.x, q.y, C(col), 1); } }
+  };
+  const webbed = R.flt || R.jump > .5, off = pts => pts.map(p => P(p.x + 2.5, p.y - 1.8));
+  live(B => {
+    hind(B, off(R.hind), limbFar, webbed); front(B, off(R.front), limbFar);
+    const body = (lk.ranid ? FROG_BODY_RANID : FROG_BODY).map(R.warp), yT = T(P(0, -14.5)).y, yB = T(P(0, -4)).y;
+    B.poly(body.map(T), (x, y) => C([green, green2][clamp(band((y - yT) / Math.max(1, yB - yT) * 1.7, x, y, .35), 0, 1)]));
+    B.poly(FROG_BELLY.map(p => R.warp(P(p.x, p.y - (p.y < -5.5 ? u * 2.2 : 0)))).map(T), orange);
+    if (lk.bellySpots && S >= .5) for (const [x, y, r] of [[-8, -4.8, .9], [0, -4.4, .7], [6, -4.9, .8], [12, -5.8, .6]]) { const p = T(R.warp(P(x, y))); B.disc(p.x, p.y, Math.max(.6, r * S), C('#1d1410')); }
+    if (lk.warty) for (const bl of FROG_BLOTCH) B.poly(bl.map(R.warp).map(T), '#18261a');
+    if (lk.goldBands) {
+      const fold = [P(15.5, -12.8), P(9, -13.4), P(2, -13.8), P(-6, -12.8), P(-13, -10.8)];
+      for (let i = 0; i + 1 < fold.length; i++) pxThick(B, T(fold[i]), T(fold[i + 1]), Math.max(1, 2.6 * S), '#a8823a');
+      if (S >= .8) B.path(fold.map(p => T(P(p.x, p.y - .7))), C('#e6c86a'), 1);
+    }
+    if (lk.tympanum && S >= .5) { const p = T(P(7.6, -10.6)); B.disc(p.x, p.y, Math.max(.7, 2.3 * S), C('#6a5424')); B.disc(p.x, p.y, Math.max(.5, 1.7 * S), C('#b8954a')); }
+    if (D) B.cleanup();
+    if (D && S >= .5) B.rim(.3, .2);
+    if (lk.warty && S >= .8) for (const t of FROG_TUB) { const p = T(R.warp(t)); B.setOn(p.x, p.y, C('#2e5a22')); if (S >= 1.5) B.setOn(p.x - 1, p.y - 1, C('#c8f0b0')); }   // 疣粒
+    if (lk.goldBands && S >= .8) B.path([P(-13, -12.2), P(-6, -14.5), P(2, -15.1), P(9, -14.6), P(13, -14.6), P(19, -12.1)].map(T), (x, y) => B.tag[y * B.w + x] === 1 ? C('#a6dc6a') : 0);
+    if (S >= 1) for (const [x, y] of lk.warty ? [[-4, -13], [5, -13.2]] : [[-6, -12.8], [-4.5, -12.8], [5, -14.1]]) { const p = T(R.warp(P(x, y))); B.setOn(p.x, p.y, C('#ffffff')); }   // 濕潤的反光
+  }, dark, dark);
+  // 嘴、鼻孔、眼睛
+  if (S >= .45) { const m0 = T(R.warp(P(lk.ranid ? 24 : 22, -8))), m1 = T(R.warp(P(13, -7.4))); PXB.line(m0.x, m0.y, m1.x, m1.y, C(dark), CREATURE); }
+  const ec = T(R.warp(P(lk.ranid ? 13 : 12.2, lk.ranid ? -15.2 : -14.2)));
+  PXB.disc(ec.x, ec.y, Math.max(.8, 3.6 * S), C(dark), CREATURE); PXB.disc(ec.x, ec.y, Math.max(.7, 3 * S), C(green), CREATURE);
+  PXB.disc(ec.x + .3 * S * e.dir, ec.y - .3 * S, Math.max(.6, 2.3 * S), C('#b8913a'), CREATURE);
+  if (!e.dead) {
+    if (S < .6) PXB.set(ec.x, ec.y, C('#0e0e0a'), CREATURE);
+    else if (lk.pupil === 'h') PXB.poly(ellipsePts(ec.x + .3 * S * e.dir, ec.y - .3 * S, 1.5 * S, Math.max(.6, .75 * S), 0, 10), C('#0e0e0a'), CREATURE);
+    else PXB.poly([P(ec.x - .9 * S * e.dir, ec.y - 1.1 * S), P(ec.x + 1.5 * S * e.dir, ec.y - 1.1 * S), P(ec.x + .3 * S * e.dir, ec.y + .8 * S)], C('#0e0e0a'), CREATURE);
+    if (S >= .9) PXB.set(ec.x + 1 * S * e.dir, ec.y - 1.3 * S, C('#ffffff'), CREATURE);
+  }
+  live(B => { hind(B, R.hind, limb, webbed); front(B, R.front, limb); }, dark, dark);
+  if (e.tongue) {                                                        // 舌頭
+    const tg = e.tongue, m = frogMouth(e), ext = tg.t < .1 ? tg.t / .1 : Math.max(0, 1 - (tg.t - .1) / .2);
+    const tip = P(lerp(m.x, tg.tx, ext), lerp(m.y, tg.ty, ext)), a = P(AX(m.x), AY(m.y)), b = P(AX(tip.x), AY(tip.y));
+    pxThick(PXB, a, b, Math.max(1, 3 * ppu()), '#e0607e', CREATURE); PXB.disc(b.x, b.y, Math.max(.8, 3.2 * ppu()), C('#e0607e'), CREATURE);
+    if (tg.caught && ext > .05) drawPxMosquitoAt(tip.x, tip.y, e.dir, 0, 1);
+  }
+}
+
+// 蝌蚪（依變態進度長出後腳、前腳）
+function drawPxTadpole(e) {
+  const m = e.meta || 0, S = ppu() * e.size * PXOPT.cscale, T = mapper(e.x, e.y, S, e.dir, 1);
+  const tail = []; for (let i = 0; i <= 6; i++) tail.push(P(-4 - i * 3.2, Math.sin(e.phase - i * .8) * i * .7));
+  const tl = tail.slice(0, Math.max(2, Math.round(7 * (1 - Math.max(0, m - .85) * 4))));
+  const dark = m > .8 ? '#2e5a24' : '#24241a';
+  live(B => {
+    B.poly(chaikin([...tl.map(p => P(p.x, p.y - 2.6 + Math.abs(p.x) * .03)), ...tl.slice().reverse().map(p => P(p.x, p.y + 2.6 - Math.abs(p.x) * .03))], true, 1).map(T), mixColor('#8a9a6a', '#9fd0de', .35), 4);
+    B.path(tl.map(T), C('#3d4a2c'), 1);
+    if (m > .6) { const k = Math.min(1, (m - .6) / .3); B.path([P(-4, 2.5), P(-7, 5 * k + 2), P(-4, 6 * k + 2)].map(T), C('#4a5a34'), 1); }
+    if (m > .9) { const a = T(P(3, 3)), b = T(P(5, 5.5)); B.line(a.x, a.y, b.x, b.y, C('#4a5a34'), 1); }
+    const yT = T(P(0, -4.6)).y, yB = T(P(0, 4.6)).y, c0 = m > .8 ? '#4f8f3a' : '#3a3a2a', c1 = m > .8 ? '#9ac46a' : '#6a6650';
+    B.poly(ellipsePts(0, 0, 6.5, 4.6, 0, 14).map(T), (x, y) => C((y - yT) / Math.max(1, yB - yT) > .55 ? c1 : c0));
+  }, dark, dark);
+  const ec = T(P(3.6, -1.4)); PXB.disc(ec.x, ec.y, Math.max(.5, 1.3 * S), C('#111111'), CREATURE);
+}
+
+// 壁虎：地上（側面）
+function drawPxGeckoSide(e) {
+  const R = geckoSideRig(e), n = R.nodes, GC = geckoColors(e), S = ppu() * e.size * PXOPT.cscale, D = PXOPT.detail, T = mapper(e.x, e.y, S, R.sx, 1);
+  const tl = e.tailLen ?? 1, origFrac = e.regrown ? Math.min(1, .25 / tl) : 1;
+  const legDraw = (B, l, col) => {
+    pxThick(B, T(l.hip), T(l.knee), Math.max(1, 3 * S), col); pxThick(B, T(l.knee), T(l.foot), Math.max(1, 3 * S), col);
+    if (S >= .5) for (const kx of [-2, -1, 0, 1, 2]) { const a = T(l.foot), b = T(P(l.foot.x + kx * 2.3, Math.min(l.foot.y + .5, 0))); B.line(a.x, a.y, b.x, b.y, C(col), 1); if (S >= 1) B.disc(b.x, b.y, Math.max(.6, 1 * S), C(col), 1); }
+  };
+  live(B => {
+    R.legs.filter(l => !l.near).forEach(l => legDraw(B, l, GC.dark));
+    B.poly(chaikin(sideOutline(n), true, 2).map(T), GC.base);
+    const nrm = i => { const a = n[Math.max(0, i - 1)], c = n[Math.min(n.length - 1, i + 1)], l = Math.hypot(c.x - a.x, c.y - a.y) || 1; return P(-(c.y - a.y) / l, (c.x - a.x) / l); };   // 往上的法線
+    const strip = (i0, i1, f0, f1) => { const A = [], Bq = []; for (let i = i0; i <= i1; i++) { const q = nrm(i), p = n[i]; A.push(P(p.x + q.x * p.t * f0, p.y + q.y * p.t * f0)); Bq.push(P(p.x + q.x * p.t * f1, p.y + q.y * p.t * f1)); } return chaikin([...A, ...Bq.reverse()], true, 1); };
+    B.poly(strip(1, n.length - 2, 1.05, .3).map(T), GC.dark);             // 背部（深）：沿著身體中線
+    B.poly(strip(1, 6, -.35, -1.05).map(T), GC.belly);                    // 腹部（淺）：只有身體，尾巴沒有
+    for (const [i, f, r] of [[2, .4, 2.6], [3, .2, 2.2], [4, .45, 2.8], [5, .25, 2]]) B.poly(ellipsePts(lerp(n[i].x, n[i + 1].x, f), n[i].y - n[i].t * .5, r, r * .55, 0, 10).map(T), mixColor(GC.base, GC.edge, .5));   // 深色斑駁
+    for (let i = 6; i <= 9; i++) {                                       // 尾巴的刺狀疣鱗（再生的部分沒有）
+      const frac = (i - 5) / 5, p = n[i], up = p.y - p.t;
+      if (frac <= origFrac + .01) { B.poly([P(p.x + 1.2, up + .3), P(p.x - 1.4, up - 1.7), P(p.x - 2, up + .4)].map(T), GC.edge); B.poly([P(p.x + 1, p.y + p.t * .6), P(p.x - 1, p.y + p.t + 1.1), P(p.x - 1.6, p.y + p.t * .6)].map(T), GC.edge); }
+    }
+    if (D) B.cleanup();
+    if (D && S >= .5) B.rim(.3, .15);
+    if (S >= .8) for (let i = 2; i <= 5; i++) for (const t of [.3, .7]) { const q = T(P(lerp(n[i].x, n[i + 1].x, t), lerp(n[i].y, n[i + 1].y, t) - lerp(n[i].t, n[i + 1].t, t) * .62)); B.setOn(q.x, q.y, C(mixColor(GC.edge, '#000000', .1))); }
+  }, GC.edge, GC.edge);
+  const h0 = n[0], h1 = n[1], ex = h1.x + 2, ey = h1.y - 2.5;
+  if (S >= .5) { const a = T(P(ex + 2.6, ey + .3)), b = T(P(h0.x + .8, h0.y - 1.2)); PXB.line(a.x, a.y, b.x, b.y, C(mixColor(GC.edge, '#000000', .25)), CREATURE); }   // 眼鼻之間的深色條紋
+  if (R.mouth) PXB.poly([P(h0.x + 2, h0.y + .5), P(h1.x - 2, h1.y + 3), P(h0.x - 1, h0.y + 7)].map(T), C('#9b3d43'), CREATURE);
+  else if (S >= .6) PXB.path([P(h0.x + 1.5, h0.y + 1), P(h1.x + 2, h1.y + 3), P(h1.x - 3, h1.y + 2.5)].map(T), C(GC.edge), CREATURE);
+  const ec = T(P(ex, ey));
+  PXB.disc(ec.x, ec.y, Math.max(.8, 3.5 * S), C(GC.edge), CREATURE); PXB.disc(ec.x, ec.y, Math.max(.6, 2.9 * S), C('#b8a27a'), CREATURE);
+  PXB.poly(ellipsePts(ec.x, ec.y, Math.max(.5, GC.pupil * .7 * S), Math.max(.6, 2.6 * S), 0, 10), C('#140e06'), CREATURE);
+  if (!e.dead && S >= 1) PXB.set(ec.x + 1.1 * S * R.sx, ec.y - 1.2 * S, C('#ffffff'), CREATURE);
+  if (e.lickT > 0) { const k = Math.sin(Math.min(1, (.7 - e.lickT) / .7) * Math.PI), a = T(P(h0.x + 1, h0.y + 1.5)), b = T(P(lerp(h0.x + 1, ex + 2.5, k), lerp(h0.y + 1.5, ey + .5, k))); pxThick(PXB, a, b, Math.max(1, 1.6 * S), '#e07a8a', CREATURE); }
+  live(B => R.legs.filter(l => l.near).forEach(l => legDraw(B, l, GC.base)), GC.edge, GC.edge);
+}
+// 壁虎：玻璃上（俯視，世界座標的鏈）
+function drawPxGeckoTop(e) {
+  const c0 = e.chain; if (!c0) return;
+  const s = e.size, GC = geckoColors(e), k = ppu(), W2 = p => P(AX(p.x), AY(p.y)), D = PXOPT.detail;
+  const tl = e.tailLen ?? 1, nVis = 7 + Math.max(1, Math.round(7 * tl)), c = c0.slice(0, nVis), origN = e.regrown ? 7 + Math.round(7 * .25) : 99;
+  const wAt = i => GK_TOP_W[i] * s * (i >= nVis - 2 ? .7 : 1);
+  live(B => {
+    if (e.feet) e.feet.forEach((f, i) => {                               // 腳＋膨大的趾下瓣
+      const L = GLASS_LEGS[i], j = c0[L.j], a = chainAngle(c0, L.j), sa = a + L.side * Math.PI / 2, hip = P(j.x + Math.cos(sa) * 4 * s, j.y + Math.sin(sa) * 4 * s);
+      const r = ik2(hip, f, 8 * s, 9 * s, (k1, k2) => { const out = p => (p.x - j.x) * Math.cos(sa) + (p.y - j.y) * Math.sin(sa); return out(k1) > out(k2) ? k1 : k2; });
+      pxThick(B, W2(hip), W2(r.knee), Math.max(1, 2.9 * s * k), GC.base); pxThick(B, W2(r.knee), W2(r.foot), Math.max(1, 2.9 * s * k), GC.base);
+      const fa = Math.atan2(r.foot.y - r.knee.y, r.foot.x - r.knee.x);
+      if (s * k >= .35) for (const kk of [-2, -1, 0, 1, 2]) { const a2 = fa + kk * .38, tip = P(r.foot.x + Math.cos(a2) * 4.6 * s, r.foot.y + Math.sin(a2) * 4.6 * s), p0 = W2(r.foot), p1 = W2(tip); B.line(p0.x, p0.y, p1.x, p1.y, C(GC.base), 1); B.disc(p1.x, p1.y, Math.max(.6, 1.3 * s * k), C(GC.base), 1); }
+    });
+    const left = [], right = [];
+    c.forEach((p, i) => { const a = chainAngle(c0, i), w = wAt(i); left.push(P(p.x + Math.cos(a - Math.PI / 2) * w, p.y + Math.sin(a - Math.PI / 2) * w)); right.push(P(p.x + Math.cos(a + Math.PI / 2) * w, p.y + Math.sin(a + Math.PI / 2) * w)); });
+    const a0 = e.ang, tip = c[c.length - 1], tipA = chainAngle(c0, c.length - 1);
+    const snout = P(c[0].x + Math.cos(a0) * 10 * s, c[0].y + Math.sin(a0) * 10 * s), tailTip = P(tip.x - Math.cos(tipA) * 4 * s, tip.y - Math.sin(tipA) * 4 * s);
+    B.poly(chaikin([snout, ...right, tailTip, ...left.reverse()], true, 2).map(W2), GC.base);
+    if (s * k >= .4) for (let i = 3; i < Math.min(10, nVis); i += 2) {    // 深色波浪橫帶
+      const a = chainAngle(c0, i), w = wAt(i) * .75;
+      B.path(chaikin([P(c[i].x + Math.cos(a - Math.PI / 2) * w, c[i].y + Math.sin(a - Math.PI / 2) * w), P(c[i].x - Math.cos(a) * 1.5 * s, c[i].y - Math.sin(a) * 1.5 * s), P(c[i].x + Math.cos(a + Math.PI / 2) * w, c[i].y + Math.sin(a + Math.PI / 2) * w)], false, 1).map(W2), (x, y) => B.tag[y * B.w + x] === 1 ? C(mixColor(GC.base, GC.edge, .6)) : 0);
+    }
+    for (let i = 7; i < nVis - 1; i++) {                                 // 尾巴兩側的刺狀疣鱗
+      if (i >= origN) continue;
+      const a = chainAngle(c0, i), w = wAt(i);
+      for (const sd of [-1, 1]) { const sa = a + sd * Math.PI / 2, b = P(c[i].x + Math.cos(sa) * w, c[i].y + Math.sin(sa) * w); B.poly([P(b.x + Math.cos(a) * 1.2 * s, b.y + Math.sin(a) * 1.2 * s), P(b.x + Math.cos(sa) * 1.6 * s - Math.cos(a) * s, b.y + Math.sin(sa) * 1.6 * s - Math.sin(a) * s), P(b.x - Math.cos(a) * 1.4 * s, b.y - Math.sin(a) * 1.4 * s)].map(W2), GC.edge); }
+    }
+    if (D && s * k >= .5) B.rim(.25, .15);
+  }, GC.edge, GC.edge);
+  for (const sd of [-1, 1]) {                                            // 眼睛凸在兩側
+    const ea = e.ang + sd * 1.1, ep = W2(P(c[0].x + Math.cos(ea) * 4.6 * s, c[0].y + Math.sin(ea) * 4.6 * s));
+    PXB.disc(ep.x, ep.y, Math.max(.7, 2.5 * s * k), C('#b8a27a'), CREATURE); PXB.disc(ep.x, ep.y, Math.max(.5, 1.2 * s * k), C('#140e06'), CREATURE);
+  }
+  if (e.mouth) { const sn = W2(P(c[0].x + Math.cos(e.ang) * 10 * s, c[0].y + Math.sin(e.ang) * 10 * s)); PXB.disc(sn.x, sn.y, Math.max(.7, 2.5 * s * k), C('#9b3d43'), CREATURE); }
+}
+function drawPxTailBits() {                                              // 斷掉的尾巴：扭動、慢慢停下來
+  for (const b of world.tailBits) {
+    if (b.t > 7 && ((b.t * 6) | 0) % 2) continue;
+    const wig = Math.max(0, 1 - b.t / 7), pts = [];
+    for (let i = 0; i <= 8; i++) {
+      const f = i / 8, a = b.ang + Math.sin(b.t * 14 * wig + b.seed - f * 4) * .6 * wig * f;
+      pts.push(P(AX(b.x + Math.cos(b.ang) * b.len * f + Math.cos(a + Math.PI / 2) * Math.sin(b.t * 12 + f * 5) * 4 * wig), AY(b.y + Math.sin(b.ang) * b.len * f + Math.sin(a + Math.PI / 2) * Math.sin(b.t * 12 + f * 5) * 4 * wig)));
+    }
+    for (let i = 0; i < 8; i++) pxThick(PXB, pts[i], pts[i + 1], Math.max(1, (5 - i * .5) * ppu()), '#b8a27a', CREATURE);
+  }
+}
+
+// 蚊子、孑孓、蟋蟀、果蠅（小，直接畫）
+function drawPxMosquitoAt(x, y, dir, phase, sc = 1) {
+  const S = ppu() * sc * PXOPT.cscale, T = mapper(x, y, S, dir, 1), dk = C('#2a2a2e');
+  if (S >= .5) for (const [a, b] of [[-5, -10], [0, -4], [3, 7]]) { const p = T(P(a, 1)), q = T(P(b, 11)); PXB.line(p.x, p.y, q.x, q.y, dk, CREATURE); }
+  const flap = Math.abs(Math.sin(phase * 60));
+  PXB.poly(ellipsePts(-2, -4 - 4 * flap, 2.6, 6 * flap + 1.5, -.3, 8).map(T), C('#d8ecff'), CREATURE);
+  pxThick(PXB, T(P(-11, 2.5)), T(P(0, 0)), Math.max(1, 2.6 * S), dk, CREATURE);
+  const h = T(P(3, -.5)); PXB.disc(h.x, h.y, Math.max(.7, 2.4 * S), dk, CREATURE);
+  if (S >= .5) { const p = T(P(6.5, .5)), q = T(P(11, 3)); PXB.line(p.x, p.y, q.x, q.y, dk, CREATURE); }
+}
+function drawPxLarva(e) {
+  const S = ppu() * e.size * PXOPT.cscale, T = mapper(e.x, e.y, S, 1, 1);
+  if (e.stage === 'egg') { PXB.poly(ellipsePts(0, 0, 7, 2.6, 0, 12).map(T), C('#3b3226'), CREATURE); if (S >= .8) for (let i = -2; i <= 2; i++) { const p = T(P(i * 2.6, -.6)); PXB.set(p.x, p.y, C('#6a5a44'), CREATURE); } return; }
+  if (e.stage === 'pupa') {
+    const tumble = e.dive > 0 ? e.phase : 0, Tp = mapper(e.x, e.y, S, 1, 1, tumble, 0, 2);
+    PXB.poly(chaikin([P(-4, -4), P(4, -5), P(6, 1), P(2, 6), P(-1, 9), P(-2, 5), P(-5, 1)], true, 2).map(Tp), C('#4a3b2a'), CREATURE);
+    for (const [a, b] of [[P(-2, -4), P(-3, -7)], [P(2, -4), P(3, -7)]]) { const p = Tp(a), q = Tp(b); PXB.line(p.x, p.y, q.x, q.y, C('#4a3b2a'), CREATURE); }
+    return;
+  }
+  const pts = [P(0, -7)]; for (let i = 1; i <= 6; i++) pts.push(P(Math.sin(e.phase - i * .7) * (e.dive > 0 ? 3 : 1.2) * (i / 6), -7 + i * 2.6));
+  const a = T(P(0, -7)), b = T(P(0, -10)); PXB.line(a.x, a.y, b.x, b.y, C('#4a3b2a'), CREATURE);   // 呼吸管
+  for (let i = 0; i < 6; i++) pxThick(PXB, T(pts[i]), T(pts[i + 1]), Math.max(1, (i < 3 ? 2.6 : 3.6) * S), '#5a4a36', CREATURE);
+  const hd = T(P(pts[6].x, pts[6].y + 1.6)); PXB.disc(hd.x, hd.y, Math.max(.6, 2.2 * S), C('#3b3226'), CREATURE);
+}
+function drawPxCricket(e) {
+  const air = e.mode === 'hop' || e.mode === 'fall', swim = e.mode === 'swim', S = ppu() * e.size * 1.2 * PXOPT.cscale;
+  const T = mapper(e.x, e.y + (swim ? 2 * e.size : 0), S, e.dir, 1, swim ? Math.sin(e.phase) * .15 : 0), leg = '#5a3b1e';
+  live(B => {
+    const knee = air ? P(-12, -6) : P(-8, -10), foot = air ? P(-18, 1) : P(-13, 0);
+    pxThick(B, T(P(-2, -4)), T(knee), Math.max(1, 2.2 * S), leg); pxThick(B, T(knee), T(foot), Math.max(1, 1.4 * S), leg);
+    for (const [a, b] of [[P(3, -3), P(5, 0)], [P(6, -3), P(9, 0)]]) { const p = T(a), q = T(b); B.line(p.x, p.y, q.x, q.y, C(leg), 1); }
+    B.poly(ellipsePts(-4, -4, 7.5, 3.4, -.08, 12).map(T), (x, y) => C(y < T(P(-4, -5)).y ? '#7e5430' : '#6b4423'));
+    B.poly(ellipsePts(4, -4.6, 3.6, 3, 0, 10).map(T), '#4f311a');
+    const h = T(P(8.2, -4.4)); B.disc(h.x, h.y, Math.max(.7, 2.6 * S), C('#3e2614'));
+  }, '#2a1808', '#2a1808');
+  if (S >= .5) { const tw = Math.sin(e.phase * .6) * 1.5; PXB.path([P(9.5, -5.5), P(14, -10 + tw), P(19, -9 + tw)].map(T), C('#3e2614'), CREATURE); PXB.path([P(9.5, -5), P(15, -8 - tw), P(20, -5 - tw)].map(T), C('#3e2614'), CREATURE); }
+}
+function drawPxFly(e) {
+  const S = ppu() * PXOPT.cscale, T = mapper(e.x, e.y, S, e.dir, 1), flap = Math.abs(Math.sin((e.phase + e.id) * 70));
+  PXB.poly(ellipsePts(-1, -2 - 2 * flap, 1.6, 3 * flap + .8, -.3, 8).map(T), C('#eef6ff'), CREATURE);
+  const b = T(P(-1, 0)); PXB.disc(b.x, b.y, Math.max(.6, 1.6 * S), C('#a07a3e'), CREATURE);
+  const h = T(P(1.8, -.2)); PXB.set(h.x, h.y, C('#c0392b'), CREATURE);
+}
+
 // 斑馬螺
 function drawPxSnail(e) {
   const s = ppu() * e.size * PXOPT.cscale, T = mapper(e.x, e.y, s, e.dir, 1), und = Math.sin(e.phase * 3) * .8;
@@ -1108,7 +1319,12 @@ function drawPxNest(e) {
       else { const L = (1.2 + g * 1.4) * s, an = i; PXB.line(ax - Math.cos(an) * L, ay - Math.sin(an) * L * .6, ax + Math.cos(an) * L, ay + Math.sin(an) * L * .6, C('#3a3228')); PXB.set(ax + Math.cos(an) * L, ay + Math.sin(an) * L * .6, C('#141010')); }
     }
     else if (e.medium === 'glass') { PXB.disc(x, y, Math.max(.6, 2.4 * s), C('#f2e6c8')); if (s >= 1 && e.t > e.hatch * .6) PXB.set(x, y, C('#3a3020')); }
-    else PXB.disc(x, y, Math.max(.6, 3 * s), C('#d8ecd8'));
+    else if (e.medium === 'land') {                                     // 烏龜蛋、壁虎蛋
+      const big = e.of === 'turtle', rx = big ? 6.5 : 3.6, ry = big ? 5 : 3, ex = AX(e.x + (i - (n - 1) / 2) * rx * 1.8), ey = AY(e.y - ry * .6);
+      PXB.poly(ellipsePts(ex, ey, Math.max(.8, rx * s), Math.max(.7, ry * s), 0, 12), C('#b8ad94')); PXB.poly(ellipsePts(ex, ey, Math.max(.6, rx * s - 1), Math.max(.5, ry * s - 1), 0, 12), C('#f4efe2'));
+      if (s >= 1) PXB.set(ex - rx * s * .4, ey - ry * s * .4, C('#ffffff'));
+    }
+    else { PXB.disc(x, y, Math.max(.7, 4.2 * s), C('#cfe6d4')); if (s >= .7) PXB.disc(x + .4 * s, y + .3 * s, Math.max(.5, 1.6 * s), C(e.t > e.hatch * .6 ? '#3a3a24' : '#2a2a20')); }   // 青蛙卵：透明果凍＋黑點
   }
 }
 function drawPxParticles() {
@@ -1244,7 +1460,7 @@ function drawPxBranch(B, d) {
 // 一幀
 // ---------------------------------------------------------------------
 // 還沒有像素版的生物、造景：先用一般版的繪圖畫在同樣解析度的畫布上，再貼進像素格子（過渡期用，補完一種就少一種）
-const PX_NATIVE_KINDS = { fish: 1, shrimp: 1, snail: 1, nest: 1, bird: 1, axolotl: 1, crab: 1, turtle: 1 };
+const PX_NATIVE_KINDS = { fish: 1, shrimp: 1, snail: 1, nest: 1, bird: 1, axolotl: 1, crab: 1, turtle: 1, frog: 1, tadpole: 1, gecko: 1, mosquito: 1, larva: 1, cricket: 1, fly: 1 };
 const PX_NATIVE_DECOR = { rock: 1, boulder: 1, wood: 1, branch: 1, bubbler: 1, filter: 1, plant: 1, floater: 1, mound: 1, mudflat: 1 };
 let PX_VC = null;
 function vectorInto(B, draw, tag) {
@@ -1260,7 +1476,7 @@ function vectorInto(B, draw, tag) {
     d[i] = a > 220 || !d[i] ? col : mixU(d[i], col, a / 255); B.tag[i] = tag;
   }
 }
-const PX_ORDER = { crab: 0, shrimp: 0, snail: 0, nest: 0, larva: 0, tadpole: 1, axolotl: 1, fish: 2, turtle: 3, bird: 4 };
+const PX_ORDER = { crab: 0, shrimp: 0, snail: 0, nest: 0, larva: 0, tadpole: 1, axolotl: 1, fish: 2, cricket: 3, turtle: 3, frog: 4, gecko: 5, mosquito: 6, fly: 6, bird: 7 };
 function renderPixel() {
   const z = PXCAM.z, cx = Math.round(PXCAM.x * ppu()), cy = Math.round(PXCAM.y * ppu());
   PXCAM.x = cx / ppu(); PXCAM.y = cy / ppu();                            // 鏡頭對齊格子，畫面才不會抖
@@ -1269,6 +1485,7 @@ function renderPixel() {
   layerFill(LAYER.back, view + '|' + wkey, drawPxBack, true);
   PXB.tag.fill(0);
   if (!PXOPT.hybrid && PXOPT.light === 'day') drawPxShafts();          // 混合模式改用平滑的光束（畫在放大之後）
+  for (const e of world.ents) if (e.kind === 'gecko' && e.surface === 'glass') drawPxGeckoTop(e);   // 背面玻璃上的壁虎（在造景後面）
   for (const d of world.decor) if (d.type === 'plant') drawPxPlant(d);
   layerFill(LAYER.decor, view + '|' + wkey + '|' + world.decor.map(d => [d.type, d.x | 0, d.y | 0, d.w | 0, d.h | 0, (d.rot || 0).toFixed(2)].join(':')).join(';'), B => {
     const fb = world.decor.filter(d => !PX_NATIVE_DECOR[d.type]);
@@ -1298,7 +1515,15 @@ function renderPixel() {
     else if (e.kind === 'axolotl') drawPxAxolotl(e);
     else if (e.kind === 'crab') drawPxCrab(e);
     else if (e.kind === 'turtle') drawPxTurtle(e);
+    else if (e.kind === 'frog') drawPxFrog(e);
+    else if (e.kind === 'tadpole') drawPxTadpole(e);
+    else if (e.kind === 'gecko' && e.surface !== 'glass') drawPxGeckoSide(e);
+    else if (e.kind === 'mosquito') drawPxMosquitoAt(e.x, e.y, e.dir, e.phase + e.id, e.dead ? .9 : 1);
+    else if (e.kind === 'larva') drawPxLarva(e);
+    else if (e.kind === 'cricket') drawPxCricket(e);
+    else if (e.kind === 'fly') drawPxFly(e);
   }
+  drawPxTailBits();
   const fb = list.filter(e => !PX_NATIVE_KINDS[e.kind]);
   if (fb.length) vectorInto(PXB, () => { for (const e of fb) DRAW[e.kind](e); }, CREATURE);   // 還沒有像素版的生物（暫代）
   layerFill(LAYER.front, view, drawPxFront);
