@@ -1008,6 +1008,76 @@ function drawPxCrab(e) {
   if (s >= .5) for (const [col, list] of tips) for (const [a0, b0] of list) { const a = T(a0), c = T(b0); PXB.line(a.x, a.y, c.x, c.y, C(col), CREATURE); }   // 螯尖（淺色）
 }
 
+// ---------------------------------------------------------------------
+// 麝香龜（和一般版共用 turtleRig 與背甲的幾何）
+// 背甲：每片鱗甲由外往內三層（暗 → 亮，盾心最亮）＋縫線；頭上兩條黃色條紋；近側的腳另外一層加外框
+// ---------------------------------------------------------------------
+function drawPxTurtle(e) {
+  const R = turtleRig(e), juv = R.juvenile, D = PXOPT.detail, S = ppu() * e.size * PXOPT.cscale;
+  const skin = juv ? '#4f4d40' : '#5d5b4a', dark = '#34322a', far = '#46443a', skinHi = juv ? '#646150' : '#77745c';
+  const sA = juv ? '#3a3628' : '#4a4431', sB = juv ? '#4c4634' : '#625a41', sC = juv ? '#5a5240' : '#7a6f4f', sD = juv ? '#6a6250' : '#8e8360';
+  const T = mapper(e.x, e.y, S, R.sx, 1, R.pitch, 0, 0), Tb = p => T(P(p.x, p.y - R.bob));   // Tb：背甲（跟著走路上下晃）
+  const leg = (B, L, col) => {
+    pxThick(B, T(L.hip), T(L.knee), Math.max(1, (L.front ? 5 : 6.2) * S), col); pxThick(B, T(L.knee), T(L.foot), Math.max(1, (L.front ? 4.2 : 4.8) * S), col);
+    const a = L.footAng, c = Math.cos(a), sn = Math.sin(a), nx = -sn, ny = c, len = L.front ? 5 : 6, wide = R.swim && L.spread ? 3.2 : 2, f = L.foot, tip = P(f.x + c * len, f.y + sn * len);
+    B.poly([P(f.x + nx * 1.6, f.y + ny * 1.6), P(tip.x + nx * wide, tip.y + ny * wide), P(tip.x - nx * wide, tip.y - ny * wide), P(f.x - nx * 1.6, f.y - ny * 1.6)].map(T), col);
+    return { tip, c, sn, nx, ny, wide };
+  };
+  const claws = (L, ft) => { if (S < .7) return; for (let i = -1.5; i <= 1.5; i += 1) { const b = P(ft.tip.x + ft.nx * ft.wide * i / 1.6, ft.tip.y + ft.ny * ft.wide * i / 1.6), a = T(b), q = T(P(b.x + ft.c * 2.2 + (R.swim ? 0 : .4), b.y + ft.sn * 2.2 + (R.swim ? 0 : 1))); PXB.line(a.x, a.y, q.x, q.y, C('#262219'), CREATURE); } };
+  const farFeet = []; let headT = null;
+  live(B => {
+    for (const L of R.legs.filter(l => !l.near)) farFeet.push([L, leg(B, L, far)]);
+    const tw = Math.sin(world.t * 2 + e.id) * .8;
+    B.poly([P(-34, -12.5 - R.bob), P(-45 + R.tuck * 6, -9 + tw), P(-34, -8.5 - R.bob)].map(T), skin);   // 尾巴
+    const base = P(31, -15.5 - R.bob), Ln = 4 + R.ext * 13;                    // 脖子和頭
+    const joint = P(base.x + Ln, base.y - 1 - R.ext * 2 + Math.sin(world.t * 1.3 + e.id) * .5 * R.ext), mid = P((base.x + joint.x) / 2, (base.y + joint.y) / 2 + 1.5);
+    pxThick(B, T(base), T(mid), Math.max(1, 9 * S), skin); pxThick(B, T(mid), T(joint), Math.max(1, 9 * S), skin);
+    const ch = Math.cos(R.headPitch), sh = Math.sin(R.headPitch), H = p => T(P(joint.x + p.x * ch - p.y * sh, joint.y + p.x * sh + p.y * ch));
+    const hy = H(P(8, 0)).y;
+    B.poly(TURTLE_HEAD.map(H), (x, y) => C(y < hy - 2 * S ? '#4e4c3e' : y < hy + 1.5 * S ? '#625f4c' : skinHi));
+    headT = H;
+    const bridge = [...TURTLE_GEO.span(x => shellBase(x) - .5, -12, 14, 6), ...TURTLE_GEO.span(x => shellBase(x) + 3.2, 14, -12, 6)];
+    B.poly(bridge.map(T), '#b39a5c');                                       // 甲橋
+    B.poly(TURTLE_GEO.outline.map(Tb), sA);                                  // 背甲
+    for (const sc of TURTLE_GEO.vertebrals) { const c = TURTLE_GEO.center(sc); B.poly(inset(sc, c, .6).map(Tb), sB); }
+    for (const sc of TURTLE_GEO.costals) {
+      const c = TURTLE_GEO.center(sc);
+      B.poly(inset(sc, c, .8).map(Tb), sB); B.poly(inset(sc, c, .5).map(Tb), sC);
+      if (S >= 1.2) B.poly(inset(sc, c, .25).map(Tb), sD);                  // 盾心
+    }
+    const mBand = [...TURTLE_GEO.span(shellMarg, -37, 37, 24), ...TURTLE_GEO.span(shellBase, 37, -37, 24)];
+    const yM = Tb(P(0, -12)).y;
+    B.poly(mBand.map(Tb), (x, y) => C(y < yM ? sB : '#2e2a1f'));            // 緣盾（上亮下暗）
+    if (!juv && S >= .6) for (const [x, r] of [[-12, 3.5], [-2, 2.6], [8, 3]]) { const q = Tb(P(x, shellTop(x) + 2.5)); B.disc(q.x, q.y, Math.max(.6, r * S * .7), C('#5a6a34')); }   // 背上一點藻類
+    if (D) B.cleanup();
+    if (D && S >= .5) B.rim(.25, .2);
+    const seam = (pts, col) => B.path(pts.map(Tb), (x, y) => B.tag[y * B.w + x] === 1 ? C(col) : 0);
+    if (S >= .45) {
+      for (const sc of TURTLE_GEO.vertebrals) seam([...sc, sc[0]], '#221f16');
+      for (const sm of TURTLE_GEO.seams) seam(sm, '#221f16');
+      seam(TURTLE_GEO.span(shellMarg, -37, 37, 24), '#221f16');
+      if (S >= .8) for (const x of TURTLE_GEO.marg.slice(1, -1)) seam([P(x, shellMarg(x)), P(x + (x < 0 ? -.6 : .6), shellBase(x))], '#221f16');
+      if (D && S >= 1.4) for (const sc of TURTLE_GEO.costals) { const c = TURTLE_GEO.center(sc); seam([...inset(sc, c, .8), inset(sc, c, .8)[0]], '#3e3826'); }   // 生長紋
+    }
+    if (juv && S >= .5) seam(TURTLE_GEO.span(x => shellTop(x) + 1.5, -28, 28, 16), '#2a2619');   // 幼體的縱稜
+  }, dark, '#221f16');
+  for (const [L, ft] of farFeet) claws(L, ft);
+  // 頭上的條紋、嘴、眼睛
+  const H = headT;
+  if (H && S >= .4) {
+    const stripe = pts => PXB.path(pts.map(H), C('#e0cd70'), CREATURE);
+    stripe([P(15.6, -2.4), P(12, -3.7), P(8, -4), P(3, -3.5), P(-1, -2.9)]); stripe([P(15.4, .2), P(12, .7), P(8, 1.3), P(4, 2), P(0, 2.7)]);
+    if (S >= .8) PXB.path([P(16, .3), P(12, 1.2), P(7.5, 1.8)].map(H), C('#1e1c16'), CREATURE);
+    const ec = H(P(8.6, -1.6));
+    PXB.disc(ec.x, ec.y, Math.max(.7, 1.8 * S), C('#c9b56a'), CREATURE); PXB.disc(ec.x, ec.y, Math.max(.5, 1.35 * S), C(e.dead ? '#666666' : '#2a2016'), CREATURE);
+    if (!e.dead && S >= 1.2) PXB.set(ec.x + .3 * S * R.sx, ec.y - .5 * S, C('#ffffff'), CREATURE);
+  }
+  // 近側的腳（自己的外框，蓋在殼上也看得清楚）
+  const nearFeet = [];
+  live(B => { for (const L of R.legs.filter(l => l.near)) nearFeet.push([L, leg(B, L, skin)]); if (D && S >= .8) B.rim(.25, .15); }, dark, dark);
+  for (const [L, ft] of nearFeet) claws(L, ft);
+}
+
 // 斑馬螺
 function drawPxSnail(e) {
   const s = ppu() * e.size * PXOPT.cscale, T = mapper(e.x, e.y, s, e.dir, 1), und = Math.sin(e.phase * 3) * .8;
@@ -1174,7 +1244,7 @@ function drawPxBranch(B, d) {
 // 一幀
 // ---------------------------------------------------------------------
 // 還沒有像素版的生物、造景：先用一般版的繪圖畫在同樣解析度的畫布上，再貼進像素格子（過渡期用，補完一種就少一種）
-const PX_NATIVE_KINDS = { fish: 1, shrimp: 1, snail: 1, nest: 1, bird: 1, axolotl: 1, crab: 1 };
+const PX_NATIVE_KINDS = { fish: 1, shrimp: 1, snail: 1, nest: 1, bird: 1, axolotl: 1, crab: 1, turtle: 1 };
 const PX_NATIVE_DECOR = { rock: 1, boulder: 1, wood: 1, branch: 1, bubbler: 1, filter: 1, plant: 1, floater: 1, mound: 1, mudflat: 1 };
 let PX_VC = null;
 function vectorInto(B, draw, tag) {
@@ -1190,7 +1260,7 @@ function vectorInto(B, draw, tag) {
     d[i] = a > 220 || !d[i] ? col : mixU(d[i], col, a / 255); B.tag[i] = tag;
   }
 }
-const PX_ORDER = { crab: 0, shrimp: 0, snail: 0, nest: 0, larva: 0, tadpole: 1, axolotl: 1, fish: 2, bird: 3 };
+const PX_ORDER = { crab: 0, shrimp: 0, snail: 0, nest: 0, larva: 0, tadpole: 1, axolotl: 1, fish: 2, turtle: 3, bird: 4 };
 function renderPixel() {
   const z = PXCAM.z, cx = Math.round(PXCAM.x * ppu()), cy = Math.round(PXCAM.y * ppu());
   PXCAM.x = cx / ppu(); PXCAM.y = cy / ppu();                            // 鏡頭對齊格子，畫面才不會抖
@@ -1227,6 +1297,7 @@ function renderPixel() {
     else if (e.kind === 'bird') drawPxBird(e);
     else if (e.kind === 'axolotl') drawPxAxolotl(e);
     else if (e.kind === 'crab') drawPxCrab(e);
+    else if (e.kind === 'turtle') drawPxTurtle(e);
   }
   const fb = list.filter(e => !PX_NATIVE_KINDS[e.kind]);
   if (fb.length) vectorInto(PXB, () => { for (const e of fb) DRAW[e.kind](e); }, CREATURE);   // 還沒有像素版的生物（暫代）
