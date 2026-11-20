@@ -375,6 +375,33 @@ function vnoise(x, y, sd = 0) {
   return lerp(lerp(a, b, ux), lerp(c, d, ux), uy);
 }
 const fbm = (x, y, sd) => vnoise(x, y, sd) * .65 + vnoise(x * 2.3, y * 2.3, sd + 5) * .35;
+// 土坡、泥灘（逐格上色：離上緣的深度＋不規則的明暗）
+const PX_SOIL = ['#a07a50', '#8a6642', '#745436', '#5e432a', '#4a3420'], PX_GRASS = ['#9cd06a', '#74b04a', '#548a38'];
+const PX_MUD = ['#a89878', '#928264', '#7c6e54', '#665a44', '#504636'];
+function pxEarth(B, d, R, grass) {
+  const ol = decorOutline(d, 48), pts = ol.map(p => P(AX(p.x), AY(p.y))), S = R.map(C), Gr = PX_GRASS.map(C), M = PX_MOSS.map(C), s = ppu(), z = PXCAM.z, wy = world.waterY, r = rng(d.seed);
+  const topW = wx => { const sp = decorSpan(d, clamp(wx, d.x - d.w / 2 + .5, d.x + d.w / 2 - .5)); return sp ? sp.top : d.y; };
+  B.poly(pts, (x, y) => {
+    const wx = PXCAM.x + (x + .5) / s, wyy = PXCAM.y + (y + .5) / s, top = topW(wx), dep = wyy - top;
+    if (grass && top < wy - 2) { const gn = fbm(wx / 3, 1, d.seed); if (dep < 3 + gn * 4) return Gr[clamp(Math.floor(dep / 2.5 + bayer(x, y) * .7), 0, 2)]; }   // 水面上：草
+    if (grass && top >= wy - 2 && dep < 3) return M[clamp(Math.floor(dep / 1.5), 0, 2)];                                                        // 水面下：苔
+    if (!grass && dep < 2.2) return S[top > wy - 22 && top < wy + 2 ? 0 : 1];                                                                     // 泥灘表面（濕的地方比較亮）
+    let v = 1 + Math.min(3, dep / Math.max(30, d.h * .45) * 3) + (fbm(wx / 8, wyy / 5, d.seed) - .5) * 1.3;
+    v += Math.sin(wyy * .09 + fbm(wx / 40, 0, d.seed) * 2.5) * .3;                                                                               // 土層（大致水平）
+    if (z >= 2 && fbm(wx / 1.5, wyy / 1.5, d.seed + 5) > .82) v -= .8;                                                                          // 顆粒
+    return S[clamp(band(v, x, y, .2), 0, 4)];
+  });
+  for (let i = 0; i < d.w / (grass ? 7 : 10); i++) {                       // 小石子／貝殼碎片
+    const x = d.x + (r() - .5) * d.w * .92, sp = decorSpan(d, x); if (!sp) continue;
+    const y = lerp(sp.top + 5, d.y - 3, Math.pow(r(), grass ? 1 : 1.8)), big = r();
+    if (big < .5 && z < 2) continue;
+    B.disc(AX(x), AY(y), Math.max(.6, (1 + big * 1.6) * s), C(grass ? (r() < .5 ? '#9a8566' : '#5a4630') : (r() < .35 ? '#e4dccc' : '#5a4e3c')));
+  }
+  const al = world.water.algae / 100;
+  if (al > .05) for (let i = 0; i + 1 < ol.length - 2; i++) if (ol[i].y > wy + 4) B.line(AX(ol[i].x), AY(ol[i].y), AX(ol[i + 1].x), AY(ol[i + 1].y), C(PXPAL.algae), 1);
+}
+const drawPxMound = (B, d) => pxEarth(B, d, PX_SOIL, true);
+const drawPxMudflat = (B, d) => pxEarth(B, d, PX_MUD, false);
 const PX_ROCK2 = ['#dfe3e3', '#bfc5c6', '#9da4a6', '#7d8487', '#5f6669', '#454b4e'];
 const PX_MOSS = ['#9cc46a', '#74a24c', '#567f3a'];
 const PX_WOOD2 = ['#d2ad7c', '#b08a5c', '#8e6a42', '#6e4f30', '#503820', '#362412'];
@@ -871,6 +898,116 @@ function drawPxAxolotl(e) {
   live(B => { drawLeg(B, legOf(P(11.5, -4.4), true, false), M.body[1]); drawLeg(B, legOf(P(-11.5, -4.6), false, false), M.body[1]); if (D && s >= 1) B.rim(.25, .15); }, M.body[3], M.body[3]);
 }
 
+// ---------------------------------------------------------------------
+// 螃蟹（和一般版同一套局部座標：正面看、甲寬約 64、腳在 y = 0）
+// ---------------------------------------------------------------------
+function pxCrabClaw(B, T, s, sh, pc, fa, sz, gape, M, finger = 1.15) {
+  const d = P(Math.cos(fa), Math.sin(fa)), n0 = P(-d.y, d.x), up = n0.y < 0 ? n0 : P(-n0.x, -n0.y);
+  const wrist = P(pc.x - d.x * sz * .9, pc.y - d.y * sz * .9), elbow = P((sh.x + wrist.x) / 2, Math.max(sh.y, wrist.y) + sz * .25);
+  pxThick(B, T(sh), T(elbow), Math.max(1, sz * .5 * s), M.claw[2]); pxThick(B, T(elbow), T(wrist), Math.max(1, sz * .55 * s), M.claw[1]);
+  const base = P(pc.x + d.x * sz * .6, pc.y + d.y * sz * .6), L = sz * finger, w = sz * .34;
+  const sgn = up.x * d.y - up.y * d.x > 0 ? 1 : -1, tips = [];
+  for (const [rot, side] of [[-sgn * gape * .5, 1], [sgn * gape * .12, -1]]) {   // 上面會動的指節、下面固定的指節
+    const a = fa + rot, dd = P(Math.cos(a), Math.sin(a)), b0 = P(base.x + up.x * w * side * .9, base.y + up.y * w * side * .9);
+    const tip = P(b0.x + dd.x * L, b0.y + dd.y * L), bend = P(up.x * side * w * .35, up.y * side * w * .35);
+    B.poly(chaikin([P(b0.x + up.x * w * side * .55, b0.y + up.y * w * side * .55), P(b0.x + dd.x * L * .55 + bend.x, b0.y + dd.y * L * .55 + bend.y), tip,
+      P(b0.x + dd.x * L * .5 - bend.x * .6, b0.y + dd.y * L * .5 - bend.y * .6), P(b0.x - up.x * w * side * .5, b0.y - up.y * w * side * .5)], true, 1).map(T), M.claw[1]);
+    tips.push([P(b0.x + dd.x * L * .62, b0.y + dd.y * L * .62), tip]);
+  }
+  B.poly(ellipsePts(pc.x, pc.y, sz, sz * .64, fa, 16).map(T), (x, y) => { const c = T(pc); return y < c.y - sz * .2 * s ? M.claw[0] : y > c.y + sz * .3 * s ? M.claw[2] : M.claw[1]; });
+  return tips;
+}
+function drawPxCrab(e) {
+  const sp = SPECIES[e.type], fid = !!sp.fiddler, M = morphList(sp)[e.morph || 0], kw = crabK(e), k = kw * PXOPT.cscale, s = ppu() * k, D = PXOPT.detail;
+  const male = e.sex === 'm' && e.size > e.adult * .6, t = world.t + e.id * 1.7;
+  if (fid && !e.dead) {                                                   // 招潮蟹的洞口和泥球
+    for (const p of e.pel || []) if (p.t < 85 || ((p.t * 6) | 0) % 2) PXB.disc(AX(p.x), AY(p.y - (p.big ? 2.2 : 1.4)), Math.max(.6, (p.big ? 2.4 : 1.5) * ppu() * PXOPT.cscale), C('#9a8a6c'));
+    if (e.burrow) {
+      const b = e.burrow, Tb = mapper(b.x, b.y, s), flooded = b.y > world.waterY - 2;
+      PXB.poly(ellipsePts(0, -.5, 26, 6, 0, 16).map(Tb), C('#6a5c48')); PXB.poly(ellipsePts(0, .3, 17, 3.8, 0, 14).map(Tb), C(flooded ? '#4e4234' : '#140e0a'));
+    }
+  }
+  if (e.mode === 'in' && !e.dead) {                                       // 在洞裡：只探出兩根眼柄
+    if (!e.peek) return;
+    const Tb = mapper(e.x, e.y, s);
+    for (const sd of [-1, 1]) { const a = Tb(P(sd * 3, 1)), b = Tb(P(sd * 5, -14)); PXB.line(a.x, a.y, b.x, b.y, C(M.body[1]), CREATURE); PXB.disc(b.x, b.y - 1.5 * s, Math.max(.6, 1.9 * s), C('#161210'), CREATURE); }
+    return;
+  }
+  const walking = !e.dead && (e.mode === 'walk' || e.mode === 'run');
+  e.hideV = lerp(e.hideV || 0, e.mode === 'hide' ? 1 : 0, .06);
+  e.threatV = lerp(e.threatV || 0, e.mode === 'threat' ? 1 : 0, .14);
+  if (!e.dead && e.mode !== 'fall') { const rr = 24 * kw, gl = groundY(e.x - rr, e.y, 30 * kw + 6), gr = groundY(e.x + rr, e.y, 30 * kw + 6); e.tiltV = lerp(e.tiltV || 0, clamp(Math.atan2(gr - gl, 2 * rr), -.6, .6), .15); }
+  const T = e.dead ? mapper(e.x, e.y - 30 * k, s, 1, -1) : mapper(e.x, e.y, s, 1, 1, e.tiltV || 0, 0, 0);
+  const hv = e.hideV, Wd = fid ? .8 : 1;
+  const b = -15 + hv * 5 + (walking ? Math.abs(Math.sin((e.dist || 0) * .32)) * -.8 : 0) - e.threatV * 3;
+  const rim = fid ? [P(-30, b - 11), P(-15, b - 9.6), P(0, b - 9.2), P(15, b - 9.6), P(30, b - 11)] : [P(-31, b - 10), P(-16, b - 8.4), P(0, b - 8), P(16, b - 8.4), P(31, b - 10)];
+  // 第一層：腳、甲殼
+  live(B => {
+    for (let i = 3; i >= 0; i--) for (const sd of [-1, 1]) {
+      const p = (e.dist || 0) * .32 + (((i % 2) ^ (sd > 0 ? 1 : 0)) ? Math.PI : 0), lift = walking ? Math.max(0, Math.sin(p)) * 3 : 0;
+      const hip = P(sd * (18 + i * 3) * Wd, b - 3 - i * 1.8), foot = P(sd * (33 + i * 10 - hv * 8) * Wd + (walking ? -Math.cos(p) * 3.5 * e.dir : 0), -lift - (e.dead ? 8 + i * 2 : 0));
+      const knee = P(sd * (29 + i * 7.5 - hv * 4) * Wd, b - 13 - i * 2.6 + hv * 4), mid = P(lerp(knee.x, foot.x, .5), lerp(knee.y, foot.y, .5));
+      const col = i >= 2 ? M.leg[1] : M.leg[0], w = Math.max(1, ((fid ? 2.6 : 4) - i * .3) * s);
+      pxThick(B, T(hip), T(knee), w, col); pxThick(B, T(knee), T(mid), Math.max(1, w * .82), col); pxThick(B, T(mid), T(foot), Math.max(1, w * .5), col);
+      if (D && s >= .9) { const kk = T(knee); B.set(kk.x, kk.y - 1, C(M.leg[0]), 1); }
+    }
+    const ol = fid
+      ? chaikin([P(-30, b - 11), P(-27, b - 18), P(-12, b - 21.5), P(12, b - 21.5), P(27, b - 18), P(30, b - 11), P(19, b - 1.5), P(-19, b - 1.5)], true, 2)
+      : chaikin([P(-31, b - 10), P(-28, b - 17), P(-14, b - 22), P(0, b - 23), P(14, b - 22), P(28, b - 17), P(31, b - 10), P(25, b - 1.5), P(10, b), P(-10, b), P(-25, b - 1.5)], true, 2);
+    const yTop = T(P(0, b - 22)).y, yRim = T(P(0, b - 9)).y;
+    B.poly(ol.map(T), (x, y) => { const v = (y - yTop) / Math.max(1, yRim - yTop) * 2.2; return C(M.body[clamp(band(v, x, y, .3), 0, 1)]); });
+    const r0 = chaikin(rim, false, 1);
+    B.poly([...r0, ...(fid ? [P(19, b - 1.5), P(-19, b - 1.5)] : [P(25, b - 1.5), P(10, b), P(-10, b), P(-25, b - 1.5)])].map(T), M.body[2]);   // 前面（比較暗）
+    if (e.preg > 0) { const r = rng(e.id); for (let i = 0; i < 14; i++) { const q = T(P((r() - .5) * 22, b + 1 + r() * 4)); B.disc(q.x, q.y, Math.max(.6, 1.4 * s), C(e.preg > .7 ? M.body[2] : mixColor('#e8902c', '#7a4a20', e.preg)), 1); } }
+    if (D) B.cleanup();
+    if (D && s >= .5) B.rim(.3, .15);
+    const r = rng(e.id + 3);
+    if (fid && M.mottle && s >= .4) for (let i = 0; i < 16; i++) { const q = T(P((r() - .5) * 46, b - 11 - r() * 9)); B.setOn(q.x, q.y, C(mixColor(M.body[1], M.mottle.startsWith('rgba(1') ? '#3a3020' : '#e8f0e0', .45))); }
+    if (!fid && s >= .6) {                                                 // H 形溝紋、顆粒
+      for (const sd of [-1, 1]) B.path(chaikin([P(sd * 10, b - 10.5), P(sd * 7, b - 15.5), P(sd * 4, b - 20)], false, 1).map(T), (x, y) => B.tag[y * B.w + x] === 1 ? C(M.body[2]) : 0);
+      const a = T(P(-7, b - 15.5)), c = T(P(7, b - 15.5)); B.lineOn(a.x, a.y, c.x, c.y, C(M.body[2]), 1);
+      if (s >= 1) for (let i = 0; i < 18; i++) { const x = (r() - .5) * 54, q = T(P(x, b - 11 - r() * (9 - Math.abs(x) * .12))); B.setOn(q.x, q.y, C(mixColor(M.body[0], '#ffffff', .25))); }
+    }
+    B.path(r0.map(T), (x, y) => B.tag[y * B.w + x] === 1 ? C(M.body[3]) : 0);   // 前緣線
+    if (s >= .5) B.poly([P(-6, b - 7.6), P(6, b - 7.6), P(5, b - .9), P(-5, b - .9)].map(T), M.body[1]);   // 口器
+  }, M.body[3], M.body[3]);
+  // 眼睛
+  const eyeUp = e.threatV * 2 - hv * 1.5;
+  for (const sd of [-1, 1]) {
+    if (fid) {
+      const lay = e.mode === 'run' ? 1 : 0, tip = P(sd * lerp(7, 20, lay), b - lerp(29, 12, lay)), a = T(P(sd * 4.5, b - 10)), c = T(tip);
+      pxThick(PXB, a, c, Math.max(1, 1.8 * s), M.body[1], CREATURE); PXB.disc(c.x, c.y - s, Math.max(.7, 2.2 * s), C('#161210'), CREATURE);
+      if (s >= 1.2) PXB.set(c.x - .5 * s, c.y - 2 * s, C('#ffffff'), CREATURE);
+    } else {
+      const a = T(P(sd * 8.6, b - 9.5)), c = T(P(sd * 9.5, b - 13.3 - eyeUp));
+      pxThick(PXB, a, c, Math.max(1, 1.7 * s), M.body[1], CREATURE); PXB.disc(c.x, c.y, Math.max(.7, 2.1 * s), C('#1a1414'), CREATURE);
+      if (s >= 1) PXB.set(c.x - .5 * s, c.y - .7 * s, C('#ffffff'), CREATURE);
+    }
+  }
+  // 第二層：螯（自己的外框，擋在身體前面也看得清楚）
+  const pickOn = e.pick || e.mode === 'eat' || e.scoop, grabK = e.mode === 'grab' ? Math.sin(Math.PI * clamp(e.modeT / .35, 0, 1)) : 0, tips = [];
+  live(B => {
+    for (const sd of [-1, 1]) {
+      const inward = sd > 0 ? Math.PI : 0, alt = (Math.sin(t * (e.scoop ? 4 : 5) + (sd > 0 ? Math.PI : 0)) + 1) / 2;
+      if (fid && male && sd === e.clawSide) {
+        e.waveV = lerp(e.waveV || 0, e.waving > 0 ? (Math.sin((e.wavePh || 0) * 3.6 - 1.2) + 1) / 2 : 0, .25);
+        const w = e.waveV, rest = P(sd * 3, b + 3), upP = P(sd * 34, b - 40), fa0 = sd > 0 ? Math.PI + .1 : -.1, fa1 = sd > 0 ? Math.PI + 1.25 : -1.25;
+        tips.push([M.tip, pxCrabClaw(B, T, s, P(sd * 14, b - 4), P(lerp(rest.x, upP.x, w), lerp(rest.y, upP.y, w)), lerp(fa0, fa1, w), 12.5, .12, M, 1.75)]);
+        continue;
+      }
+      const minor = fid, sz = minor ? 3.6 : 9.5 * (male ? 1.15 : .9) * (sd > 0 && male ? 1.1 : 1);
+      let pc = minor ? P(sd * 8, b + 4.5) : P(sd * 13, b + 6), fa = inward + (sd > 0 ? -.25 : .25), gape = .15;
+      if (pickOn) { const down = minor ? P(sd * 12, -1.6) : P(sd * 13, -3), mouth = minor ? P(sd * 2.5, b - 3.5) : P(sd * 4, b - 3); pc = P(lerp(down.x, mouth.x, alt), lerp(down.y, mouth.y, alt)); fa = inward + (sd > 0 ? .5 : -.5) * (1 - alt); gape = .3 * (1 - alt); }
+      if (!fid && e.threatV > .01) { const raised = P(sd * 30, b - 26), fr = sd > 0 ? 2 * Math.PI - Math.PI * .62 : -Math.PI * .38; pc = P(lerp(pc.x, raised.x, e.threatV), lerp(pc.y, raised.y, e.threatV)); fa = lerp(fa, fr, e.threatV); gape = lerp(gape, .9, e.threatV); }
+      if (grabK > 0 && sd === e.dir) { const reach = P(sd * 38, b + 10); pc = P(lerp(pc.x, reach.x, grabK), lerp(pc.y, reach.y, grabK)); fa = lerp(fa, sd > 0 ? 0 : Math.PI, grabK); gape = .8 * (1 - grabK) + .1; }
+      const MM = minor ? { claw: [M.leg[0], M.leg[1], M.leg[2]], tip: M.tip } : M;
+      tips.push([MM.tip, pxCrabClaw(B, T, s, P(sd * (minor ? 12 : 17), b - 4), pc, fa, sz, gape, MM, minor ? 1 : 1.15)]);
+    }
+    if (D && s >= .8) B.rim(.3, .15);
+  }, M.claw[2], M.claw[2]);
+  if (s >= .5) for (const [col, list] of tips) for (const [a0, b0] of list) { const a = T(a0), c = T(b0); PXB.line(a.x, a.y, c.x, c.y, C(col), CREATURE); }   // 螯尖（淺色）
+}
+
 // 斑馬螺
 function drawPxSnail(e) {
   const s = ppu() * e.size * PXOPT.cscale, T = mapper(e.x, e.y, s, e.dir, 1), und = Math.sin(e.phase * 3) * .8;
@@ -919,9 +1056,10 @@ function drawPxParticles() {
 }
 function drawPxSurface() {                                            // 水面：一條亮線＋波動的亮點
   const wy = world.waterY; if (wy >= TANK.floor) return;
-  const c1 = C('#ffffff'), c2 = C('#d8f2fa');
+  const c1 = C("#ffffff"), c2 = C("#d8f2fa");
   for (let x = AX(TANK.left); x <= AX(TANK.right); x++) {
     const wx = PXCAM.x + x / ppu(), yy = AY(wy + Math.sin(wx * .03 + world.t * 1.8) * 1.6 + Math.sin(wx * .011 - world.t) * 1.2);
+    if (highestTop(wx) < wy - 1) continue;                               // 陸地露出水面的地方不畫
     PXB.set(x, yy, (x + Math.floor(world.t * 6)) % 7 === 0 ? c2 : c1); PXB.set(x, yy + 1, c2);
   }
 }
@@ -1036,8 +1174,8 @@ function drawPxBranch(B, d) {
 // 一幀
 // ---------------------------------------------------------------------
 // 還沒有像素版的生物、造景：先用一般版的繪圖畫在同樣解析度的畫布上，再貼進像素格子（過渡期用，補完一種就少一種）
-const PX_NATIVE_KINDS = { fish: 1, shrimp: 1, snail: 1, nest: 1, bird: 1, axolotl: 1 };
-const PX_NATIVE_DECOR = { rock: 1, boulder: 1, wood: 1, branch: 1, bubbler: 1, filter: 1, plant: 1, floater: 1 };
+const PX_NATIVE_KINDS = { fish: 1, shrimp: 1, snail: 1, nest: 1, bird: 1, axolotl: 1, crab: 1 };
+const PX_NATIVE_DECOR = { rock: 1, boulder: 1, wood: 1, branch: 1, bubbler: 1, filter: 1, plant: 1, floater: 1, mound: 1, mudflat: 1 };
 let PX_VC = null;
 function vectorInto(B, draw, tag) {
   if (!PX_VC || PX_VC.width !== B.w || PX_VC.height !== B.h) { PX_VC = document.createElement('canvas'); PX_VC.width = B.w; PX_VC.height = B.h; PX_VC.c = PX_VC.getContext('2d', { willReadFrequently: true }); }
@@ -1052,7 +1190,7 @@ function vectorInto(B, draw, tag) {
     d[i] = a > 220 || !d[i] ? col : mixU(d[i], col, a / 255); B.tag[i] = tag;
   }
 }
-const PX_ORDER = { shrimp: 0, snail: 0, nest: 0, larva: 0, tadpole: 1, axolotl: 1, fish: 2, bird: 3 };
+const PX_ORDER = { crab: 0, shrimp: 0, snail: 0, nest: 0, larva: 0, tadpole: 1, axolotl: 1, fish: 2, bird: 3 };
 function renderPixel() {
   const z = PXCAM.z, cx = Math.round(PXCAM.x * ppu()), cy = Math.round(PXCAM.y * ppu());
   PXCAM.x = cx / ppu(); PXCAM.y = cy / ppu();                            // 鏡頭對齊格子，畫面才不會抖
@@ -1067,6 +1205,8 @@ function renderPixel() {
     if (fb.length) vectorInto(B, () => { for (const d of fb) drawDecor(d); }, 1);   // 土坡、泥灘、前景草、蕨類（暫代）
     for (const d of world.decor) {
       if (d.type === 'rock' || d.type === 'boulder') { drawPxRock(B, d); }
+      else if (d.type === 'mound') drawPxMound(B, d);
+      else if (d.type === 'mudflat') drawPxMudflat(B, d);
       else if (d.type === 'wood') drawPxWood(B, d);
       else if (d.type === 'branch') drawPxBranch(B, d);
       else if (d.type === 'bubbler') drawPxBubbler(B, d);
@@ -1086,6 +1226,7 @@ function renderPixel() {
     else if (e.kind === 'nest') drawPxNest(e);
     else if (e.kind === 'bird') drawPxBird(e);
     else if (e.kind === 'axolotl') drawPxAxolotl(e);
+    else if (e.kind === 'crab') drawPxCrab(e);
   }
   const fb = list.filter(e => !PX_NATIVE_KINDS[e.kind]);
   if (fb.length) vectorInto(PXB, () => { for (const e of fb) DRAW[e.kind](e); }, CREATURE);   // 還沒有像素版的生物（暫代）
