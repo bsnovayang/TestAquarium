@@ -787,6 +787,90 @@ function drawPxMolts() {
   }
 }
 
+// ---------------------------------------------------------------------
+// 六角恐龍（和一般版同一套局部座標：身長 64、頭在 +x、腳在 y = 0）
+// 半透明的鰭用「往水色靠」的顏色表示；外鰓、近側的腳另外畫成一層，各自有外框
+// ---------------------------------------------------------------------
+function pxThick(B, a, b, w, col, tag = 1) {                          // 有寬度的線段
+  const c = typeof col === 'string' ? C(col) : col;
+  if (w < 1.3) { B.line(a.x, a.y, b.x, b.y, c, tag); return; }
+  const dx = b.x - a.x, dy = b.y - a.y, L = Math.hypot(dx, dy) || 1, nx = -dy / L * w / 2, ny = dx / L * w / 2;
+  B.poly([P(a.x + nx, a.y + ny), P(b.x + nx, b.y + ny), P(b.x - nx, b.y - ny), P(a.x - nx, a.y - ny)], c, tag);
+  B.disc(b.x, b.y, w / 2, c, tag);
+}
+function drawPxAxolotl(e) {
+  const sp = SPECIES[e.type], M = AXO_MORPHS[e.morph || 0], k = e.size * sp.len / 64 * PXOPT.cscale, s = ppu() * k, mode = e.mode, D = PXOPT.detail;
+  const sx = Math.abs(e.sx === undefined ? e.dir : e.sx) < .15 ? .15 * Math.sign(e.sx || e.dir) : (e.sx === undefined ? e.dir : e.sx);
+  const swim = mode === 'swim' || mode === 'gulp' || mode === 'sink';
+  const lp = e.mouthT > 0 ? clamp(1 - e.mouthT / .3, 0, 1) : 0, open = e.mouthT > 0 ? Math.sin(Math.PI * Math.min(1, lp / .7)) : 0;
+  e.flareV = lerp(e.flareV || 0, mode === 'lunge' ? 1 : 0, .3);
+  const T0 = mapper(e.x, e.y, s, sx, e.dead ? -1 : 1, e.tilt || 0, 0, -6), T = e.dead ? (p => T0(P(p.x, p.y + 14))) : T0;
+  const ph = e.phase || 0, wave = x => swim ? Math.sin(ph * 1.6 - (32 - x) * .12) * (32 - x) / 64 * 2.2 : Math.sin(ph * .5 - x * .05) * .3;
+  const fl = Math.sin(e.gill || 0) * .9, flare = -(e.flareV || 0) * .3, step = (e.dist || 0) * .35;
+  const FIN = 4, finCol = mixColor(M.body[1], '#9fd0de', .4), finDk = mixColor(M.body[3], '#6eafc6', .3);
+  const legOf = (hip, front, far) => {
+    let knee, foot;
+    if (swim) { knee = P(hip.x - 3.5, hip.y + 1.6); foot = P(hip.x - 7.5, hip.y + 2.2); }
+    else {
+      const p = step + (front ? 0 : Math.PI) + (far ? Math.PI : 0), lift = Math.max(0, Math.sin(p)) * 1.4;
+      foot = P(hip.x - Math.cos(p) * (mode === 'walk' ? 2.2 : 0) + (front ? 1.5 : -1) - (mode === 'lunge' ? (front ? 1.5 : 2.5) * lp : 0), -lift * (mode === 'walk' ? 1 : 0));
+      knee = P((hip.x + foot.x) / 2 + (front ? -1.6 : 1.6), (hip.y + foot.y) / 2 - .6);
+    }
+    const toes = []; for (let t = 0; t < (front ? 4 : 5); t++) toes.push(P(foot.x + (t - (front ? 1.5 : 2)) * .9 + (swim ? -1.2 : 0), foot.y + (swim ? .4 : .5)));
+    return { hip, knee, foot, toes };
+  };
+  const drawLeg = (B, L, col) => {
+    const w = Math.max(1, 1.9 * s);
+    pxThick(B, T(L.hip), T(L.knee), w, col); pxThick(B, T(L.knee), T(L.foot), w * .8, col);
+    if (s >= .45) for (const q of L.toes) { const a = T(L.foot), b = T(q); B.line(a.x, a.y, b.x, b.y, C(col), 1); }
+  };
+  const gillBase = [P(15, -11.4), P(15.6, -9.6), P(16, -7.6)], gillAng = [-1.85, -2.4, -2.95], gillLen = [9.5, 10.5, 8.5];
+  const drawGill = (B, base, ang, len, flutter, fil, stalkCol, filCol) => {
+    const tip = P(base.x + Math.cos(ang) * len, base.y + Math.sin(ang) * len), mid = P((base.x + tip.x) / 2 - Math.sin(ang) * flutter, (base.y + tip.y) / 2 + Math.cos(ang) * flutter);
+    const st = chaikin([base, mid, tip], false, 2), w = Math.max(1, 1.2 * s);
+    if (s >= .35) for (let i = 1; i <= 6; i++) {                          // 兩側羽毛狀的細絲
+      const t = i / 6.5, p = P(lerp(lerp(base.x, mid.x, t), lerp(mid.x, tip.x, t), t), lerp(lerp(base.y, mid.y, t), lerp(mid.y, tip.y, t), t)), f = fil * (1.15 - t * .55);
+      for (const sd of [1, -1]) { const a = T(p), b = T(P(p.x + Math.cos(ang + sd * 1.05) * f, p.y + Math.sin(ang + sd * 1.05) * f)); if (s >= 1.6) pxThick(B, a, b, Math.max(1, .6 * s), filCol, 4); else B.line(a.x, a.y, b.x, b.y, C(filCol), 4); }
+    }
+    for (let i = 0; i + 1 < st.length; i++) pxThick(B, T(st[i]), T(st[i + 1]), w, stalkCol);
+    const tp = T(tip); B.disc(tp.x, tp.y, Math.max(.6, .7 * s), C(filCol), 4);
+  };
+  // 第一層：遠側的腳和外鰓、鰭、身體
+  live(B => {
+    drawLeg(B, legOf(P(11, -4), true, true), M.body[3]); drawLeg(B, legOf(P(-12, -4.2), false, true), M.body[3]);
+    for (let i = 0; i < 3; i++) drawGill(B, P(gillBase[i].x - .8, gillBase[i].y - .6), gillAng[i] + .12 + fl * .06 + flare, gillLen[i] * .92, fl * .6, 1.5, M.gill[2], mixColor(M.gill[2], M.gill[1], .4));
+    const topLine = [[12, -11], [4, -10.6], [-6, -10.2], [-14, -9.8], [-22, -8.6], [-32, -6.4]].map(([x, y]) => P(x, y + wave(x)));
+    const finTop = [[12, -11.1], [4, -11.6], [-6, -12.2], [-14, -13.2], [-22, -12.4], [-32, -7.2]].map(([x, y]) => P(x, y + wave(x)));
+    const finBot = [[-12, -4], [-18, -2.4], [-26, -3.4], [-32, -5.6]].map(([x, y]) => P(x, y + wave(x)));
+    B.poly(chaikin([...finTop, ...topLine.slice().reverse()], true, 2).map(T), finCol, FIN);
+    B.poly(chaikin([P(-12, -4.6 + wave(-12)), ...finBot, P(-26, -5 + wave(-26)), P(-18, -4.6 + wave(-18))], true, 2).map(T), finCol, FIN);
+    if (D && s >= .6) for (let i = 1; i < 5; i++) { const a = T(topLine[i]), b = T(finTop[i]); B.lineOn(a.x, a.y, b.x, b.y, C(finDk), FIN); }   // 鰭條
+    const top = [[32, -7.2], [30.5, -10.6], [27, -12.6], [21, -13], [16, -12], [12, -11], [4, -10.6], [-6, -10.2], [-14, -9.8], [-22, -8.6], [-32, -6.4]];
+    const bot = [[-32, -5.6], [-22, -5], [-12, -4], [0, -3.2], [10, -3.4], [16, -3.6], [22, -3.2], [27, -3.6], [31, -5.4]];
+    B.poly(chaikin([...top.map(([x, y]) => P(x, y + wave(x))), ...bot.map(([x, y]) => P(x, y + wave(x)))], true, 2).map(T), M.body[0]);
+    B.poly(chaikin([P(-30, -6.3 + wave(-30)), P(-10, -8.6), P(10, -9.6), P(22, -11.6), P(28, -11.2), P(22, -9.4), P(10, -7.8), P(-10, -7), P(-30, -5.8 + wave(-30))], true, 1).map(T), M.body[1]);   // 背部較深
+    if (M.spots) for (let i = 0; i < 14; i++) { const x = 26 - i * 4.2, y = -8 - (i % 3) * 1.1 + wave(x), p = T(P(x, y)); B.disc(p.x, p.y, Math.max(.6, (.8 + (i % 2) * .4) * s), C(M.body[3])); if (i % 3 === 0) { const q = T(P(x + 1.6, y + 1.8)); B.setOn(q.x, q.y, C('#e8c860')); } }
+    if (open > .02) {                                                     // 撲咬：下顎張開、喉嚨鼓起
+      const hinge = P(23.2, -6.6), ang = open * .42, rotP = q => { const dx = q.x - hinge.x, dy = q.y - hinge.y; return P(hinge.x + dx * Math.cos(ang) - dy * Math.sin(ang), hinge.y + dx * Math.sin(ang) + dy * Math.cos(ang)); };
+      const jaw = [P(23.2, -6.4), P(28, -5.9), P(31.6, -5.6), P(31, -4.4), P(27, -3.4), P(22, -3.2)].map(rotP);
+      B.poly([P(23.2, -6.6), P(28, -5.9), P(31.6, -5.6), jaw[2], jaw[1], jaw[0]].map(T), '#5a2a30');
+      B.poly(chaikin([...jaw, P(18, -2.8 + open * 1.6), P(14, -3.2)], true, 1).map(T), M.body[0]);
+    }
+    if (D) B.cleanup();
+    if (D && s >= .5) B.rim(.3, .2);
+    if (D && s >= .7) for (let x = 9; x >= -11; x -= 2.4) B.path([P(x, -9.6 + wave(x)), P(x - .4, -6.6 + wave(x)), P(x, -4 + wave(x))].map(T), (xx, yy) => B.tag[yy * B.w + xx] === 1 ? C(M.body[2]) : 0);   // 肋溝
+  }, M.body[3], M.body[3]);
+  // 嘴、眼睛（外框之後）
+  PXB.path(chaikin([P(31.6, -5.6), P(28, -5.9), P(24.5, -6.4), P(23.4, -7.2)], false, 1).map(T), C(M.body[3]), CREATURE);
+  if (open > .02 && s >= .6) { const a = T(P(23.2, -6.4)), b = T(P(31, -4.6)); PXB.line(a.x, a.y, b.x, b.y, C(M.body[3]), CREATURE); }
+  const ec = T(P(25.6, -9.6));
+  PXB.disc(ec.x, ec.y, Math.max(.7, 1.35 * s), C(M.ring), CREATURE); PXB.disc(ec.x, ec.y, Math.max(.5, 1 * s), C(M.eye), CREATURE);
+  if (s >= 1.4) PXB.set(ec.x - .4 * s, ec.y - .45 * s, C('#ffffff'), CREATURE);
+  // 第二層：近側的外鰓、近側的腳（各自加外框，疊在身體上也看得清楚）
+  live(B => { for (let i = 0; i < 3; i++) drawGill(B, gillBase[i], gillAng[i] + fl * .07 + flare, gillLen[i], fl, 1.7, M.gill[1], M.gill[0]); if (D && s >= 1.2) B.rim(.25, 0, [1, 4]); }, s >= .6 ? M.gill[2] : null, M.gill[2]);
+  live(B => { drawLeg(B, legOf(P(11.5, -4.4), true, false), M.body[1]); drawLeg(B, legOf(P(-11.5, -4.6), false, false), M.body[1]); if (D && s >= 1) B.rim(.25, .15); }, M.body[3], M.body[3]);
+}
+
 // 斑馬螺
 function drawPxSnail(e) {
   const s = ppu() * e.size * PXOPT.cscale, T = mapper(e.x, e.y, s, e.dir, 1), und = Math.sin(e.phase * 3) * .8;
@@ -810,7 +894,13 @@ function drawPxNest(e) {
   const n = Math.max(1, e.count), s = ppu();
   for (let i = 0; i < n; i++) {
     const a = i * 2.39996, r = Math.sqrt(i) * 5.5, x = AX(e.x + Math.cos(a) * r), y = AY(e.y + Math.sin(a) * r);
-    if (e.medium === 'glass') { PXB.disc(x, y, Math.max(.6, 2.4 * s), C('#f2e6c8')); if (s >= 1 && e.t > e.hatch * .6) PXB.set(x, y, C('#3a3020')); }
+    if (e.medium === 'glass' && e.of === 'axolotl') {                  // 六角恐龍的卵：透明膠質（淡色圈）裡一顆深色胚胎，越接近孵化越長
+      const g = clamp(e.t / e.hatch, 0, 1), ax = AX(e.x + Math.cos(a) * r * 1.4), ay = AY(e.y + Math.sin(a) * r * 1.1);
+      PXB.disc(ax, ay, Math.max(.7, 3.6 * s), C('#cfe6e2')); if (s >= .7) PXB.disc(ax, ay, Math.max(.6, 2.9 * s), C('#b8dcd8'));
+      if (g < .5 || s < 1) PXB.disc(ax, ay, Math.max(.5, 1.4 * s), C('#3a3228'));
+      else { const L = (1.2 + g * 1.4) * s, an = i; PXB.line(ax - Math.cos(an) * L, ay - Math.sin(an) * L * .6, ax + Math.cos(an) * L, ay + Math.sin(an) * L * .6, C('#3a3228')); PXB.set(ax + Math.cos(an) * L, ay + Math.sin(an) * L * .6, C('#141010')); }
+    }
+    else if (e.medium === 'glass') { PXB.disc(x, y, Math.max(.6, 2.4 * s), C('#f2e6c8')); if (s >= 1 && e.t > e.hatch * .6) PXB.set(x, y, C('#3a3020')); }
     else PXB.disc(x, y, Math.max(.6, 3 * s), C('#d8ecd8'));
   }
 }
@@ -946,7 +1036,7 @@ function drawPxBranch(B, d) {
 // 一幀
 // ---------------------------------------------------------------------
 // 還沒有像素版的生物、造景：先用一般版的繪圖畫在同樣解析度的畫布上，再貼進像素格子（過渡期用，補完一種就少一種）
-const PX_NATIVE_KINDS = { fish: 1, shrimp: 1, snail: 1, nest: 1, bird: 1 };
+const PX_NATIVE_KINDS = { fish: 1, shrimp: 1, snail: 1, nest: 1, bird: 1, axolotl: 1 };
 const PX_NATIVE_DECOR = { rock: 1, boulder: 1, wood: 1, branch: 1, bubbler: 1, filter: 1, plant: 1, floater: 1 };
 let PX_VC = null;
 function vectorInto(B, draw, tag) {
@@ -962,7 +1052,7 @@ function vectorInto(B, draw, tag) {
     d[i] = a > 220 || !d[i] ? col : mixU(d[i], col, a / 255); B.tag[i] = tag;
   }
 }
-const PX_ORDER = { shrimp: 0, snail: 0, nest: 0, larva: 0, tadpole: 1, fish: 2, bird: 3 };
+const PX_ORDER = { shrimp: 0, snail: 0, nest: 0, larva: 0, tadpole: 1, axolotl: 1, fish: 2, bird: 3 };
 function renderPixel() {
   const z = PXCAM.z, cx = Math.round(PXCAM.x * ppu()), cy = Math.round(PXCAM.y * ppu());
   PXCAM.x = cx / ppu(); PXCAM.y = cy / ppu();                            // 鏡頭對齊格子，畫面才不會抖
@@ -995,6 +1085,7 @@ function renderPixel() {
     else if (e.kind === 'snail') drawPxSnail(e);
     else if (e.kind === 'nest') drawPxNest(e);
     else if (e.kind === 'bird') drawPxBird(e);
+    else if (e.kind === 'axolotl') drawPxAxolotl(e);
   }
   const fb = list.filter(e => !PX_NATIVE_KINDS[e.kind]);
   if (fb.length) vectorInto(PXB, () => { for (const e of fb) DRAW[e.kind](e); }, CREATURE);   // 還沒有像素版的生物（暫代）
