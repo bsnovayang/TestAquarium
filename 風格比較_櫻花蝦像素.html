@@ -163,7 +163,7 @@ function shrimpRig(st) {
       foot = P(root.x + 1.5 + i * .3, -2.5 + i * .2);                   // 彈尾時腳收起來
     } else {
       const ph = st.walk + i * 2.2, lift = Math.max(0, Math.sin(ph)) * 1.4;
-      foot = P(root.x + 2.2 - i * .5 + Math.cos(ph) * (st.act === 'walk' ? 1.6 : 0), -lift * (st.act === 'walk' ? 1 : 0));
+      foot = P(root.x + 2.2 - i * .5 - Math.cos(ph) * (st.act === 'walk' ? 1.6 : 0), -lift * (st.act === 'walk' ? 1 : 0));
     }
     // 兩節腳：膝蓋往上彎（簡單 IK）
     const dx = foot.x - root.x, dy = foot.y - root.y, d = Math.min(Math.hypot(dx, dy), L1 + L2 - .01);

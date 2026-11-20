@@ -53,6 +53,20 @@ const PRESETS = [
     },
   },
   {
+    id: 'axolotl', name: '六角恐龍缸', desc: '乾淨的冷水缸，看六角恐龍在底部散步、擺動外鰓、伏擊吸食',
+    tank: 'standard', level: .82, mosq: 'off', icons: ['axolotl', 'cherry', 'nerite'],
+    build(B) {
+      B.decor('rock', 260, B.floor + 8, { w: 140, h: 70 });
+      B.decor('wood', 820, B.floor - 24, { rot: .1, w: 280 });
+      for (const [x, h] of [[120, 220], [190, 170], [1020, 240], [1100, 200], [1170, 260]]) B.decor('plant', x, B.floor, { h });
+      B.decor('floater', 420, B.waterY); B.decor('floater', 980, B.waterY);
+      B.decor('filter', 1215, B.waterY + 40);
+      B.ent('axolotl', 480, B.floor - 20, { morph: 0 }); B.ent('axolotl', 760, B.floor - 20, { morph: 2 });
+      B.ent('nerite', 300, B.floor - 70); B.ent('nerite', 900, B.floor - 30);
+      for (let i = 0; i < 6; i++) B.ent('cherry', B.rx(500, 1000), B.floor - 30, { sex: i < 2 ? 'm' : 'f' });
+    },
+  },
+  {
     id: 'kingfisher', name: '溪邊翠鳥缸', desc: '低水位的溪邊造景，翠鳥停在石頭和沉木上，看準了俯衝抓魚',
     tank: 'wide', level: .5, mosq: 'off', icons: ['kingfisher', 'guppy', 'cherry'],
     build(B) {
@@ -174,7 +188,7 @@ function stockingDensity() {
   for (const e of world.ents) {
     if (e.dead) continue;
     const len = SPECIES[e.type].len * e.size / PX_PER_CM;
-    if (e.kind === 'fish' || e.kind === 'turtle' || e.kind === 'whale') cm += len;
+    if (e.kind === 'fish' || e.kind === 'turtle' || e.kind === 'whale' || e.kind === 'axolotl') cm += len;
     else if (e.kind === 'frog' || e.kind === 'tadpole') cm += len * .5;
   }
   const r = cm / liters;

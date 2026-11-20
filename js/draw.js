@@ -4,7 +4,7 @@
 // =====================================================================
 
 const DRAW = { shrimp: drawShrimp, snail: drawSnail, fish: drawFish, turtle: drawTurtle, frog: drawFrog, gecko: drawGecko, mosquito: drawMosquito, larva: drawLarva,
-               tadpole: drawTadpole, whale: drawWhale, nest: drawNest, cricket: drawCricket, fly: drawFly, bird: drawBird };
+               tadpole: drawTadpole, whale: drawWhale, nest: drawNest, cricket: drawCricket, fly: drawFly, bird: drawBird, axolotl: drawAxolotl };
 
 // ---------------------------------------------------------------------
 // 場景
@@ -1057,6 +1057,13 @@ function drawNest(e) {
       G.save(); G.alpha(.5); G.circle(x, y, 4.2, '#d8ecd8'); G.restore();
       G.circle(x, y, 1.6, '#1d2414');
     }
+  } else if (e.medium === 'glass' && e.of === 'axolotl') {      // 六角恐龍的卵：透明的膠質包著深色的胚胎
+    for (let i = 0; i < n; i++) {
+      const a = i * 2.39996, r = Math.sqrt(i) * 7.5, x = Math.cos(a) * r, y = Math.sin(a) * r * .8;
+      G.save(); G.alpha(.4); G.circle(x, y, 3.6, '#e8f4f0', 'rgba(140,170,160,.7)', .5); G.restore();
+      const g = clamp(e.t / e.hatch, 0, 1);                              // 越接近孵化，胚胎越長
+      if (g < .5) G.circle(x, y, 1.4, '#3a3228'); else G.poly(ellipsePts(x, y, 1.2 + g * 1.4, 1, i, 8), '#3a3228');
+    }
   } else if (e.medium === 'glass') {                            // 鼠魚的卵：一顆顆黏在玻璃上，半透明米色
     for (let i = 0; i < n; i++) {
       const a = i * 2.39996, r = Math.sqrt(i) * 5.5, x = Math.cos(a) * r, y = Math.sin(a) * r;
@@ -1138,6 +1145,86 @@ function drawBird(e) {
   G.restore();
   // 近側的翅膀（飛行時）
   if (flying) { G.save(); G.tf(2, -25, -.6 - flap * 1.1); G.poly(chaikin(wingPts, true, 1), KF.wing, 'rgba(10,30,50,.45)', .5); for (let i = 0; i < 4; i++) G.circle(-8 - i * 5, -2, .55, KF.spot); G.restore(); }
+  G.restore();
+}
+
+// ---------------------------------------------------------------------
+// 六角恐龍（局部座標：身長 64，頭在 +x，腳在 y = 0）
+// 寬扁的頭、往上翹的嘴（像在笑）、小眼睛；頭兩側各 3 根羽毛狀外鰓；
+// 背鰭從頭後一路到尾尖、腹側的鰭從後腳到尾尖；身體兩側一圈圈肋溝；前腳 4 趾、後腳 5 趾
+// ---------------------------------------------------------------------
+function axoGill(base, ang, len, col, dk, flutter, filaments) {         // 一根外鰓：鰓柄＋兩側羽毛狀的細絲
+  const tip = P(base.x + Math.cos(ang) * len, base.y + Math.sin(ang) * len), mid = P((base.x + tip.x) / 2 - Math.sin(ang) * flutter, (base.y + tip.y) / 2 + Math.cos(ang) * flutter);
+  G.line(chaikin([base, mid, tip], false, 2), 1.1, dk);                 // 鰓柄
+  for (let i = 1; i <= 6; i++) {                                         // 兩側的細絲（羽毛狀），越往尖端越短
+    const t = i / 6.5, p = P(lerp(lerp(base.x, mid.x, t), lerp(mid.x, tip.x, t), t), lerp(lerp(base.y, mid.y, t), lerp(mid.y, tip.y, t), t));
+    const a = ang, f = filaments * (1.15 - t * .55);
+    for (const sd of [1, -1]) G.line([p, P(p.x + Math.cos(a + sd * 1.05) * f, p.y + Math.sin(a + sd * 1.05) * f)], .55, col);
+  }
+  G.circle(tip.x, tip.y, .55, col);
+}
+function drawAxolotl(e) {
+  const sp = SPECIES[e.type], M = AXO_MORPHS[e.morph || 0], k = e.size * sp.len / 64, mode = e.mode;
+  const sx = Math.abs(e.sx === undefined ? e.dir : e.sx) < .15 ? .15 * Math.sign(e.sx || e.dir) : (e.sx === undefined ? e.dir : e.sx);
+  const swim = mode === 'swim' || mode === 'gulp' || mode === 'sink';   // 撲咬時腳還踩在地上（不要突然收起來）
+  const lp = e.mouthT > 0 ? clamp(1 - e.mouthT / .3, 0, 1) : 0;          // 撲咬進度 0 → 1
+  const open = e.mouthT > 0 ? Math.sin(Math.PI * Math.min(1, lp / .7)) : 0;   // 嘴：快速張開再閉上
+  e.flareV = lerp(e.flareV || 0, mode === 'lunge' ? 1 : 0, .3);
+  G.save(); G.tf(e.x, e.y, 0, sx * k, (e.dead ? -1 : 1) * k);
+  if (e.dead) { G.alpha(.65); G.tf(0, 14); }
+  G.tf(0, -6, e.tilt || 0); G.tf(0, 6);
+  const ph = e.phase || 0, wave = x => swim ? Math.sin(ph * 1.6 - (32 - x) * .12) * (32 - x) / 64 * 2.2 : Math.sin(ph * .5 - x * .05) * .3;   // 尾巴擺動（側面看是上下的起伏）
+  const fl = Math.sin(e.gill || 0) * .9, flare = -(e.flareV || 0) * .3;   // 撲咬時外鰓往後貼（平滑）
+  // 腳（遠側較暗）：散步時對角交替，游泳時往後收
+  const step = (e.dist || 0) * .35, leg = (hip, front, far) => {
+    const col = far ? M.body[3] : M.body[2], len1 = 4.2, len2 = 4;
+    let knee, foot;
+    if (swim) { knee = P(hip.x - 3.5, hip.y + 1.6); foot = P(hip.x - 7.5, hip.y + 2.2); }
+    else {
+      const p = step + (front ? 0 : Math.PI) + (far ? Math.PI : 0) + (mode === 'lunge' ? 0 : 0), lift = Math.max(0, Math.sin(p)) * 1.4;
+      foot = P(hip.x - Math.cos(p) * (mode === 'walk' ? 2.2 : 0) + (front ? 1.5 : -1) - (mode === 'lunge' ? (front ? 1.5 : 2.5) * lp : 0), -lift * (mode === 'walk' ? 1 : 0));   // 撲咬：腳往後蹬
+      knee = P((hip.x + foot.x) / 2 + (front ? -1.6 : 1.6), (hip.y + foot.y) / 2 - .6);
+    }
+    G.line([hip, knee], 1.8, col); G.line([knee, foot], 1.4, col);
+    for (let t = 0; t < (front ? 4 : 5); t++) G.line([foot, P(foot.x + (t - (front ? 1.5 : 2)) * .9 + (swim ? -1.2 : 0), foot.y + (swim ? .4 : .5))], .55, col);   // 趾頭
+  };
+  leg(P(11, -4), true, true); leg(P(-12, -4.2), false, true);
+  // 遠側的外鰓（暗一點，在頭後面）
+  const gillBase = [P(15, -11.4), P(15.6, -9.6), P(16, -7.6)], gillAng = [-1.85, -2.4, -2.95], gillLen = [9.5, 10.5, 8.5];   // 三根往上、往後張開
+  G.save(); G.alpha(.75);
+  for (let i = 0; i < 3; i++) axoGill(P(gillBase[i].x - .8, gillBase[i].y - .6), gillAng[i] + .12 + fl * .06 + flare, gillLen[i] * .92, M.gill[2], M.gill[2], fl * .6, 1.5);
+  G.restore();
+  // 尾巴＋背鰭、腹鰭（半透明）
+  const topLine = [[12, -11], [4, -10.6], [-6, -10.2], [-14, -9.8], [-22, -8.6], [-32, -6.4]].map(([x, y]) => P(x, y + wave(x)));
+  const finTop = [[12, -11.1], [4, -11.6], [-6, -12.2], [-14, -13.2], [-22, -12.4], [-32, -7.2]].map(([x, y]) => P(x, y + wave(x)));   // 背鰭在身體上低、到尾巴才變高
+  const finBot = [[-12, -4], [-18, -2.4], [-26, -3.4], [-32, -5.6]].map(([x, y]) => P(x, y + wave(x)));
+  G.save(); G.alpha(.55);
+  G.poly(chaikin([...finTop, ...topLine.slice().reverse()], true, 2), M.body[1], M.body[3], .4);
+  G.poly(chaikin([P(-12, -4.6 + wave(-12)), ...finBot, P(-26, -5 + wave(-26)), P(-18, -4.6 + wave(-18))], true, 2), M.body[1], M.body[3], .4);
+  G.restore();
+  // 身體＋頭：一個連續的輪廓（頭寬扁、肚子稍微鼓）
+  const top = [[32, -7.2], [30.5, -10.6], [27, -12.6], [21, -13], [16, -12], [12, -11], [4, -10.6], [-6, -10.2], [-14, -9.8], [-22, -8.6], [-32, -6.4]];
+  const bot = [[-32, -5.6], [-22, -5], [-12, -4], [0, -3.2], [10, -3.4], [16, -3.6], [22, -3.2], [27, -3.6], [31, -5.4]];
+  const ol = chaikin([...top.map(([x, y]) => P(x, y + wave(x))), ...bot.map(([x, y]) => P(x, y + wave(x)))], true, 2);
+  G.poly(ol, { lin: [0, -13, 0, -3, [[0, M.body[1]], [.55, M.body[0]], [1, M.body[0]]]] }, M.body[3], .6);
+  G.poly(chaikin([P(-30, -6.3 + wave(-30)), P(-10, -8.6), P(10, -9.6), P(22, -11.6), P(28, -11.2), P(22, -9.4), P(10, -7.8), P(-10, -7), P(-30, -5.8 + wave(-30))], true, 1), M.body[1]);   // 背部較深
+  if (M.spots) for (let i = 0; i < 14; i++) { const x = 26 - i * 4.2, y = -8 - (i % 3) * 1.1 + wave(x); G.circle(x, y, .8 + (i % 2) * .4, M.body[3]); if (i % 3 === 0) G.circle(x + 1.6, y + 1.8, .45, '#e8c860'); }   // 野生型：深色斑點、金色亮點
+  for (let x = 9; x >= -11; x -= 2.4) G.line([P(x, -9.6 + wave(x)), P(x - .4, -6.6 + wave(x)), P(x, -4 + wave(x))], .45, M.body[3]);   // 肋溝
+  // 嘴：撲咬時下顎以嘴角為軸往下張開，喉嚨往下鼓（把水吸進去），再閉上
+  if (open > .02) {
+    const hinge = P(23.2, -6.6), ang = open * .42, rotP = q => { const dx = q.x - hinge.x, dy = q.y - hinge.y; return P(hinge.x + dx * Math.cos(ang) - dy * Math.sin(ang), hinge.y + dx * Math.sin(ang) + dy * Math.cos(ang)); };
+    const jaw = [P(23.2, -6.4), P(28, -5.9), P(31.6, -5.6), P(31, -4.4), P(27, -3.4), P(22, -3.2)].map(rotP);
+    G.poly([P(23.2, -6.6), P(28, -5.9), P(31.6, -5.6), jaw[2], jaw[1], jaw[0]], '#5a2a30');   // 嘴裡（深色）
+    G.poly(chaikin([...jaw, P(18, -2.8 + open * 1.6), P(14, -3.2)], true, 1), M.body[0], M.body[3], .5);   // 下顎＋鼓起的喉嚨
+    G.line([jaw[0], jaw[1], jaw[2]], .7, M.body[3]);
+  }
+  G.line(chaikin([P(31.6, -5.6), P(28, -5.9), P(24.5, -6.4), P(23.4, -7.2)], false, 1), .7, M.body[3]);
+  // 眼睛（小、沒有眼瞼）
+  G.circle(25.6, -9.6, 1.3, M.ring); G.circle(25.7, -9.6, .95, M.eye); G.circle(25.3, -10, .35, 'rgba(255,255,255,.85)');
+  // 近側的外鰓
+  for (let i = 0; i < 3; i++) axoGill(gillBase[i], gillAng[i] + fl * .07 + flare, gillLen[i], M.gill[0], M.gill[1], fl, 1.7);
+  // 近側的腳
+  leg(P(11.5, -4.4), true, false); leg(P(-11.5, -4.6), false, false);
   G.restore();
 }
 
@@ -1624,7 +1711,7 @@ function render(selected) {
   drawTailBits();
   drawMolts();
   for (const f of world.food) drawFood(f);
-  const order = { shrimp: 0, snail: 0, nest: 0, larva: 0, tadpole: 1, whale: 1, fish: 2, cricket: 3, turtle: 3, frog: 4, gecko: 5, mosquito: 6, fly: 6, bird: 7 };
+  const order = { shrimp: 0, snail: 0, nest: 0, larva: 0, tadpole: 1, whale: 1, axolotl: 1, fish: 2, cricket: 3, turtle: 3, frog: 4, gecko: 5, mosquito: 6, fly: 6, bird: 7 };
   const list = world.ents.filter(e => !(e.kind === 'gecko' && e.surface === 'glass')).sort((a, b) => order[a.kind] - order[b.kind]);
   drawShadows(list);
   for (const e of list) DRAW[e.kind](e);

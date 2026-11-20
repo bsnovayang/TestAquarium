@@ -674,7 +674,7 @@ function pxShrimpRig(st) {
     let foot;
     if (st.act === 'pick' && i < 2) { const kk = (Math.sin(st.t * 6 + i * Math.PI) + 1) / 2; foot = P(lerp(root.x + 4.5, 22, kk), lerp(-.3, -6.5, kk)); }
     else if (st.act === 'swim') foot = P(root.x + 1.5 + i * .3, -2.5 + i * .2);
-    else { const ph = st.walk + i * 2.2, lift = Math.max(0, Math.sin(ph)) * 1.4; foot = P(root.x + 2.2 - i * .5 + Math.cos(ph) * (st.act === 'walk' ? 1.6 : 0), st.act === 'walk' ? -lift : 0); }
+    else { const ph = st.walk + i * 2.2, lift = Math.max(0, Math.sin(ph)) * 1.4; foot = P(root.x + 2.2 - i * .5 - Math.cos(ph) * (st.act === 'walk' ? 1.6 : 0), st.act === 'walk' ? -lift : 0); }
     const dx = foot.x - root.x, dy = foot.y - root.y, d = Math.min(Math.hypot(dx, dy), L1 + L2 - .01);
     const base = Math.atan2(dy, dx), A = Math.acos(clamp((L1 * L1 + d * d - L2 * L2) / (2 * L1 * d), -1, 1));
     R.legs.push({ root, knee: P(root.x + Math.cos(base - A) * L1, root.y + Math.sin(base - A) * L1), foot, chela: i < 2 });

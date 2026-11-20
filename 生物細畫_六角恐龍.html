@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>六角恐龍細畫</title>
+<style>
+  :root { --bg:#1d2124; --panel:#262b2f; --ink:#e8e6e1; --muted:#9aa0a4; --line:#3a4146; --accent:#4fb89f; }
+  @media (prefers-color-scheme: light) { :root:not([data-theme="dark"]) { --bg:#e9e6df; --panel:#fbfaf7; --ink:#2b2b2b; --muted:#6f6f6f; --line:#d8d2c5; --accent:#2f8f78; } }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.6 system-ui, "Microsoft JhengHei", "PingFang TC", sans-serif; }
+  main { max-width: 1200px; margin: 0 auto; padding: 16px; }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  h2 { font-size: 16px; margin: 22px 0 8px; }
+  p.lead { color: var(--muted); margin: 0 0 12px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
+  figure { margin: 0; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 8px; }
+  figcaption { font-weight: 600; margin-bottom: 4px; }
+  figcaption small { font-weight: 400; color: var(--muted); }
+  canvas { display: block; width: 100%; border-radius: 6px; background: linear-gradient(#7cb8cc 0 80%, #c8b285 80%); }
+  ul { margin: 6px 0; padding-left: 20px; }
+  .src a { color: var(--accent); }
+</style>
+</head>
+<body>
+<main>
+  <h1>六角恐龍細畫</h1>
+  <p class="lead">依真實墨西哥鈍口螈（<i>Ambystoma mexicanum</i>）的結構重畫。下方的圖直接使用遊戲裡的繪圖程式。</p>
+
+  <h2>結構標示</h2>
+  <figure><canvas id="anatomy" width="1100" height="500"></canvas></figure>
+
+  <h2>品系</h2>
+  <div class="grid" id="morphs"></div>
+
+  <h2>行為</h2>
+  <div class="grid">
+    <figure><figcaption>休息 <small>停在底部，外鰓輕輕擺動</small></figcaption><canvas id="rest" width="360" height="200"></canvas></figure>
+    <figure><figcaption>散步 <small>四隻腳對角交替，慢慢走</small></figcaption><canvas id="walk" width="360" height="200"></canvas></figure>
+    <figure><figcaption>游泳 <small>腳往後收，擺動尾巴前進</small></figcaption><canvas id="swim" width="360" height="200"></canvas></figure>
+    <figure><figcaption>撲咬吸食 <small>突然張嘴往前衝，把獵物連水吸進去；外鰓往後貼</small></figcaption><canvas id="lunge" width="360" height="200"></canvas></figure>
+    <figure><figcaption>卵 <small>一顆顆黏在水草或玻璃上，透明膠質裡的胚胎慢慢長大</small></figcaption><canvas id="eggs" width="360" height="200"></canvas></figure>
+    <figure><figcaption>幼體 <small>孵出來就是小六角恐龍，品系和親代一樣（已放大顯示）</small></figcaption><canvas id="juv" width="360" height="200"></canvas></figure>
+  </div>
+
+  <h2>參考的真實特徵</h2>
+  <ul>
+    <li><b>幼態延續</b>：一輩子保持幼體的樣子，不會變成陸生的成體；完全住在水裡。成體約 20～25 cm</li>
+    <li><b>外鰓</b>：頭兩側各 3 根羽毛狀的外鰓（共 6 根，「六角」名字的由來），細絲裡充滿血管，所以白化個體的鰓是紅色的；水裡氧氣少時擺動得比較頻繁</li>
+    <li><b>頭</b>：又寬又扁，嘴角往上翹，看起來像在笑；眼睛小、沒有眼瞼</li>
+    <li><b>身體</b>：兩側有一圈圈的肋溝；背鰭從頭後一路延伸到尾尖，尾巴側扁；前腳 4 趾、後腳 5 趾</li>
+    <li><b>捕食</b>：伏擊型。獵物靠近時突然張大嘴，把獵物連水一起吸進去（吸食）。吃蟲、小魚、蝦，幼體之間會互相吃</li>
+    <li><b>習性</b>：大多停在底部或慢慢走動，晚上比較活躍；偶爾游上水面吸一口空氣；喜歡乾淨的冷水，水質變差容易生病</li>
+    <li><b>繁殖</b>：卵一顆顆黏在水草或石頭上，約 2～3 週孵化（遊戲縮短為 60 秒），孵出來就是小六角恐龍</li>
+    <li><b>品系</b>：粉紅（白化／白子，黑眼睛的是白化 leucistic）、野生型（橄欖褐色帶斑點與金色亮點）、金色（金色白子，眼睛偏紅）、黑色（melanoid）</li>
+    <li><b>保育</b>：野生族群只剩墨西哥城附近的霍奇米爾科湖一帶，屬於極度瀕危；寵物市場的都是人工繁殖</li>
+  </ul>
+  <p class="src">資料來源：
+    <a href="https://en.wikipedia.org/wiki/Axolotl">Wikipedia：Axolotl</a>、
+    <a href="https://animaldiversity.org/accounts/Ambystoma_mexicanum/">Animal Diversity Web</a>
+  </p>
+</main>
+
+<script src="js/core.js"></script>
+<script src="js/species.js"></script>
+<script src="js/world.js"></script>
+<script src="js/effects.js"></script>
+<script src="js/water.js"></script>
+<script src="js/creatures.js"></script>
+<script src="js/draw.js"></script>
+<script>
+world.waterY = -9999; world.tod = .5;
+function mkA(extra = {}) {
+  const e = makeEnt('axolotl', 0, 0, false);
+  Object.assign(e, { dir: 1, sx: 1, id: 3, phase: 0, gill: 0, tilt: 0, mode: 'rest', morph: 0, dist: 0 }, extra);
+  e.size = e.adult = 1; return e;
+}
+const V = [
+  { id: 'anatomy', e: mkA({ morph: 0 }), sc: 2.15, labels: true },
+  { id: 'rest', e: mkA({ morph: 1 }), sc: .68 },
+  { id: 'walk', e: mkA({ morph: 2, mode: 'walk' }), sc: .68, walk: true },
+  { id: 'swim', e: mkA({ morph: 3, mode: 'swim' }), sc: .68, swim: true },
+  { id: 'lunge', e: mkA({ morph: 0, mode: 'lunge' }), sc: .68, lunge: true },
+  { id: 'eggs', sc: 3, eggs: true },
+  { id: 'juv', e: mkA({ morph: 0 }), sc: .68 / .25 * .4, juv: true },
+].map(v => ({ ...v, ctx: document.getElementById(v.id).getContext('2d') }));
+V.find(v => v.juv).e.size = .25;
+AXO_MORPHS.forEach((m, i) => {
+  const f = document.createElement('figure');
+  f.innerHTML = `<figcaption>${m.name}</figcaption><canvas width="320" height="180"></canvas>`;
+  document.getElementById('morphs').appendChild(f);
+  V.push({ e: mkA({ morph: i, id: 10 + i }), sc: .62, ctx: f.querySelector('canvas').getContext('2d') });
+});
+const nest = makeEnt('nest', 0, 0, false); Object.assign(nest, { of: 'axolotl', medium: 'glass', count: 10, hatch: 60, t: 20 });
+const LABELS = [
+  ['外鰓（左右各 3 根，羽毛狀）', 11, -19, -14, -10], ['眼睛（小、沒有眼瞼）', 25.6, -9.6, 10, -26], ['寬扁的頭', 21, -12.8, -2, -30],
+  ['往上翹的嘴（像在笑）', 28, -6, 14, 10], ['肋溝', 0, -7, -2, 22], ['背鰭（從頭後到尾尖）', -14, -12.8, -6, -18],
+  ['側扁的尾巴＋腹鰭', -26, -4, -10, 18], ['前腳 4 趾', 12, -1, 8, 16], ['後腳 5 趾', -11, -1, -6, 16],
+];
+let last = performance.now();
+function frame(now) {
+  const dt = Math.min(.05, (now - last) / 1000); last = now; world.t += dt;
+  for (const v of V) {
+    const c = v.ctx, cw = c.canvas.width, ch = c.canvas.height, e = v.e;
+    c.setTransform(1, 0, 0, 1, 0, 0); c.clearRect(0, 0, cw, ch);
+    G.begin(c);
+    if (v.eggs) { c.setTransform(v.sc, 0, 0, v.sc, cw / 2, ch * .42); nest.t = 10 + (Math.sin(world.t * .4) + 1) * 24; drawNest(nest); continue; }
+    e.gill += dt * 2.2; e.phase += dt * (v.swim ? 9 : v.walk ? 3 : 1);
+    if (v.walk) e.dist += dt * 14;
+    let shift = 0;
+    if (v.lunge) {                                                       // 撲咬：0.3 秒往前衝，之後慢慢退回原位
+      const ct = world.t % 1.8; e.mouthT = ct < .3 ? .3 - ct : 0; e.mode = e.mouthT > 0 ? 'lunge' : 'rest';
+      shift = ct < .3 ? Math.min(1, ct / .2) : Math.max(0, 1 - (ct - .3) / 1.2);
+      shift *= 22;
+    }
+    const gy = v.swim ? ch * .6 : ch * .8;
+    c.setTransform(v.sc, 0, 0, v.sc, cw / 2 - 30 + shift, gy);
+    drawAxolotl(e);
+    if (v.labels) {
+      c.setTransform(1, 0, 0, 1, 0, 0);
+      const k = v.sc * e.size * SPECIES.axolotl.len / 64;
+      c.font = '15px system-ui, "Microsoft JhengHei", sans-serif'; c.textBaseline = 'middle';
+      for (const [text, lx, ly, dx, dy] of LABELS) {
+        const px = cw / 2 + lx * k, py = gy + ly * k, tx = px + dx * 5, ty = py + dy * 4;
+        c.strokeStyle = 'rgba(20,20,20,.75)'; c.lineWidth = 1.2; c.beginPath(); c.moveTo(px, py); c.lineTo(tx, ty); c.stroke();
+        c.fillStyle = '#ff9f1c'; c.beginPath(); c.arc(px, py, 3.5, 0, 7); c.fill();
+        const w = c.measureText(text).width, bx = clamp(tx - (dx < 0 ? w + 10 : 0), 2, cw - w - 12);
+        c.fillStyle = 'rgba(255,255,255,.92)'; c.fillRect(bx, ty - 11, w + 10, 22); c.fillStyle = '#222'; c.textAlign = 'left'; c.fillText(text, bx + 5, ty);
+      }
+    }
+  }
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
