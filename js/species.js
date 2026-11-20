@@ -88,6 +88,21 @@ const SPECIES = {
   cherry: { name: '櫻花蝦', kind: 'shrimp', len: 40, speed: 12, hungerTime: 1800, huntBelow: 85, hit: 12,
             sexed: true, femaleScale: 1.2, morphs: 'shrimp', growTime: 240, birth: .25,
             gestation: 120, clutch: [6, 12], molt: [220, 360] },   // 抱卵 120 秒（真實約 3～4 週）
+  // 水晶蝦（Caridina cantonensis 的人工選育品系，約 2.5 cm）：不透明的白底加紅（或黑）色環帶，白色越多等級越高；
+  // 和櫻花蝦不同屬，不會互相雜交；喜歡乾淨的軟水，對水質比櫻花蝦更敏感；每次抱的卵比較少、比較久才孵化
+  crystal: { name: '水晶蝦', kind: 'shrimp', len: 44, speed: 11, hungerTime: 1800, huntBelow: 85, hit: 12,
+             sexed: true, femaleScale: 1.15, morphs: 'crystal', growTime: 300, birth: .22, sensitive: 10,
+             gestation: 150, clutch: [4, 9], molt: [220, 360] },
+  // 拉氏清溪蟹（Candidiopotamon rathbunae，台灣特有種，甲寬約 3～4 cm）：住在山區溪流，白天躲在石頭邊，晚上出來覓食；
+  // 雜食，也會清理動物屍體；可以離水在陸地上活動，但要常回水裡弄濕鰓；
+  // 淡水蟹是直接發育：母蟹把卵抱在腹部，孵出來就是小螃蟹（不用回到海裡）
+  streamcrab: { name: '拉氏清溪蟹', kind: 'crab', len: 64, speed: 26, sight: 200, hungerTime: 2000, huntBelow: 75, hit: 22,
+                sexed: true, femaleScale: .92, morphs: 'crab', growTime: 400, birth: .2, gestation: 200, clutch: [5, 10], dryMax: 120 },
+  // 招潮蟹（甲寬約 2 cm）：住在河口泥灘，挖洞當家；退潮時在洞口附近用小螯挖泥巴吃，吃剩的泥搓成小球（擬糞）留在地上；
+  // 公蟹有一隻特別大的螯，會不停揮動（求偶、宣示地盤）；有危險就衝回洞裡；白天活動、晚上躲在洞裡
+  // 真實的幼生要在海裡漂流長大，所以缸內不會繁殖
+  fiddler: { name: '招潮蟹', kind: 'crab', len: 36, speed: 40, sight: 260, hungerTime: 1600, huntBelow: 85, hit: 14, fiddler: true,
+             sexed: true, femaleScale: .9, morphs: 'fiddler' },
   // 斑馬螺（蜑螺）：在水中的地面、石頭上慢慢爬，吃藻類；淡水中產的卵不會孵化，所以不會繁殖失控
   nerite: { name: '斑馬螺', kind: 'snail', len: 36, speed: 5, hungerTime: 3000, huntBelow: 90, hit: 14 },             // 青蛙卵、烏龜蛋、壁虎蛋（共用）
   // 活餌：玩家投放，不繁殖；給青蛙、壁虎吃
@@ -118,6 +133,15 @@ const AXO_MORPHS = [
   { name: '金色',         body: ['#fff0b8', '#f6d47a', '#e2b04c', '#b88a30'], gill: ['#ffb0a0', '#f07a6a', '#c04a44'], eye: '#d8506a', ring: '#f8c0b0' },
   { name: '黑色',         body: ['#5a5a66', '#3a3a44', '#26262e', '#16161c'], gill: ['#7a4a62', '#54304a', '#36203a'], eye: '#0a0a0e', ring: '#2a2a32' },
 ];
+// 水晶蝦品系：band 環帶顏色；head 頭胸甲（full 整片、spot 日之丸圓斑、tiny 小點）；segs 腹部 6 節哪幾節是色帶；grade 等級（小蝦會隨機升降一級）
+const CRYSTAL_MORPHS = [
+  { name: '紅白・C 級',   band: '#cc1c28', color: '#cc1c28', head: 'full', segs: [0, 1, 1, 0, 1, 1], fan: true,  grade: 0 },
+  { name: '紅白・日之丸', band: '#cc1c28', color: '#cc1c28', head: 'spot', segs: [0, 0, 0, 0, 0, 1], fan: true,  grade: 1 },
+  { name: '紅白・SSS',    band: '#cc1c28', color: '#cc1c28', head: 'tiny', segs: [0, 0, 0, 0, 0, 0], fan: false, grade: 2 },
+  { name: '黑白・C 級',   band: '#201c20', color: '#201c20', head: 'full', segs: [0, 1, 1, 0, 1, 1], fan: true,  grade: 0 },
+  { name: '黑白・日之丸', band: '#201c20', color: '#201c20', head: 'spot', segs: [0, 0, 0, 0, 0, 1], fan: true,  grade: 1 },
+  { name: '黑白・SSS',    band: '#201c20', color: '#201c20', head: 'tiny', segs: [0, 0, 0, 0, 0, 0], fan: false, grade: 2 },
+];
 const SHRIMP_GRADES = [
   { name: '普通', color: '#e04a3a', opacity: .55, speckle: true },
   { name: '櫻花', color: '#e8302a', opacity: .8,  speckle: true },
@@ -125,7 +149,22 @@ const SHRIMP_GRADES = [
 ];
 
 // 族群上限（以標準缸為準，大缸依面積放大）
-const CAPS = { axolotl: 4, bird: 2, mosquito: 30, larva: 80, fish: 20, frog: 6, tadpole: 30, turtle: 3, gecko: 4, shrimp: 20 };
+// 拉氏清溪蟹的體色（體色變化很大）：身體色階（亮 → 暗）、螯、螯尖、腳
+const CRAB_MORPHS = [
+  { name: '紫褐色', body: ['#8a5a6a', '#6a3e50', '#4a2838', '#2a1420'], claw: ['#9a6070', '#74404e', '#4e2632'], tip: '#f4c8a0', leg: ['#d0743e', '#a8542c', '#6a3018'] },
+  { name: '橙紅色', body: ['#f08a48', '#d8662c', '#b04a1c', '#6a2a0e'], claw: ['#f49a58', '#dc7036', '#a84a1e'], tip: '#fff0d8', leg: ['#f4a060', '#d07838', '#8a4420'] },
+  { name: '黃褐色', body: ['#b89a5a', '#94783e', '#6e5628', '#3e3014'], claw: ['#c4a466', '#9c7e44', '#6c5428'], tip: '#f8e8c8', leg: ['#d8a868', '#b08040', '#6e4c22'] },
+];
+// 招潮蟹（台灣常見的三種，遊戲裡當成品系）：公蟹大螯的顏色最醒目
+const FIDDLER_MORPHS = [
+  { name: '清白招潮',     body: ['#f4f2ea', '#dcd8cc', '#b8b2a2', '#7a7466'], claw: ['#ffffff', '#ece8de', '#c4beb0'], tip: '#ffffff', leg: ['#e6e0d2', '#c4bcaa', '#8a826e'], mottle: 'rgba(120,110,95,.35)' },
+  { name: '弧邊招潮',     body: ['#5a4a40', '#3e322c', '#2c2420', '#18120e'], claw: ['#ff8a4a', '#e8542a', '#a8361a'], tip: '#ffe0c0', leg: ['#7a5a48', '#5a4234', '#3a2a20'], mottle: 'rgba(120,200,210,.4)' },
+  { name: '北方呼喚招潮', body: ['#5e8a96', '#3e6a78', '#2c4c58', '#16303a'], claw: ['#ffe27a', '#f4c040', '#c08a1a'], tip: '#fff6d8', leg: ['#7a8a80', '#58685e', '#36443c'], mottle: 'rgba(230,240,220,.3)' },
+];
+const shrimpMorphs = sp => sp.morphs === 'crystal' ? CRYSTAL_MORPHS : SHRIMP_GRADES;   // 蝦的品系表
+const MORPH_TABLES = { shrimp: SHRIMP_GRADES, crystal: CRYSTAL_MORPHS, crab: CRAB_MORPHS, fiddler: FIDDLER_MORPHS, cory: CORY_MORPHS, axo: AXO_MORPHS };
+const morphList = sp => MORPH_TABLES[sp.morphs] || GUPPY_MORPHS;        // 這個物種的品系表
+const CAPS = { crab: 10, axolotl: 4, bird: 2, mosquito: 30, larva: 80, fish: 20, frog: 6, tadpole: 30, turtle: 3, gecko: 4, shrimp: 20 };
 
 const DECOR_TYPES = {
   rock:    { name: '石頭',   w: 150, h: 80,  solid: true },
@@ -139,6 +178,7 @@ const DECOR_TYPES = {
   floater: { name: '浮萍',   w: 140, h: 10,  solid: false },   // 浮在水面：吸收養分、遮光，抑制藻類
   fern:    { name: '蕨類',   w: 90,  h: 90,  solid: false },   // 陸生植物，種在土坡或岩石上
   carpet:  { name: '前景草', w: 220, h: 26,  solid: false },   // 沿著缸底長成一片草地，也會吸收髒污
+  mudflat: { name: '泥灘',   w: 560, h: 150, solid: true },    // 平緩的泥灘（招潮蟹在這裡挖洞）；水位調到剛好淹過一部分，就像潮間帶
 };
 
 // 吃到能恢復多少飽食度
@@ -156,7 +196,7 @@ const WATER = {
   deadlyAt: 85,        // 超過這個值，生病得更快
 };
 
-const FOOD_VALUE = { shrimp: 8, food: 10, mosquito: 15, fish: 40, larva: 6, tadpole: 12, cricket: 25, fly: 6 };
+const FOOD_VALUE = { crab: 20, shrimp: 8, food: 10, mosquito: 15, fish: 40, larva: 6, tadpole: 12, cricket: 25, fly: 6 };
 
 // 捕食規則：每一條都可以在設定面板單獨開關
 //   juvenileOnly：只吃幼體（大魚吃魚苗）
@@ -178,6 +218,16 @@ const RULES = [
   { id: 'bird_fish',      pred: 'bird',    prey: 'fish',     label: '翠鳥俯衝抓小魚' },
   { id: 'bird_shrimp',    pred: 'bird',    prey: 'shrimp',   label: '翠鳥抓蝦' },
   { id: 'bird_tadpole',   pred: 'bird',    prey: 'tadpole',  label: '翠鳥抓蝌蚪' },
+  { id: 'bird_crab',      pred: 'bird',    prey: 'crab',     label: '翠鳥抓水裡的螃蟹' },
+  { id: 'crab_food',      pred: 'crab',    prey: 'food',     label: '螃蟹吃飼料' },
+  { id: 'crab_carrion',   pred: 'crab',    prey: 'carrion',  label: '清溪蟹清理動物屍體' },
+  { id: 'crab_shrimp',    pred: 'crab',    prey: 'shrimp',   label: '清溪蟹夾小蝦' },
+  { id: 'crab_tadpole',   pred: 'crab',    prey: 'tadpole',  label: '清溪蟹夾蝌蚪' },
+  { id: 'crab_cricket',   pred: 'crab',    prey: 'cricket',  label: '清溪蟹吃蟋蟀' },
+  { id: 'crab_young',     pred: 'crab',    prey: 'crab',     label: '螃蟹吃小螃蟹', juvenileOnly: true },
+  { id: 'turtle_crab',    pred: 'turtle',  prey: 'crab',     label: '烏龜吃小螃蟹', juvenileOnly: true },
+  { id: 'axo_crab',       pred: 'axolotl', prey: 'crab',     label: '六角恐龍吃小螃蟹', juvenileOnly: true },
+  { id: 'fish_crab',      pred: 'fish',    prey: 'crab',     label: '魚吃剛孵出的小螃蟹', juvenileOnly: true },
   { id: 'whale_larva',    pred: 'whale',   prey: 'larva',    label: '藍鯨濾食孑孓' },
   { id: 'whale_food',     pred: 'whale',   prey: 'food',     label: '藍鯨濾食飼料' },
   { id: 'frog_cricket',   pred: 'frog',    prey: 'cricket',  label: '蛙類吃蟋蟀' },

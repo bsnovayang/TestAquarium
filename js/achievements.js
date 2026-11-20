@@ -20,6 +20,7 @@ const ACHIEVEMENTS = [
   { id: 'frog_meta',     cat: '繁殖',   icon: '🐸', name: '長出腳了',     desc: '蝌蚪變成小青蛙' },
   { id: 'shrimp_berried',cat: '繁殖',   icon: '🦐', name: '抱卵',         desc: '櫻花蝦母蝦蛻殼後抱卵' },
   { id: 'egg_hatch',     cat: '繁殖',   icon: '🐣', name: '破殼而出',     desc: '烏龜或壁虎的蛋孵化' },
+  { id: 'crab_hatch',    cat: '繁殖',   icon: '🦀', name: '蟹寶寶',       desc: '拉氏清溪蟹母蟹腹部的小螃蟹爬出來' },
   // 食物鏈
   { id: 'food_chain',    cat: '食物鏈', icon: '🔗', name: '生生不息',     desc: '蚊子在水面產卵之後，魚吃到孑孓' },
   { id: 'frog_mosquito', cat: '食物鏈', icon: '👅', name: '神準舌頭',     desc: '青蛙吃到蚊子' },
@@ -32,12 +33,15 @@ const ACHIEVEMENTS = [
   // 收藏
   { id: 'guppy_all',     cat: '收藏',   icon: '🌈', name: '孔雀魚圖鑑',   desc: '看過孔雀魚公魚的每一種品系', goal: () => GUPPY_MORPHS.length, prog: s => s.morphs.length },
   { id: 'shrimp_fire',   cat: '收藏',   icon: '🔥', name: '極火傳承',     desc: '極火等級的櫻花蝦母蝦孵出小蝦' },
+  { id: 'crystal_sss',   cat: '收藏',   icon: '💎', name: '白到發光',     desc: '繁殖出 SSS 等級的水晶蝦' },
   { id: 'all_species',   cat: '收藏',   icon: '📖', name: '生態學家',     desc: '養過每一種生物', goal: () => ACH_SPECIES.length, prog: s => s.species.length },
   // 趣味
   { id: 'whale_spout',   cat: '趣味',   icon: '🐋', name: '噴泉',         desc: '看到迷你藍鯨浮上來噴水' },
   { id: 'gecko_tail',    cat: '趣味',   icon: '🦎', name: '金蟬脫殼',     desc: '壁虎斷尾逃走' },
   { id: 'shark_chase',   cat: '趣味',   icon: '🦈', name: '地盤意識',     desc: '紅尾黑鯊趕走靠近的魚' },
   { id: 'kingfisher',    cat: '趣味',   icon: '🐦', name: '一擊必中',     desc: '翠鳥俯衝抓到魚' },
+  { id: 'crab_scavenge', cat: '趣味',   icon: '🦀', name: '溪流清道夫',   desc: '拉氏清溪蟹把缸底的屍體清掉' },
+  { id: 'fiddler_wave',  cat: '趣味',   icon: '👋', name: '招潮',         desc: '招潮蟹公蟹在自己挖的洞口揮動大螯' },
 ];
 
 // ---------------------------------------------------------------------
@@ -73,7 +77,7 @@ onWorldEvent((type, d) => {
     case 'fishBirth': unlock('fish_birth'); break;
     case 'metamorph': unlock('frog_meta'); break;
     case 'shrimpBerried': unlock('shrimp_berried'); break;
-    case 'shrimpHatch': if (d.morph === 2) unlock('shrimp_fire'); break;
+    case 'shrimpHatch': if (d.type === 'cherry' && d.morph === 2) unlock('shrimp_fire'); if (d.sss) unlock('crystal_sss'); break;
     case 'hatch': if (d.kind === 'turtle' || d.kind === 'gecko') unlock('egg_hatch'); break;
     case 'mosquitoLay': if (!ACH.laid) { ACH.laid = true; achSave(); } break;
     case 'eat': {
@@ -88,6 +92,9 @@ onWorldEvent((type, d) => {
     case 'autotomy': unlock('gecko_tail'); break;
     case 'chase': unlock('shark_chase'); break;
     case 'birdCatch': unlock('kingfisher'); break;
+    case 'scavenge': unlock('crab_scavenge'); break;
+    case 'crabHatch': unlock('crab_hatch'); break;
+    case 'fiddlerWave': unlock('fiddler_wave'); break;
   }
 });
 

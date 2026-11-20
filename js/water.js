@@ -51,7 +51,7 @@ function tickWater(dt) {
   // 水太髒：魚和蝌蚪掉血
   for (const e of world.ents) {                               // 水太髒：魚、蝌蚪生病；蝦更敏感（門檻低 15）
     if (e.dead) continue;
-    const sens = e.kind === 'shrimp' || e.kind === 'axolotl' ? Wp.harmAt - 15 : Wp.harmAt;   // 蝦、六角恐龍對水質比較敏感
+    const sens = (e.kind === 'shrimp' || e.kind === 'axolotl' ? Wp.harmAt - 15 : Wp.harmAt) - (SPECIES[e.type].sensitive || 0);   // 蝦、六角恐龍對水質比較敏感（水晶蝦更敏感）
     const ok = e.kind === 'fish' || e.kind === 'tadpole' || e.kind === 'whale' || e.kind === 'shrimp' || e.kind === 'axolotl';
     if (!ok || e.y < wy || w.dirt <= sens) { e.sick = false; continue; }
     const harm = (w.dirt - sens) / (w.dirt > Wp.deadlyAt ? 12 : 30);

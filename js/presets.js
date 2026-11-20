@@ -83,6 +83,33 @@ const PRESETS = [
     },
   },
   {
+    id: 'stream', name: '溪流螃蟹缸', desc: '岸邊和石頭灘，看拉氏清溪蟹白天躲在石頭邊、晚上出來覓食、舉螯威嚇',
+    tank: 'standard', level: .45, mosq: 'off', icons: ['streamcrab', 'cherry', 'rock'],
+    build(B) {
+      B.decor('mound', 170, B.floor, { w: 400, h: 360 });
+      B.decor('boulder', 1170, B.floor, { w: 220, h: 300 });
+      B.decor('rock', 520, B.floor + 8, { w: 150, h: 80 }); B.decor('rock', 760, B.floor + 8, { w: 110, h: 60 }); B.decor('rock', 950, B.floor + 8, { w: 160, h: 90 });
+      for (const [x, h] of [[640, 150], [860, 180], [1050, 140]]) B.decor('plant', x, B.floor, { h });
+      B.decor('filter', 1215, B.waterY + 40);
+      B.ent('streamcrab', 430, B.floor - 10, { sex: 'm', morph: 0 }); B.ent('streamcrab', 1050, B.floor - 10, { sex: 'm', morph: 1 });
+      B.ent('streamcrab', 840, B.floor - 10, { sex: 'f', morph: 2 }); B.onLand('streamcrab', 200).morph = 1;
+      B.ent('nerite', 700, B.floor - 30); B.ent('nerite', 1000, B.floor - 30);
+      for (let i = 0; i < 6; i++) B.ent('cherry', B.rx(580, 1100), B.floor - 30, { sex: i < 2 ? 'm' : 'f' });
+    },
+  },
+  {
+    id: 'mudflat', name: '河口泥灘缸', desc: '退潮的泥灘，招潮蟹挖洞、挖泥巴吃，公蟹揮動大螯；把水位調高就像漲潮',
+    tank: 'wide', level: .3, mosq: 'off', icons: ['fiddler', 'mudflat', 'nerite'],
+    build(B) {
+      B.decor('mudflat', 640, B.floor, { w: 980, h: 214 });
+      B.decor('rock', 130, B.floor + 8, { w: 120, h: 60 });
+      B.decor('filter', 1215, B.waterY + 40);
+      for (let i = 0; i < 6; i++) B.ent('fiddler', B.rx(380, 900), B.top + 300, { sex: i % 2 ? 'f' : 'm', morph: i % 3 });
+      B.ent('nerite', 100, B.floor - 30); B.ent('nerite', 1180, B.floor - 30);
+      for (let i = 0; i < 4; i++) B.ent('guppy', B.rx(1080, 1220), B.ry(.3, .8), { sex: i % 2 ? 'f' : 'm' });
+    },
+  },
+  {
     id: 'turtle', name: '烏龜缸', desc: '寬缸和曬背平台，看烏龜曬背、散步、游泳',
     tank: 'wide', level: .55, mosq: 'off', icons: ['turtle', 'redtail', 'wood'],
     build(B) {
@@ -148,7 +175,7 @@ function presetBuilder() {
     rangeY: (a, b) => rand(a, Math.max(a + 1, b)),
     decor(type, x, y, extra = {}) {
       const d = makeDecor(type, X(x), TANK.floor - (668 - y) * sy, { ...extra });
-      const big = type === 'mound' || type === 'boulder' || type === 'plant';   // 大型造景跟著魚缸高度放大
+      const big = type === 'mound' || type === 'boulder' || type === 'plant' || type === 'mudflat';   // 大型造景跟著魚缸高度放大
       d.w = (extra.w ?? DECOR_TYPES[type].w) * (big || type === 'wood' ? Math.min(sx, 1.6) : 1);
       d.h = big ? Ysc(extra.h ?? DECOR_TYPES[type].h) : (extra.h ?? DECOR_TYPES[type].h);
       if (type !== 'wood') settle(d);

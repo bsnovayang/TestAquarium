@@ -85,6 +85,7 @@ function decorSpan(d, x) {
   if (u <= -1 || u >= 1) return null;
   let k;
   if (d.type === 'mound') k = Math.pow(.5 + .5 * Math.cos(Math.PI * u), .8);
+  else if (d.type === 'mudflat') { const e = clamp((1 - Math.abs(u)) / .32, 0, 1); k = e * e * (3 - 2 * e) * (1 + .025 * Math.sin(u * 9 + d.seed)); }   // 中間平坦、兩端緩坡
   else k = Math.pow(1 - u * u, d.type === 'boulder' ? .35 : .55) * (1 + rockNoise(d, u) * (1 - u * u));
   return { top: d.y - d.h * k, bottom: d.y };
 }
@@ -177,9 +178,10 @@ function makeEnt(type, x, y, push = true) {
   if (sp.kind === 'whale') { e.breathT = rand(...sp.breath) * .5; e.wmode = 'cruise'; }
   if (sp.kind === 'cricket' || sp.kind === 'fly') { e.life = rand(...sp.life); e.adult = e.size = rand(.9, 1.1); }
   if (sp.kind === 'gecko') { e.tailLen = 1; e.regrown = false; }
-  if (sp.sexed) { e.morph = Math.floor(Math.random() * (sp.morphs === 'shrimp' ? SHRIMP_GRADES : GUPPY_MORPHS).length); setSex(e, Math.random() < .5 ? 'm' : 'f'); }
+  if (sp.sexed) { e.morph = Math.floor(Math.random() * morphList(sp).length); setSex(e, Math.random() < .5 ? 'm' : 'f'); }
   if (sp.kind === 'shrimp') { e.moltT = rand(...sp.molt) * rand(.2, 1); e.mode = 'fall'; e.curl = 0; }
   if (sp.morphs === 'cory') { e.morph = Math.floor(Math.random() * CORY_MORPHS.length); e.cm = 'sink'; e.tilt = 0; }
+  if (sp.kind === 'crab') { e.mode = 'fall'; e.vy = 0; e.dry = 0; if (sp.fiddler) { e.clawSide = Math.random() < .5 ? -1 : 1; e.pel = []; } }
   if (sp.morphs === 'axo') { e.morph = Math.floor(Math.random() * AXO_MORPHS.length); e.tilt = 0; e.gill = rand(0, 6); }
   if (push) { world.ents.push(e); afterDrop(e); }
   return e;
@@ -194,6 +196,7 @@ function afterDrop(e) {
   if (e.kind === 'gecko') { if (e.y > wy - 24) e.y = Math.max(TANK.top + 20, wy - 30); initChain(e, -Math.PI / 2); }
   if (e.kind === 'mosquito') e.goal = null;
   if (e.kind === 'axolotl') { e.mode = 'sink'; e.vy = 0; e.tilt = 0; }
+  if (e.kind === 'crab') { e.mode = 'fall'; e.vy = 0; e.burrow = null; if (solidAt(e.x, e.y - 2)) e.y = groundY(e.x, e.y, 9999) - 1; }   // 放進石頭裡：放到石頭上面
   if (e.kind === 'bird') { e.mode = 'fly'; e.perch = null; e.carry = null; e.pitch = 0; e.cool = 3; }
   if (e.kind === 'larva') { e.dive = 0; if (e.y < wy + 6) e.y = wy + 6; }
 }

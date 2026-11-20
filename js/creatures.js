@@ -5,7 +5,7 @@
 // =====================================================================
 
 const UPDATE = { fish: updFish, turtle: updTurtle, frog: updFrog, gecko: updGecko, mosquito: updMosquito, larva: updLarva,
-                 tadpole: updTadpole, whale: updWhale, nest: updNest, cricket: updCricket, fly: updFly, snail: updSnail, shrimp: updShrimp, bird: updBird, axolotl: updAxolotl };
+                 tadpole: updTadpole, whale: updWhale, nest: updNest, cricket: updCricket, fly: updFly, snail: updSnail, shrimp: updShrimp, bird: updBird, axolotl: updAxolotl, crab: updCrab };
 
 // 轉身：轉完後有 0.8 秒冷卻，避免目標在身邊晃動時原地連續翻轉
 function startTurn(e) { if (!e.turning && !(e.turnCD > 0)) { e.turning = true; e.turnT = 0; } }
@@ -437,6 +437,7 @@ function updFish(e, dt) {
   let prey = e.hunger < sp.huntBelow && !e.chasing ? findPrey(e, sp.sight, t => {
     if (t.kind === 'food') return t.y > wy;
     if (t.kind === 'mosquito') return t.y > wy - 24 && t.y < wy + 4;           // 停在水面的蚊子
+    if (t.y < wy) return false;                                                // 岸上的東西（例如陸地上的小螃蟹）
     return !inPlant(t) || dist(head, t) < sp.sight * .3;                       // 躲在水草裡的孑孓、蝌蚪、魚苗比較難發現
   }, head) : null;
   if (!prey && e.hunger < sp.huntBelow && !e.chasing && world.food.length)    // 餵食時整缸的魚都會游過來（看得到遠處落下的飼料）
@@ -1544,8 +1545,16 @@ function updShrimp(e, dt) {
     if (e.preg >= 1) {
       e.preg = 0;
       const room = capFor('shrimp') - countKind('shrimp'), n = Math.min(room, Math.round(rand(...sp.clutch)));
-      for (let i = 0; i < n; i++) { const c = makeEnt(e.type, e.x + rand(-12, 12), e.y - 4); c.size = c.adult * sp.birth; c.hunger = 80; c.morph = e.morph; }
-      if (n > 0) { logEvent(`🦐 ${sp.name}孵出了 ${n} 隻小蝦`); emit('shrimpHatch', { type: e.type, morph: e.morph, n }); }
+      let sss = false;
+      for (let i = 0; i < n; i++) {
+        const c = makeEnt(e.type, e.x + rand(-12, 12), e.y - 4); c.size = c.adult * sp.birth; c.hunger = 80; c.morph = e.morph;
+        if (sp.morphs === 'crystal' && Math.random() < .2) {               // 水晶蝦：小蝦的等級可能比母蝦高或低一級（顏色不變）
+          const M = CRYSTAL_MORPHS[e.morph], g = clamp(M.grade + (Math.random() < .5 ? 1 : -1), 0, 2);
+          c.morph = CRYSTAL_MORPHS.findIndex(o => o.band === M.band && o.grade === g);
+        }
+        if (sp.morphs === 'crystal' && CRYSTAL_MORPHS[c.morph].grade === 2 && CRYSTAL_MORPHS[e.morph].grade < 2) sss = true;
+      }
+      if (n > 0) { logEvent(`🦐 ${sp.name}孵出了 ${n} 隻小蝦${sss ? '（出現了 SSS 等級！）' : ''}`); emit('shrimpHatch', { type: e.type, morph: e.morph, n, sss }); }
     }
   }
   if (e.mode === 'walk' && e.moltT <= 0) { e.mode = 'molt'; e.moltProg = 0; return; }
@@ -1601,4 +1610,322 @@ function updShrimp(e, dt) {
     e.state = food ? '走向飼料' : '走動';
     if (food && dist(e, food) < 8) eat(e, food);
   }
+}
+
+
+// =====================================================================
+// 螃蟹（從正面看，橫著走）
+//   拉氏清溪蟹：白天躲在石頭邊，晚上出來覓食；雜食、會清理屍體；離水太久要回水裡弄濕鰓；
+//               遇到威脅（或另一隻公蟹）舉起雙螯；母蟹抱卵，孵出來就是小螃蟹
+//   招潮蟹：在泥灘上挖洞；白天在洞口附近用小螯挖泥巴吃，留下一顆顆泥球；公蟹揮動大螯；
+//           有危險就衝回洞裡，過一會兒先探出眼睛再出來；漲潮（洞被水淹）和晚上都躲在洞裡
+// =====================================================================
+const crabK = e => e.size * SPECIES[e.type].len / 64;           // 繪圖單位 → 世界單位
+function crabMove(e, tx, spd, dt) {                              // 橫著走向 tx；被擋住回傳 false
+  const k = crabK(e), d = tx - e.x;
+  if (Math.abs(d) < 1.5) return true;
+  e.dir = Math.sign(d);
+  const nx = e.x + e.dir * Math.min(Math.abs(d), spd * dt), ng = groundY(nx, e.y, 22 * k + 6);
+  if (nx < TANK.left + 30 * k || nx > TANK.right - 30 * k || solidAt(nx, ng - 6 * k - 2)) return false;
+  if (ng > e.y + 26 * k + 8) { e.x = nx; e.mode = 'fall'; e.vy = 0; return true; }   // 走到邊緣：掉下去
+  e.x = nx; e.y = ng; e.dist = (e.dist || 0) + spd * dt / Math.max(.3, k);
+  return true;
+}
+function crabFall(e, dt) {
+  const wy = world.waterY, inW = e.y > wy;
+  e.vy = Math.min((e.vy || 0) + (inW ? 250 : 900) * dt, inW ? 90 : 500);
+  const g = groundY(e.x, e.y - 2, 4);
+  e.y = Math.min(g, e.y + e.vy * dt); e.state = inW ? '沉到水底' : '掉下去';
+  if (e.y >= g - .5) { e.y = g; if (e.vy > 300) dust(e.x, g, .4); e.vy = 0; e.mode = 'rest'; e.think = rand(.5, 2); }
+}
+function nearestWaterX(e) {                                      // 最近的「有水」的位置
+  const wy = world.waterY;
+  for (let dx = 0; dx < W; dx += 16) for (const s of [-1, 1]) {
+    const x = e.x + s * dx;
+    if (x > TANK.left + 30 && x < TANK.right - 30 && highestTop(x) > wy + 10) return x;
+  }
+  return null;
+}
+function nearestLandX(e, ok) {                                   // 最近的陸地（地面高於水面）
+  const wy = world.waterY;
+  for (let dx = 0; dx < W; dx += 12) for (const s of [-1, 1]) {
+    const x = e.x + s * dx, top = highestTop(x);
+    if (x > TANK.left + 30 && x < TANK.right - 30 && top < wy - 4 && (!ok || ok(x, top))) return x;
+  }
+  return null;
+}
+const CARRION = { fish: 1, shrimp: 1, tadpole: 1, frog: 1, crab: 1, snail: 1, cricket: 1, fly: 1, gecko: 1, larva: 1, mosquito: 1 };
+function findCarrion(e, range) {                                 // 沉在地上的屍體
+  let best = null, bd = range;
+  for (const t of world.ents) {
+    if (!t.dead || t.removed || t.held || !CARRION[t.kind] || Math.abs(t.x - e.x) > bd) continue;
+    if (Math.abs(groundY(t.x, t.y - 4, 8) - t.y) > 8) continue;
+    const d = dist(e, t); if (d < bd) { bd = d; best = t; }
+  }
+  return best;
+}
+function crabShelter(e) {                                        // 石頭、漂流木旁邊可以躲的位置
+  const k = crabK(e); let best = null, bd = 700;
+  for (const d of world.decor) {
+    if (d.type !== 'rock' && d.type !== 'boulder' && d.type !== 'wood') continue;
+    const xs = d.type === 'wood' ? woodEnds(d).map(p => p.x) : [d.x - d.w / 2 - 4 * k, d.x + d.w / 2 + 4 * k];
+    for (const x of xs) {
+      if (x < TANK.left + 40 || x > TANK.right - 40) continue;
+      const y = groundY(x, d.y - 4, 40);
+      if (d.type === 'wood' && Math.abs(y - Math.max(...woodEnds(d).map(p => p.y))) > 50) continue;   // 木頭離地太高
+      const dd = Math.abs(x - e.x) + Math.abs(y - e.y);
+      if (dd < bd) { bd = dd; best = P(x, y); }
+    }
+  }
+  return best;
+}
+function crabDanger(e) {                                         // 讓清溪蟹舉螯的東西：大型動物靠近、另一隻公蟹
+  const k = crabK(e), r = 60 * k + 30;
+  for (const kind of ['turtle', 'axolotl', 'frog', 'bird']) for (const o of entsOfKind(kind)) {
+    if (o.kind !== kind || o.dead || o.held || (kind === 'bird' && !birdDiving(o))) continue;
+    if (Math.abs(o.x - e.x) < r && Math.abs(o.y - e.y) < r) return o;
+  }
+  if (e.sex === 'm' && isAdult(e) && !(e.rivalCD > 0))
+    for (const o of entsOfType(e.type)) if (o !== e && o.type === e.type && o.sex === 'm' && !o.dead && isAdult(o) && o.mode !== 'hide' && Math.abs(o.x - e.x) < 44 * k && Math.abs(o.y - e.y) < 20) return o;
+  return null;
+}
+function updCrab(e, dt) { return SPECIES[e.type].fiddler ? updFiddler(e, dt) : updStreamCrab(e, dt); }
+function crabPick(e, dt) {                                       // 用小螯撿地上的碎屑、藻類（勉強維生）
+  e.pick = true;
+  e.hunger = Math.min(100, e.hunger + .025 * dt + (e.y > world.waterY ? eatAlgae(.001 * dt) * 30 : 0));
+}
+
+function updStreamCrab(e, dt) {
+  const sp = SPECIES[e.type], wy = world.waterY, k = crabK(e), night = isNight(), juv = e.size < e.adult * .6;
+  const inWater = e.y > wy + 2;
+  e.dry = inWater ? Math.max(0, (e.dry || 0) - dt * 6) : (e.dry || 0) + dt;
+  if (e.cool > 0) e.cool -= dt;
+  if (e.rivalCD > 0) e.rivalCD -= dt;
+  if (e.shelterCD > 0) e.shelterCD -= dt;
+  e.pick = false;
+  if (e.mode === 'fall') return crabFall(e, dt);
+  if (e.mode !== 'threat' && e.mode !== 'eat' && e.mode !== 'grab') {
+    const o = crabDanger(e);
+    if (o) { e.mode = 'threat'; e.modeT = 0; e.src = o; e.state = `舉起雙螯威嚇${o.type === e.type ? '另一隻公蟹' : entName(o)}`; if (o.type === e.type) { e.rivalCD = 6; o.rivalCD = Math.max(o.rivalCD || 0, 1.5); } }
+  }
+  if (e.mode === 'threat') {
+    e.modeT += dt;
+    if (e.modeT > 1.6) {                                         // 威嚇完往旁邊退開
+      const away = Math.sign(e.x - (e.src ? e.src.x : e.x - e.dir)) || 1;
+      e.mode = 'walk'; e.tx = clamp(e.x + away * rand(80, 160), TANK.left + 40, TANK.right - 40); e.fast = 1.4; e.think = 3;
+    }
+    return;
+  }
+  if (e.mode === 'grab') {                                       // 出螯夾獵物
+    e.modeT += dt; e.state = `出螯夾${entName(e.meal || e)}`;
+    if (e.modeT < .35) return;
+    const t = e.meal; e.meal = null;
+    if (t && !t.removed && !t.dead && canEat(e, t) && Math.abs(t.x - e.x) < 34 * k + 8 && Math.abs(t.y - e.y) < 30 * k + 10 && Math.random() < (t.kind === 'cricket' ? .5 : .4)) {
+      eat(e, t); e.mode = 'eat'; e.modeT = 0; e.eatDur = 2.5;
+    } else {
+      e.cool = 3; e.mode = 'rest'; e.state = '沒夾到';
+      if (t && t.kind === 'shrimp' && !t.dead) { t.mode = 'flip'; t.flipT = 0; t.fvx = Math.sign(t.x - e.x || 1) * 200; t.fvy = -rand(30, 70); }
+    }
+    return;
+  }
+  if (e.mode === 'eat') {                                        // 用螯把食物撕成小塊送進嘴裡
+    e.modeT += dt; e.state = '用螯把食物撕成小塊送進嘴裡';
+    if (e.modeT > e.eatDur) { e.mode = 'rest'; e.think = rand(1, 3); }
+    return;
+  }
+  // 繁殖：晚上公母相遇 → 母蟹抱卵 → 孵出小螃蟹（直接發育）
+  if (e.preg > 0) {
+    e.preg += dt / sp.gestation * (e.hunger > 30 ? 1 : .3);
+    if (e.preg >= 1) {
+      e.preg = 0; e.breedT = rand(150, 240);
+      const room = capFor('crab') - countKind('crab'), n = Math.min(room, Math.round(rand(...sp.clutch)));
+      for (let i = 0; i < n; i++) {
+        const c = makeEnt(e.type, clamp(e.x + rand(-16, 16) * k, TANK.left + 20, TANK.right - 20), e.y - 2);
+        c.size = c.adult * sp.birth; c.hunger = 80; c.morph = Math.random() < .5 ? e.morph : (e.mateMorph ?? e.morph);
+      }
+      if (n > 0) { logEvent(`🦀 ${sp.name}母蟹腹部的 ${n} 隻小螃蟹爬出來了`); emit('crabHatch', { type: e.type, n }); }
+    }
+  } else if (e.sex === 'f' && isAdult(e) && world.settings.breed && e.hunger > 50 && night) {
+    if (e.breedT === undefined) e.breedT = rand(40, 90);
+    if ((e.breedT -= dt) <= 0) {
+      e.breedT = rand(60, 120);
+      const m = entsOfType(e.type).find(o => o.type === e.type && o.sex === 'm' && !o.dead && isAdult(o) && dist(o, e) < 180);
+      if (m && countKind('crab') < capFor('crab')) { e.preg = .001; e.mateMorph = m.morph; logEvent(`💕 ${sp.name}交配了，母蟹開始抱卵`); }
+    }
+  }
+  const brooding = e.preg > 0;
+  e.think -= dt;
+  let goal = null, why = '';
+  if (e.dry > sp.dryMax) { const wx = nearestWaterX(e); if (wx !== null) { goal = wx; why = '離水太久，回水裡弄濕鰓'; } }
+  if (goal === null && e.hunger < sp.huntBelow && !(e.cool > 0) && (night || e.hunger < 45 || juv)) {
+    const range = sp.sight * (night ? 1 : .5);
+    const c = world.settings.rules.crab_carrion ? findCarrion(e, range) : null;
+    const t = c || findPrey(e, range, t => t.kind === 'food' ? t.y > groundY(t.x, t.y - 2, 4) - 16 : Math.abs(t.y - e.y) < 40 * k + 12);
+    if (t) {
+      if (Math.abs(t.x - e.x) < 18 * k + 4 && Math.abs(t.y - e.y) < 26 * k + 8) {
+        e.modeT = 0;
+        if (c) {                                                 // 屍體：撕下來吃掉，順便清理缸底
+          c.removed = true; e.hunger = Math.min(100, e.hunger + 25); e.eaten++; addFx(c.x, c.y, '+25', '#ffb020');
+          logEvent(`🦀 ${sp.name}把${entName(c)}的屍體吃掉了（清理缸底）`); emit('scavenge', { e, t: c });
+          e.mode = 'eat'; e.eatDur = 4;
+        } else if (t.kind === 'food') { eat(e, t); e.mode = 'eat'; e.eatDur = 1.5; }
+        else { e.mode = 'grab'; e.meal = t; e.dir = Math.sign(t.x - e.x) || e.dir; }
+        return;
+      }
+      goal = t.x; why = c ? `走向${entName(c)}的屍體` : t.kind === 'food' ? '走向飼料' : `靠近${entName(t)}`;
+    }
+  }
+  if (e.dayOut > 0) e.dayOut -= dt;
+  if (goal === null && (!night && !(e.dayOut > 0) || brooding || (juv && e.hunger > 60))) {   // 白天、抱卵中、吃飽的小螃蟹：躲在石頭邊
+    if (!e.shelter && !(e.shelterCD > 0)) e.shelter = crabShelter(e);
+    if (e.shelter) {
+      if (Math.abs(e.x - e.shelter.x) < 3 && Math.abs(e.y - e.shelter.y) < 20) {
+        e.mode = 'hide'; e.state = brooding ? `抱卵中（${Math.round(e.preg * 100)}%），躲在石頭邊` : night ? '吃飽了，躲在石頭邊' : '白天躲在石頭邊';
+        if (Math.random() < dt * .3) crabPick(e, dt);
+        if (!night && !brooding && !juv && (e.hideT = (e.hideT ?? rand(20, 50)) - dt) <= 0) { e.hideT = rand(30, 70); e.dayOut = rand(8, 20); e.shelter = null; }   // 白天偶爾出來晃一下
+        return;
+      }
+      goal = e.shelter.x; why = '走回石頭邊躲起來';
+    } else {
+      e.mode = 'rest'; e.state = night ? '休息' : '白天不太活動（附近沒有石頭可以躲）'; crabPick(e, dt);
+      return;
+    }
+  }
+  if (goal === null) {                                           // 晚上：到處走動覓食（陸地、水裡都會去）
+    e.shelter = null;
+    if (e.think <= 0 || e.tx === undefined) { e.think = rand(3, 7); e.tx = clamp(e.x + rand(-260, 260), TANK.left + 40, TANK.right - 40); e.pause = Math.random() < .4 ? rand(1.5, 4) : 0; }
+    if (e.pause > 0) { e.pause -= dt; e.mode = 'rest'; e.state = '用小螯在地上撿東西吃'; crabPick(e, dt); return; }
+    goal = e.tx; why = inWater ? '在水底走動覓食' : '在陸地上走動覓食';
+  }
+  e.mode = 'walk'; e.state = why;
+  const spd = sp.speed * e.size * (e.fast > 0 ? 2 : 1); if (e.fast > 0) e.fast -= dt;
+  if (!crabMove(e, goal, spd, dt)) {                             // 被擋住：換個方向
+    if (e.shelter && goal === e.shelter.x) { e.shelter = null; e.shelterCD = 12; }
+    e.think = rand(2, 4); e.tx = clamp(e.x - e.dir * rand(60, 160), TANK.left + 40, TANK.right - 40);
+    if (e.mode !== 'fall') e.mode = 'rest';
+  }
+}
+
+function onMudflat(x, y) { return world.decor.some(d => d.type === 'mudflat' && (s => s && Math.abs(s.top - y) < 4)(decorSpan(d, x))); }
+function fiddlerSite(e) {                                        // 挖洞的地點：泥灘上、水面上方一點點（潮間帶），離別的洞遠一點
+  const wy = world.waterY, out = [];
+  for (const d of world.decor) {
+    if (d.type !== 'mudflat') continue;
+    for (let x = d.x - d.w * .46; x <= d.x + d.w * .46; x += 8) {
+      const s = decorSpan(d, x); if (!s) continue;
+      const top = highestTop(x);
+      if (top < s.top - 1 || top > wy - 4 || x < TANK.left + 30 || x > TANK.right - 30) continue;   // 被蓋住、在水裡
+      if (world.ents.some(o => o !== e && o.burrow && Math.abs(o.burrow.x - x) < 40)) continue;
+      out.push({ x, y: top, score: Math.abs((wy - top) - 30) * 1.5 + Math.abs(x - e.x) * .1 });
+    }
+  }
+  out.sort((a, b) => a.score - b.score);
+  return out[0] || null;
+}
+function fiddlerThreat(e) {
+  const near = (o, r) => Math.abs(o.x - e.x) < r && Math.abs(o.y - e.y) < r;
+  for (const o of entsOfKind('bird')) if (o.kind === 'bird' && !o.dead && !o.held && near(o, o.mode === 'perch' ? 170 : 340)) return o;
+  for (const [kind, r] of [['turtle', 140], ['frog', 90], ['gecko', 80], ['axolotl', 90]]) for (const o of entsOfKind(kind)) if (o.kind === kind && !o.dead && !o.held && near(o, r)) return o;
+  for (const o of entsOfType('streamcrab')) if (o.type === 'streamcrab' && !o.dead && isAdult(o) && near(o, 60)) return o;
+  return null;
+}
+function updFiddler(e, dt) {
+  const sp = SPECIES[e.type], wy = world.waterY, k = crabK(e), night = isNight(), male = e.sex === 'm' && e.size > e.adult * .6;
+  e.pel = e.pel || [];
+  for (const p of e.pel) p.t += dt;
+  while (e.pel.length && e.pel[0].t > 90) e.pel.shift();
+  if (e.burrow && Math.abs(highestTop(e.burrow.x) - e.burrow.y) > 5) e.burrow = null;   // 泥灘被移動了：洞不見了
+  const flooded = !!e.burrow && e.burrow.y > wy - 2;
+  e.pick = false; e.scoop = false;
+  if (e.waving > 0) { e.waving -= dt; e.wavePh = (e.wavePh || 0) + dt; }
+  if (e.mode === 'fall') return crabFall(e, dt);
+  if (e.mode !== 'in' && e.mode !== 'run') {
+    const o = fiddlerThreat(e);
+    if (o) { e.mode = 'run'; e.src = o; e.waving = 0; e.modeT = 0; }
+  }
+  const spd = sp.speed * e.size;
+  if (e.mode === 'run') {                                        // 衝回洞裡
+    e.modeT += dt; e.state = `看到${entName(e.src || e)}，衝回洞裡`;
+    if (e.burrow) {
+      if (Math.abs(e.x - e.burrow.x) < 2) { e.x = e.burrow.x; e.y = e.burrow.y; e.mode = 'in'; e.inT = rand(5, 12); return; }
+      if (!crabMove(e, e.burrow.x, spd * 2.6, dt) || e.modeT > 6) { e.burrow = null; e.mode = 'walk'; }
+    } else {
+      e.state = '沒有洞可以躲，趕快逃開';
+      crabMove(e, clamp(e.x + Math.sign(e.x - (e.src ? e.src.x : 0) || 1) * 80, TANK.left + 40, TANK.right - 40), spd * 2.2, dt);
+      if (e.modeT > 1.5) e.mode = 'walk';
+    }
+    return;
+  }
+  if (e.mode === 'in') {                                         // 在洞裡：過一陣子先探出眼睛，再爬出來
+    if (!e.burrow) { e.mode = 'walk'; return; }
+    e.x = e.burrow.x; e.y = e.burrow.y;
+    e.inT -= dt; e.hunger = Math.min(100, e.hunger + 100 / sp.hungerTime * dt * .6);   // 躲在洞裡不太消耗體力
+    if (fiddlerThreat(e)) e.inT = Math.max(e.inT, 3);
+    e.peek = e.inT < 2.5 && !flooded;
+    if (flooded) { e.state = '漲潮了，躲在洞裡（洞口封起來）'; e.inT = Math.max(e.inT, 1); return; }
+    if (night) { e.state = '晚上躲在洞裡'; e.inT = Math.max(e.inT, 1); e.peek = false; return; }
+    e.state = e.peek ? '從洞口探出眼睛看看' : '躲在洞裡';
+    if (e.inT <= 0) { e.mode = 'walk'; e.think = rand(1, 3); }
+    return;
+  }
+  if (e.mode === 'dig') {                                        // 挖洞：把泥巴一團團搬出來
+    e.modeT += dt; e.state = '在泥灘上挖洞'; e.scoop = true;
+    if ((e.digT = (e.digT || 0) - dt) <= 0) { e.digT = rand(.5, .9); e.pel.push({ x: e.x + rand(-20, 20) * k, y: e.y, t: 0, big: true }); dust(e.x, e.y, .25); }
+    if (e.modeT > 6) { e.burrow = { x: e.x, y: e.y }; e.mode = 'in'; e.inT = rand(2, 4); logEvent(`🦀 ${sp.name}在泥灘上挖好了洞`); }
+    return;
+  }
+  // 平常：在洞口附近活動
+  if (!e.burrow) {
+    if (e.y > wy + 2) {                                          // 在水裡：先上岸
+      const lx = nearestLandX(e); e.state = '爬上岸';
+      if (lx !== null && crabMove(e, lx, spd, dt)) { e.mode = 'walk'; return; }
+    }
+    if ((e.siteT = (e.siteT || 0) - dt) <= 0) { e.siteT = 3; e.site = fiddlerSite(e); }
+    if (e.site) {
+      if (Math.abs(e.x - e.site.x) < 2) { e.mode = 'dig'; e.modeT = 0; return; }
+      e.mode = 'walk'; e.state = '走到泥灘上找地方挖洞';
+      if (!crabMove(e, e.site.x, spd, dt)) e.siteT = 0;
+      return;
+    }
+    e.state = '找不到泥灘（招潮蟹要在泥灘上挖洞）';
+  } else {
+    if (flooded || night) {                                      // 漲潮、晚上：回洞裡
+      e.mode = 'walk'; e.state = flooded ? '漲潮了，回到洞裡' : '天黑了，回到洞裡';
+      if (Math.abs(e.x - e.burrow.x) < 2) { e.mode = 'in'; e.inT = rand(3, 6); return; }
+      if (!crabMove(e, e.burrow.x, spd * 1.5, dt)) e.burrow = null;
+      return;
+    }
+  }
+  const food = e.hunger < sp.huntBelow ? findPrey(e, 160, t => t.kind === 'food' && Math.abs(t.y - e.y) < 30) : null;
+  if (food) {
+    e.mode = 'walk'; e.state = '走向飼料';
+    if (Math.abs(food.x - e.x) < 12 * k + 3) { eat(e, food); e.scoopT = 1.5; e.waving = 0; }
+    else crabMove(e, food.x, spd, dt);
+    return;
+  }
+  e.think -= dt;
+  if (e.think <= 0) {
+    const r = Math.random(), femaleNear = male && world.ents.some(o => o.type === e.type && o.sex === 'f' && !o.dead && o.mode !== 'in' && Math.abs(o.x - e.x) < 240);
+    e.think = rand(2, 5); e.tx = undefined; e.scoopT = 0;
+    if (male && r < (femaleNear ? .55 : .3)) { e.waving = rand(3, 6); e.wavePh = 0; e.think = e.waving; if (e.burrow && Math.abs(e.x - e.burrow.x) < 30) emit('fiddlerWave', { e }); }
+    else if (r < .75) e.scoopT = e.think;
+    else {
+      const base = e.burrow ? e.burrow.x : e.x;
+      for (let i = 0; i < 6; i++) { const x = clamp(base + rand(-80, 80), TANK.left + 30, TANK.right - 30); if (highestTop(x) < wy - 4) { e.tx = x; break; } }
+    }
+  }
+  if (e.waving > 0) { e.mode = 'wave'; e.state = '揮動大螯（求偶、宣示地盤）'; return; }
+  if (e.tx !== undefined) {
+    e.mode = 'walk'; e.state = '在洞口附近走動';
+    if (!crabMove(e, e.tx, spd, dt) || Math.abs(e.x - e.tx) < 2) e.tx = undefined;
+    return;
+  }
+  e.mode = 'feed';
+  if (e.scoopT > 0) {                                            // 用小螯挖泥巴吃，吃剩的搓成小球
+    e.scoopT -= dt; e.scoop = true;
+    const mud = onMudflat(e.x, e.y);
+    e.hunger = Math.min(100, e.hunger + (mud ? .3 : .03) * dt);
+    e.state = mud ? '用小螯挖泥巴吃（把吃剩的泥搓成小球）' : '用小螯在地上找東西吃（這裡不是泥灘，吃不太到）';
+    if ((e.pelT = (e.pelT || 0) - dt) <= 0) { e.pelT = rand(1.6, 2.8); if (mud && e.pel.length < 24) e.pel.push({ x: e.x + rand(-14, 14) * k, y: e.y, t: 0 }); }
+  } else e.state = '站在洞口張望';
 }

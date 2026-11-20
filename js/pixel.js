@@ -202,6 +202,11 @@ const PX_SHRIMP = [                                                   // 櫻花�
   { hi: '#ffc49c', li: '#ff8466', base: '#ee4c40', sh: '#c22c40', dk: '#801838', ol: '#4c0e2a', spot: '#b0122c', spot2: '#ff6a52', fan: '#ff9a80', leg: '#e85a50' },
   { hi: '#ffa070', li: '#ff5c3e', base: '#e0262a', sh: '#aa1230', dk: '#6c0a2c', ol: '#3e0620', spot: '#9c0a28', spot2: '#ff4a36', fan: '#f04a3a', leg: '#d8302e' },
 ];
+const PX_CRS = {                                                       // 水晶蝦：不透明白底＋紅／黑色帶
+  white: { hi: '#ffffff', li: '#fbf9f6', base: '#efebe5', sh: '#d6cec8', dk: '#a49896', ol: '#5e5254', fan: '#f6f2ee', leg: '#e4dcd8' },
+  '#cc1c28': { hi: '#ff8a7a', li: '#f04a46', base: '#d41e2c', sh: '#a01228', dk: '#6a0a22', ol: '#3e0618', fan: '#e8343a', leg: '#e86a66' },
+  '#201c20': { hi: '#7a7480', li: '#4e4854', base: '#2e2a32', sh: '#1e1a22', dk: '#121014', ol: '#08060a', fan: '#3a3640', leg: '#8a8490' },
+};
 const PX_MOLT = { hi: '#fbf4ee', li: '#f4e8e0', base: '#eadcd2', sh: '#d8c6bc', dk: '#c0aca2', ol: '#a89488', spot: '#eadcd2', spot2: '#eadcd2', fan: '#f4e8e0', leg: '#d8c6bc', clear: true, molt: true };
 const PX_CORY = [
   { ramp: ['#ecdcbc', '#bea878', '#9c8862', '#706244', '#4a4028'], sheen: '#5f9a80', cheek: '#c98a58', fin: '#dccfb4', finDk: '#a8946e', eye: '#151515', ring: '#c9a860' },
@@ -703,7 +708,8 @@ function pxShrimpSprite(B, st, T, S, g) {
   if (S >= .8) for (const L of R.legs) stroke([P(L.root.x - .8, L.root.y), P(L.knee.x - .8, L.knee.y), P(L.foot.x - .8, L.foot.y)], g.dk, 1);   // 遠側的腳
   if (S >= .6 && !g.molt) stroke(R.antenna[1], g.dk, 1);
   const t0 = R.tail.at, ta = R.tail.ang;
-  for (const [da, len, col] of [[-R.tail.spread, 5.6, g.fan], [R.tail.spread, 5.6, g.fan], [0, 6.2, g.li]]) {   // 尾扇
+  const fg = st.crs && st.crs.fan ? st.band : g;
+  for (const [da, len, col] of [[-R.tail.spread, 5.6, fg.fan], [R.tail.spread, 5.6, fg.fan], [0, 6.2, fg.li]]) {   // 尾扇
     const tip = P(t0.x + Math.cos(ta + da) * len, t0.y + Math.sin(ta + da) * len), n = P(-Math.sin(ta + da), Math.cos(ta + da));
     B.poly([P(t0.x + n.x * .9, t0.y + n.y * .9), P(tip.x + n.x * 1.1, tip.y + n.y * 1.1), P(tip.x - n.x * 1.1, tip.y - n.y * 1.1), P(t0.x - n.x * .9, t0.y - n.y * .9)].map(T), col);
     if (S >= (PXOPT.detail ? .85 : 1.2)) { const a = T(t0), b = T(tip); B.line(a.x, a.y, b.x, b.y, C(g.sh), 1); }
@@ -713,16 +719,20 @@ function pxShrimpSprite(B, st, T, S, g) {
     const A = sg.a, Bq = sg.b, h0 = sg.h, h1 = nx.h;
     const quad = (f0, f1, col) => B.poly([P(A.x + up.x * h0 * f0, A.y + up.y * h0 * f0), P(Bq.x + up.x * h1 * f0, Bq.y + up.y * h1 * f0), P(Bq.x + up.x * h1 * f1, Bq.y + up.y * h1 * f1), P(A.x + up.x * h0 * f1, A.y + up.y * h0 * f1)].map(T), col);
     const DS = PXOPT.detail ? .85 : 1.2;                                  // 細節門檻（改善後在比較小的尺寸就出現）
-    quad(1.02, -.95, g.base); quad(-.35, -.95, g.sh); quad(1.02, .45, g.li); if (S >= DS) quad(1.02, .8, g.hi);
+    const q = st.crs && st.crs.segs[i] ? st.band : g;                     // 水晶蝦：這一節是色帶
+    quad(1.02, -.95, q.base); quad(-.35, -.95, q.sh); quad(1.02, .45, q.li); if (S >= DS) quad(1.02, .8, q.hi);
     const big = i === 1 ? 1.35 : 1, mid = P((A.x + Bq.x) / 2, (A.y + Bq.y) / 2), dn = P(-up.x, -up.y);
     if (i < 5 && S >= .8) B.poly([-1.25, -.6, 0, .6, 1.25].map((f, kk) => T(P(mid.x + (Bq.x - A.x) / 3.3 * f * 1.9 * big + dn.x * sg.h * (kk === 0 || kk === 4 ? .7 : 1.15 * big), mid.y + (Bq.y - A.y) / 3.3 * f * 1.9 * big + dn.y * sg.h * (kk === 0 || kk === 4 ? .7 : 1.15 * big)))), g.sh);
     if (S >= DS) { const a = T(P(A.x + up.x * h0, A.y + up.y * h0)), b = T(P(A.x - up.x * h0 * .8, A.y - up.y * h0 * .8)); B.line(a.x, a.y, b.x, b.y, C(g.dk), 1); }
   }
-  B.poly([P(4.2, -11.4), P(8, -12.6), P(13, -12.8), P(17, -12), P(19.6, -10.6), P(19.8, -7.8), P(16, -6.2), P(10, -5.6), P(4.4, -5.8)].map(T), g.base);   // 頭胸甲
-  B.poly([P(4.4, -8), P(19.8, -8.6), P(19.8, -7.8), P(16, -6.2), P(10, -5.6), P(4.4, -5.8)].map(T), g.sh);
-  B.poly([P(4.2, -11.4), P(8, -12.6), P(13, -12.8), P(17, -12), P(19.4, -10.8), P(17, -11), P(12, -11.6), P(6, -11)].map(T), g.li);
-  if (S >= (PXOPT.detail ? .6 : 1.2)) B.poly([P(7, -12.2), P(12.5, -12.6), P(16, -11.9), P(12, -12)].map(T), g.hi);
-  B.poly([P(18.8, -11.4), P(25.6, -12), P(24.8, -11.1), P(19.2, -9.8)].map(T), g.li);   // 額角
+  const hg = st.crs && st.crs.head === 'full' ? st.band : g;
+  B.poly([P(4.2, -11.4), P(8, -12.6), P(13, -12.8), P(17, -12), P(19.6, -10.6), P(19.8, -7.8), P(16, -6.2), P(10, -5.6), P(4.4, -5.8)].map(T), hg.base);   // 頭胸甲
+  B.poly([P(4.4, -8), P(19.8, -8.6), P(19.8, -7.8), P(16, -6.2), P(10, -5.6), P(4.4, -5.8)].map(T), hg.sh);
+  B.poly([P(4.2, -11.4), P(8, -12.6), P(13, -12.8), P(17, -12), P(19.4, -10.8), P(17, -11), P(12, -11.6), P(6, -11)].map(T), hg.li);
+  if (S >= (PXOPT.detail ? .6 : 1.2)) B.poly([P(7, -12.2), P(12.5, -12.6), P(16, -11.9), P(12, -12)].map(T), hg.hi);
+  if (st.crs && st.crs.head === 'full') B.poly([P(16.4, -12), P(19.4, -10.8), P(19.6, -8.2), P(17.6, -7), P(16, -9.6)].map(T), g.li);   // C 級額頭的白帶
+  if (st.crs && st.crs.head !== 'full') B.poly(ellipsePts(11.4, -9.4, st.crs.head === 'spot' ? 3.8 : 1.9, st.crs.head === 'spot' ? 2.6 : 1.3, 0, 14).map(T), st.band.base);   // 日之丸
+  B.poly([P(18.8, -11.4), P(25.6, -12), P(24.8, -11.1), P(19.2, -9.8)].map(T), hg.li);   // 額角
   return R;
 }
 function pxShrimpDetails(B, st, T, S, g, R) {                         // 外框之後：腸道、卵鞍、斑點、眼睛、腳、觸角
@@ -730,7 +740,7 @@ function pxShrimpDetails(B, st, T, S, g, R) {                         // 外框�
     const gut = [P(17, -10.2), P(10, -10.6), P(5, -10.2), ...R.ab.map(sg => { const up = P(Math.cos(sg.ang + Math.PI / 2), Math.sin(sg.ang + Math.PI / 2)); return P(sg.b.x + up.x * sg.h * .35, sg.b.y + up.y * sg.h * .35); })];
     B.path(gut.map(T), g.clear ? '#7c4a32' : g.dk);
   }
-  if (!g.molt && st.sex === 'f' && st.adult) { B.poly([P(5.5, -11.3), P(10.5, -11.8), P(12, -10.4), P(6, -9.6)].map(T), '#f4cc4c', 3); }
+  if (!g.molt && !st.crs && st.sex === 'f' && st.adult) { B.poly([P(5.5, -11.3), P(10.5, -11.8), P(12, -10.4), P(6, -9.6)].map(T), '#f4cc4c', 3); }
   if (!g.molt && st.grade < 2 && S >= .8) {                             // 紅色素斑點（固定雜訊，跟著身體移動）
     const dens = st.grade === 0 ? .07 : .1, o = T(P(0, 0)), fl = o.x > T(P(1, 0)).x ? -1 : 1;
     for (let y = B.y0; y <= B.y1; y++) for (let x = B.x0; x <= B.x1; x++) {
@@ -762,7 +772,9 @@ function drawPxShrimp(e) {
   const moving = e.mode === 'walk' && e.state === '走動' || e.state === '走向飼料';
   const st = { t: world.t + e.id * .7, act: e.state === '用小螯夾食' ? 'pick' : (e.mode === 'swim' || e.mode === 'swarm' || e.mode === 'flip' || e.mode === 'fall') ? 'swim' : moving ? 'walk' : 'still',
                walk: (e.dist || 0) * .55, curl: e.curl || 0, grade: e.sex === 'm' ? Math.max(0, (e.morph || 0) - 1) : (e.morph || 0), sex: e.sex, berried: (e.preg || 0) > 0, adult: e.size >= e.adult * .6 };
-  const g = PX_SHRIMP[st.grade], T = mapper(e.x, e.y, S, e.dir, 1);
+  const crs = SPECIES[e.type].morphs === 'crystal' ? CRYSTAL_MORPHS[e.morph || 0] : null;
+  if (crs) { st.crs = crs; st.band = PX_CRS[crs.band]; st.grade = 2; }   // grade 2：不畫櫻花蝦的斑點和腸道
+  const g = crs ? PX_CRS.white : PX_SHRIMP[st.grade], T = mapper(e.x, e.y, S, e.dir, 1);
   let R;
   live(B => { R = pxShrimpSprite(B, st, T, S, g); if (PXOPT.detail) { B.cleanup(); if (S >= .7) B.rim(.25, .18); } B.outline(g.dk, g.ol); pxShrimpDetails(B, st, T, S, g, R); }, null);
 }
