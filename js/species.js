@@ -48,6 +48,10 @@ const SPECIES = {
     look: { shape: 'shark', body: ['#121416', '#25282c', '#3b3f44'], tail: ['#f04a30', '#d8321f', '#b0261a'], tailType: 'fork',
             fin: '#1a1c1f', hScale: .82, dorsalTall: true },
   },
+  // 翠鳥（普通翠鳥，約 16 cm）：停在水邊的石頭或樹枝上盯著水面，看準了頭朝下俯衝入水抓小魚，
+  // 叼回原處把魚往石頭上甩幾下再整條吞下。公鳥嘴全黑、母鳥下嘴喙橘紅色
+  kingfisher: { name: '翠鳥', kind: 'bird', len: 290, speed: 300, sight: 560, hungerTime: 1500, huntBelow: 88, hit: 30,
+                dive: { depth: 160, success: .5, cool: [6, 14] }, sexed: true, femaleScale: 1 },
   turtle: { name: '麝香龜', kind: 'turtle', len: 90, scale: 2, speed: 26, walk: 14, sight: 190, hungerTime: 1200, huntBelow: 60, hit: 22,
             growTime: 400, birth: .35, breed: { how: 'eggs', cool: [300, 420], count: [2, 3], hatch: 60 } },
   frog:   { name: '東方鈴蟾', kind: 'frog', len: 50, scale: 1.6, tongue: 150, sight: 150, hungerTime: 900, huntBelow: 80, hit: 17,
@@ -110,13 +114,14 @@ const SHRIMP_GRADES = [
 ];
 
 // 族群上限（以標準缸為準，大缸依面積放大）
-const CAPS = { mosquito: 30, larva: 80, fish: 20, frog: 6, tadpole: 30, turtle: 3, gecko: 4, shrimp: 20 };
+const CAPS = { bird: 2, mosquito: 30, larva: 80, fish: 20, frog: 6, tadpole: 30, turtle: 3, gecko: 4, shrimp: 20 };
 
 const DECOR_TYPES = {
   rock:    { name: '石頭',   w: 150, h: 80,  solid: true },
   boulder: { name: '大岩石', w: 230, h: 400, solid: true },
   mound:   { name: '土坡',   w: 440, h: 400, solid: true },
   wood:    { name: '漂流木', w: 250, h: 20,  solid: true },
+  branch:  { name: '樹枝',   w: 380, h: 11,  solid: true },     // 從側面伸進缸內的樹枝（給翠鳥停）；放在哪個高度就停在那裡
   plant:   { name: '水草',   w: 60,  h: 180, solid: false },
   bubbler: { name: '氣泡石', w: 36,  h: 14,  solid: false },
   filter:  { name: '過濾器', w: 46,  h: 90,  solid: false },   // 掛在水面附近，持續清除髒污
@@ -153,6 +158,9 @@ const RULES = [
   { id: 'fish_fry',       pred: 'fish',    prey: 'fish',     label: '大魚吃魚苗', juvenileOnly: true },
   { id: 'turtle_fish',    pred: 'turtle',  prey: 'fish',     label: '烏龜吃小魚' },
   { id: 'turtle_tadpole', pred: 'turtle',  prey: 'tadpole',  label: '烏龜吃蝌蚪' },
+  { id: 'bird_fish',      pred: 'bird',    prey: 'fish',     label: '翠鳥俯衝抓小魚' },
+  { id: 'bird_shrimp',    pred: 'bird',    prey: 'shrimp',   label: '翠鳥抓蝦' },
+  { id: 'bird_tadpole',   pred: 'bird',    prey: 'tadpole',  label: '翠鳥抓蝌蚪' },
   { id: 'whale_larva',    pred: 'whale',   prey: 'larva',    label: '藍鯨濾食孑孓' },
   { id: 'whale_food',     pred: 'whale',   prey: 'food',     label: '藍鯨濾食飼料' },
   { id: 'frog_cricket',   pred: 'frog',    prey: 'cricket',  label: '蛙類吃蟋蟀' },

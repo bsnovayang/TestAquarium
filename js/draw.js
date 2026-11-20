@@ -4,7 +4,7 @@
 // =====================================================================
 
 const DRAW = { shrimp: drawShrimp, snail: drawSnail, fish: drawFish, turtle: drawTurtle, frog: drawFrog, gecko: drawGecko, mosquito: drawMosquito, larva: drawLarva,
-               tadpole: drawTadpole, whale: drawWhale, nest: drawNest, cricket: drawCricket, fly: drawFly };
+               tadpole: drawTadpole, whale: drawWhale, nest: drawNest, cricket: drawCricket, fly: drawFly, bird: drawBird };
 
 // ---------------------------------------------------------------------
 // 場景
@@ -84,14 +84,14 @@ function drawMoundGrass(d) {
   for (let i = 0; i < top.length; i += 2) { const p = top[i]; if (p.y < wy - 4) G.line([p, P(p.x + Math.sin(i + world.t) * 2, p.y - 9)], 2, '#78b04a'); }
 }
 // 靜態造景（岩石、漂流木、土坡）用圖層快取；位置、水位、藻類量變了才重畫
-const STATIC_DECOR = { rock: 1, boulder: 1, mound: 1, wood: 1 };
+const STATIC_DECOR = { rock: 1, boulder: 1, mound: 1, wood: 1, branch: 1 };
 const decorLayerId = new WeakMap(); let decorLayerSeq = 0;
 function drawDecorCached(d) {
   if (!STATIC_DECOR[d.type]) return drawDecor(d);
   let id = decorLayerId.get(d); if (!id) { id = 'decor' + (++decorLayerSeq); decorLayerId.set(d, id); }
   let x0, y0, x1, y1;
-  if (d.type === 'wood') {
-    const [a, b] = woodEnds(d), m = d.h + 10;
+  if (isStick(d)) {
+    const [a, b] = woodEnds(d), m = d.h + (d.type === 'branch' ? 40 : 10);
     x0 = Math.min(a.x, b.x) - m; x1 = Math.max(a.x, b.x) + m; y0 = Math.min(a.y, b.y) - m; y1 = Math.max(a.y, b.y) + m;
   } else {
     const ol = decorOutline(d); x0 = x1 = ol[0].x; y0 = y1 = ol[0].y;
@@ -114,6 +114,25 @@ function drawDecor(d) {
     G.poly(ellipsePts(d.x, d.y - 5, d.w / 2, d.h / 2, 0, 18), { lin: [0, d.y - 12, 0, d.y, [[0, '#b9c2c6'], [1, '#6f7a80']]] }, '#4f585c', 1);
     for (let i = -2; i <= 2; i++) G.circle(d.x + i * 5, d.y - 8, 1, '#4f585c');
     G.line([P(d.x + d.w / 2 - 2, d.y - 6), P(d.x + d.w / 2 + 30, d.y - 2), P(TANK.right - 4, d.y - 2)], 2, 'rgba(60,70,60,.5)');   // 打氣管
+    return;
+  }
+  if (d.type === 'branch') {                                        // 樹枝：根部粗、尖端細，有樹皮紋和幾根小枝、葉子
+    const [a0, b0] = woodEnds(d), base = d.x < (TANK.left + TANK.right) / 2 ? a0 : b0, tip = base === a0 ? b0 : a0;
+    const r = rng(d.seed), n = 10, top = [], bot = [];
+    for (let i = 0; i <= n; i++) {
+      const t = i / n, x = lerp(base.x, tip.x, t), y = lerp(base.y, tip.y, t) + Math.sin(t * 5 + d.seed) * 2.5 + t * t * 6, hw = d.h / 2 * (1 - t * .62);
+      top.push(P(x, y - hw)); bot.push(P(x, y + hw));
+    }
+    G.poly(chaikin([...top, ...bot.reverse()], true, 1), { lin: [0, base.y - d.h, 0, base.y + d.h, [[0, '#8a6a46'], [1, '#4e3822']]] }, '#3a2814', 1.2);
+    for (let i = 1; i < n; i += 2) G.line([top[i], P(top[i].x + (tip.x > base.x ? 6 : -6), top[i].y + d.h * .5)], .7, 'rgba(40,26,12,.5)');   // 樹皮紋
+    G.save(); G.alpha(.3); G.line(top.slice(1, n), 1.4, '#e8d0a8'); G.restore();                                   // 上緣受光
+    const dirx = Math.sign(tip.x - base.x);
+    for (const [t, up, len] of [[.45, -1, 34], [.7, 1, 26], [.88, -1, 22]]) {                                      // 小枝和葉子
+      const i = Math.round(t * n), p = P((top[i].x + bot[n - i].x) / 2, (top[i].y + bot[n - i].y) / 2);
+      const q = P(p.x + dirx * len * .8, p.y + up * len * .55);
+      G.line([p, P((p.x + q.x) / 2, (p.y + q.y) / 2 - 2), q], 2, '#5e432a');
+      for (let k = 0; k < 3; k++) { const lp = P(lerp(p.x, q.x, .45 + k * .25), lerp(p.y, q.y, .45 + k * .25)); G.poly(ellipsePts(lp.x + dirx * 3, lp.y - 3, 6, 2.6, -dirx * .6 + (r() - .5) * .5, 10), k % 2 ? '#5f9a3c' : '#78b04a', '#3f6a2a', .5); }
+    }
     return;
   }
   if (d.type === 'wood') {
@@ -1053,6 +1072,76 @@ function drawNest(e) {
 }
 
 // ---------------------------------------------------------------------
+// 翠鳥（局部座標：身長約 64，頭在 +x，腳在原點；整個身體繞臀部 (0,-12) 轉 pitch）
+// 普通翠鳥：頭頂和翅膀藍綠色帶淡藍細點、背到腰一條亮藍色、橘紅色的胸腹、
+// 眼後橘色＋頸側白斑、白喉、從嘴角延伸的深色顎線、長而直的嘴（母鳥下嘴喙橘紅）、紅色短腳
+// ---------------------------------------------------------------------
+const KF = { crown: '#1d86a8', crownDk: '#14607e', back: '#3cc8ec', wing: '#1a7a9c', wingDk: '#125a74', spot: '#7fdcf2',
+             tail: '#17577a', belly: '#e8742a', bellyDk: '#c45a1e', cheek: '#ee8236', white: '#f6f2e8', beak: '#1c1c1e', beakF: '#d8502a', leg: '#e2462a', eye: '#141414' };
+function kfFish(c, x, y, k) {                                            // 嘴裡叼的魚（橫叼在嘴尖）
+  const sp = SPECIES[c.type]; if (!sp) return;
+  const len = sp.len * (c.size || 1) / k, h = len * .22, col = sp.look && sp.look.body ? sp.look.body[1] : (c.type === 'cherry' ? '#e04a3a' : '#c8d0d4');
+  G.save(); G.tf(x, y, Math.PI / 2 - .25);
+  G.poly(ellipsePts(0, 0, len * .5, h, 0, 14), col, 'rgba(40,50,60,.5)', .3);
+  const tailCol = c.type === 'guppy' && c.sex === 'm' ? GUPPY_MORPHS[c.morph || 0].tail[1] : col;
+  G.poly([P(-len * .45, 0), P(-len * .75, -h * 1.3), P(-len * .75, h * 1.3)], tailCol);
+  if (c.type === 'neon' || c.type === 'neontetra') { G.line([P(-len * .3, -h * .2), P(len * .35, -h * .2)], h * .35, '#2fd3ff'); G.line([P(-len * .35, h * .35), P(len * .1, h * .35)], h * .4, '#ff3348'); }
+  G.circle(len * .32, -h * .2, h * .3, '#111');
+  G.restore();
+}
+function drawBird(e) {
+  const sp = SPECIES[e.type], k = e.size * sp.len / 64, mode = e.mode, female = e.sex === 'f';
+  const flying = mode === 'fly' || mode === 'rise', diving = mode === 'dive' || mode === 'under', sleep = mode === 'perch' && isNight();
+  G.save(); G.tf(e.x, e.y, 0, e.dir * k, k);
+  if (e.dead) G.alpha(.6);
+  const shakeX = mode === 'shake' ? Math.sin(world.t * 60) * .8 : 0;
+  if (!(mode === 'fly' || mode === 'rise' || mode === 'dive' || mode === 'under')) {   // 腳：不跟著身體轉，直直抓住棲木
+    G.line([P(-1.2, -6.5), P(-.8, -1.2)], 1.5, KF.leg); G.line([P(1.6, -6.5), P(2, -1.2)], 1.5, KF.leg);   // 翠鳥的腳很短
+    for (const dx of [-3.5, -.5, 3.5]) G.line([P(.6, -1), P(.6 + dx, .3)], 1, KF.leg);
+  }
+  G.tf(shakeX, 6);                                                         // 身體往下移，貼近棲木
+  G.tf(0, -12, e.pitch || 0); G.tf(0, 12);                                 // 以臀部為支點轉
+  const flap = flying ? Math.sin(e.phase) : 0, puff = sleep ? 1.12 : mode === 'shake' ? 1.08 : 1;
+  // 遠側的翅膀（飛行時）
+  const wingPts = [P(0, 0), P(-6, -5), P(-16, -8), P(-27, -6), P(-31, -2), P(-24, 2), P(-12, 3), P(-3, 2.5)];
+  if (flying) { G.save(); G.tf(2, -24, -.9 - flap * .9); G.poly(chaikin(wingPts, true, 1), KF.wingDk); G.restore(); }
+  // 尾巴（短、深藍）
+  G.poly(chaikin([P(-13, -24), P(-30, -22.5), P(-31.5, -20), P(-30, -17.5), P(-13, -16.5)], true, 1), KF.tail, 'rgba(10,30,50,.5)', .5);
+  // 身體：上半藍綠、下半橘紅
+  const body = ellipsePts(-2, -20, 15.5, 8.6 * puff, 0, 28);
+  G.poly(body, { lin: [0, -29, 0, -11, [[0, KF.crown], [.42, KF.crown], [.5, KF.belly], [1, KF.bellyDk]]] }, 'rgba(20,30,40,.45)', .6);
+  G.line(chaikin([P(-15, -24.5), P(-6, -27), P(4, -27.6)], false, 1), 2.4, KF.back);   // 背到腰的亮藍色
+  // 收起來的翅膀（停棲、俯衝時）：蓋在身體側面，帶淡藍色細點
+  if (!flying) {
+    const fw = chaikin([P(8, -26.5), P(-2, -28.5), P(-15, -25.5), P(-21, -22), P(-15, -18.5), P(-2, -17.5), P(6, -20)], true, 1);
+    G.poly(fw, KF.wing, 'rgba(10,30,50,.45)', .5);
+    for (const [x, y] of [[4, -24], [0, -25], [-4, -24], [-8, -23], [2, -21.5], [-3, -21], [-8, -20.5], [-12, -22]]) G.circle(x, y, .55, KF.spot);
+    G.line([P(-6, -19), P(-18, -21.5)], .5, KF.wingDk);
+  }
+  // 頭：甩魚時整顆頭左右甩
+  const beat = mode === 'beat' ? Math.sin((e.modeT || 0) * 10.5) * .7 : 0, swallow = mode === 'swallow' ? Math.sin(Math.min(1, (e.modeT || 0) / .9) * Math.PI) * .25 : 0;
+  G.save(); G.tf(7, -24, beat - swallow + (sleep ? .35 : 0)); G.tf(-7, 24);
+  if (sleep) G.tf(-2, 2);
+  G.circle(11, -28.5, 8.6, { lin: [0, -37, 0, -20, [[0, KF.crown], [.6, KF.crown], [1, KF.crownDk]]] }, 'rgba(20,30,40,.45)', .6);
+  for (const [x, y] of [[8, -34], [12, -35], [15, -33], [6, -31], [10, -32], [14, -31.5]]) G.circle(x, y, .5, KF.spot);   // 頭頂的細點
+  G.poly(ellipsePts(8.5, -26.6, 4.6, 2.6, -.1, 12), KF.cheek);           // 眼後橘色
+  G.poly(ellipsePts(4.6, -24.6, 2.2, 1.7, .3, 10), KF.white);            // 頸側白斑
+  G.poly(ellipsePts(14.6, -22.9, 2.8, 1.5, -.2, 10), KF.white);          // 白喉
+  G.line(chaikin([P(17.5, -26.2), P(13, -26.2), P(8, -24.6)], false, 1), 1.6, KF.crownDk);   // 顎線
+  // 嘴：長而直（母鳥下嘴喙橘紅）
+  G.poly([P(17, -30.2), P(36.5, -27.6), P(17, -26.8)], KF.beak);
+  G.poly([P(17, -26.8), P(35.5, -27.3), P(17, -25)], female ? KF.beakF : KF.beak);
+  if (e.carry) kfFish(e.carry, 33.5, -27.2, k);
+  // 眼睛
+  if (sleep) G.line([P(13.2, -28.6), P(15.8, -28.6)], .7, KF.eye);
+  else { G.circle(14.5, -28.8, 1.7, KF.eye); G.circle(14, -29.4, .55, '#ffffff'); }
+  G.restore();
+  // 近側的翅膀（飛行時）
+  if (flying) { G.save(); G.tf(2, -25, -.6 - flap * 1.1); G.poly(chaikin(wingPts, true, 1), KF.wing, 'rgba(10,30,50,.45)', .5); for (let i = 0; i < 4; i++) G.circle(-8 - i * 5, -2, .55, KF.spot); G.restore(); }
+  G.restore();
+}
+
+// ---------------------------------------------------------------------
 // 迷你藍鯨（局部座標身長 100，頭在 +50）
 // ---------------------------------------------------------------------
 function drawWhale(e) {
@@ -1493,7 +1582,7 @@ function drawSelection(obj) {
   c.restore();
 }
 function decorBounds(d) {
-  if (d.type === 'wood') { const [a, b] = woodEnds(d); return { x0: Math.min(a.x, b.x) - 6, x1: Math.max(a.x, b.x) + 6, y0: Math.min(a.y, b.y) - d.h, y1: Math.max(a.y, b.y) + d.h }; }
+  if (isStick(d)) { const [a, b] = woodEnds(d); return { x0: Math.min(a.x, b.x) - 6, x1: Math.max(a.x, b.x) + 6, y0: Math.min(a.y, b.y) - d.h - 6, y1: Math.max(a.y, b.y) + d.h + 6 }; }
   if (d.type === 'plant') return { x0: d.x - d.w / 2 - 10, x1: d.x + d.w / 2 + 10, y0: d.y - d.h, y1: d.y };
   return { x0: d.x - d.w / 2, x1: d.x + d.w / 2, y0: d.y - d.h - 4, y1: d.y };
 }
@@ -1535,7 +1624,7 @@ function render(selected) {
   drawTailBits();
   drawMolts();
   for (const f of world.food) drawFood(f);
-  const order = { shrimp: 0, snail: 0, nest: 0, larva: 0, tadpole: 1, whale: 1, fish: 2, cricket: 3, turtle: 3, frog: 4, gecko: 5, mosquito: 6, fly: 6 };
+  const order = { shrimp: 0, snail: 0, nest: 0, larva: 0, tadpole: 1, whale: 1, fish: 2, cricket: 3, turtle: 3, frog: 4, gecko: 5, mosquito: 6, fly: 6, bird: 7 };
   const list = world.ents.filter(e => !(e.kind === 'gecko' && e.surface === 'glass')).sort((a, b) => order[a.kind] - order[b.kind]);
   drawShadows(list);
   for (const e of list) DRAW[e.kind](e);

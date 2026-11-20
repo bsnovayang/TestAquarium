@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>水草缸像素版</title>
+<title>像素測試版</title>
 <style>
   :root { --bg:#15181a; --panel:#262b2f; --panel2:#2e3439; --ink:#e8e6e1; --muted:#9aa0a4; --line:#3a4146; --accent:#4fb89f; }
   * { box-sizing: border-box; }
@@ -27,7 +27,8 @@
 <body>
 <div id="app">
   <header>
-    <b>水草缸・像素測試版</b>
+    <b>像素測試版</b>
+    <div class="grp"><span>魚缸</span><button data-preset="planted" class="on">水草缸</button><button data-preset="kingfisher">溪邊翠鳥缸</button></div>
     <div class="grp"><span>鏡頭</span><button data-z="1" class="on">1x</button><button data-z="2">2x</button><button data-z="4">4x</button></div>
     <div class="grp"><span>速度</span><button data-speed="0">⏸</button><button data-speed="1" class="on">1x</button><button data-speed="2">2x</button><button data-speed="5">5x</button><button data-speed="10">10x</button></div>
     <div class="grp"><button id="feed">🍤 餵食</button><button id="night">🌙 日夜快轉</button></div>
@@ -53,6 +54,8 @@
 'use strict';
 const cv = document.getElementById('px'), ctx = cv.getContext('2d');
 let speed = 1, scale = 1;
+// 換魚缸時重新產生背景、底沙（main.js 沒載入，所以在這裡定義）
+function onTankResize() { SAND = makeSand(); ALGAE_SPOTS = makeAlgaeSpots(); SCENERY = makeScenery(); }
 updateWaterY();
 loadPreset('planted');
 
@@ -82,6 +85,11 @@ document.getElementById('night').onclick = e => {                     // 日夜�
   const on = world.settings.dayCycle !== 'fast'; world.settings.dayCycle = on ? 'fast' : 'off'; e.target.classList.toggle('on', on);
 };
 
+// 換魚缸（寬缸在全景時比畫面寬，可以拖曳左右看）
+document.querySelectorAll('[data-preset]').forEach(b => b.onclick = () => {
+  loadPreset(b.dataset.preset); PXCAM.x = 0; PXCAM.y = 0; camClampPx();
+  document.querySelectorAll('[data-preset]').forEach(x => x.classList.toggle('on', x === b));
+});
 // 畫面選項
 function syncOpt() {
   document.querySelectorAll('[data-cs]').forEach(b => b.classList.toggle('on', +b.dataset.cs === PXOPT.cscale));
@@ -109,6 +117,7 @@ cv.addEventListener('wheel', ev => { ev.preventDefault(); const p = toPx(ev), zs
 
 // 測試用網址參數：?z=4&focus=cherry&tod=0.9（鏡頭、對準某種生物、時間）
 { const q = new URLSearchParams(location.search);
+  if (q.has('preset')) document.querySelector(`[data-preset="${q.get('preset')}"]`)?.click();
   if (q.has('tod')) { world.tod = +q.get('tod'); world.settings.dayCycle = 'normal'; }
   if (q.has('z')) { setZoom(+q.get('z')); const f = q.get('focus') && world.ents.find(e => e.type === q.get('focus'));
     if (f) { PXCAM.x = f.x - PXW / ppu() / 2; PXCAM.y = f.y - PXH / ppu() * .6; camClampPx(); }
@@ -118,7 +127,9 @@ cv.addEventListener('wheel', ev => { ev.preventDefault(); const p = toPx(ev), zs
   for (const k of ['mute', 'bright', 'hybrid']) if (q.has(k)) PXOPT[k] = true;
   if (q.has('nodetail')) PXOPT.detail = false;
   syncOpt();
-  if (q.has('warm')) for (let i = 0; i < +q.get('warm') * 60; i++) step(STEP); }
+  if (q.has('warm')) for (let i = 0; i < +q.get('warm') * 60; i++) step(STEP);
+  if (q.has('dive')) { const b = world.ents.find(e => e.kind === 'bird'); if (b) { b.hunger = 40; b.cool = 0; for (let i = 0; i < 60 * 240 && !(b.mode === 'under' && b.modeT > .08); i++) step(STEP); speed = 0;
+    document.querySelectorAll('[data-speed]').forEach(x => x.classList.toggle('on', x.dataset.speed === '0')); setZoom(+(q.get('z') || 2)); PXCAM.x = b.bk.x - PXW / ppu() / 2; PXCAM.y = world.waterY - PXH / ppu() * .55; camClampPx(); } } }
 
 // 主迴圈
 let acc = 0, last = performance.now(), fpsN = 0, fpsT = 0, drawMs = 0;

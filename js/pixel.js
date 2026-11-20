@@ -162,15 +162,18 @@ function muteColor(v, k = .38) {
 const muteHex = h => PXOPT.mute ? mixColor(h, '#7cb4c8', .38) : h;
 function layerFill(L, key, draw, opaque) {                            // 靜態圖層：整個魚缸畫一次，平移時只複製看得到的那一塊
   key += '|' + PXOPT.mute + '|' + PXOPT.detail;
-  const gw = Math.ceil(W * ppu()), gh = Math.ceil(H * ppu());
+  let gw = Math.ceil(W * ppu()), gh = Math.ceil(H * ppu()), bx = 0, by = 0;
+  if (gw * gh > 3.5e6) {                                                // 整缸太大（寬缸＋4 倍）：只快取看得到的範圍（平移時重畫）
+    bx = Math.round(PXCAM.x * ppu()); by = Math.round(PXCAM.y * ppu()); gw = PXW; gh = PXH; key += '|' + bx + ',' + by;
+  }
   if (L.key !== key) {
-    const cx = PXCAM.x, cy = PXCAM.y; PXCAM.x = 0; PXCAM.y = 0;          // 以魚缸左上角為原點畫整張
+    const cx = PXCAM.x, cy = PXCAM.y; PXCAM.x = bx / ppu(); PXCAM.y = by / ppu();   // 以快取範圍的左上角為原點畫
     const tmp = new PixBuf(gw, gh); draw(tmp);
     PXCAM.x = cx; PXCAM.y = cy;
     if (PXOPT.mute) for (let i = 0; i < tmp.d.length; i++) if (tmp.d[i]) tmp.d[i] = muteColor(tmp.d[i]);
-    L.d = tmp.d; L.w = gw; L.h = gh; L.key = key;
+    L.d = tmp.d; L.w = gw; L.h = gh; L.bx = bx; L.by = by; L.key = key;
   }
-  const ox = Math.round(PXCAM.x * ppu()), oy = Math.round(PXCAM.y * ppu()), src = L.d, dst = PXB.d;
+  const ox = Math.round(PXCAM.x * ppu()) - L.bx, oy = Math.round(PXCAM.y * ppu()) - L.by, src = L.d, dst = PXB.d;
   for (let y = 0; y < PXH; y++) {
     const sy = y + oy; if (sy < 0 || sy >= L.h) continue;
     const row = sy * L.w, x0 = Math.max(0, -ox), x1 = Math.min(PXW, L.w - ox);
@@ -820,10 +823,116 @@ function drawPxSurface() {                                            // 水面�
   }
 }
 
+
+// ---------------------------------------------------------------------
+// 翠鳥（像素）：用向量版同一套局部座標和姿勢（身體繞臀部轉 pitch、腳不跟著轉）
+// ---------------------------------------------------------------------
+const PX_KF = {
+  teal: ['#5fd6ee', '#2ea8cc', '#1d86a8', '#14607e', '#0c4058'],      // 頭頂、翅膀（亮 → 暗）
+  back: ['#a8f0ff', '#46d0f2'], orange: ['#ffb070', '#f08a3c', '#d86a26', '#a84c18'], white: ['#ffffff', '#e8e2d4'],
+  beak: '#1c1c22', beakHi: '#4a4a56', beakF: '#e0582c', leg: '#f0502c', legDk: '#b03418', spot: '#9ff0ff', eye: '#101014', ol: '#0a2c3e', olWarm: '#5a2a10',
+};
+function drawPxBird(e) {
+  const sp = SPECIES[e.type], k = e.size * sp.len / 64, s = ppu() * k * PXOPT.cscale, mode = e.mode, female = e.sex === 'f';
+  const flying = mode === 'fly' || mode === 'rise', diving = mode === 'dive' || mode === 'under', sleep = mode === 'perch' && isNight();
+  const Lpx = 64 * s, D = PXOPT.detail, pitch = e.pitch || 0, ca = Math.cos(pitch), sa = Math.sin(pitch), dir = e.dir;
+  const shakeX = mode === 'shake' ? Math.sin(world.t * 60) * .8 : 0;
+  const ox = AX(e.x), oy = AY(e.y);
+  const TL = p => P(ox + dir * p.x * s, oy + p.y * s);                    // 腳（不轉）
+  const TB = p => { const x = p.x + shakeX, y = p.y + 12; return P(ox + dir * (x * ca - y * sa) * s, oy + ((x * sa + y * ca) - 12 + 6) * s); };   // 身體：繞臀部轉、往下移 6
+  const beat = mode === 'beat' ? Math.sin((e.modeT || 0) * 10.5) * .7 : 0, swallow = mode === 'swallow' ? Math.sin(Math.min(1, (e.modeT || 0) / .9) * Math.PI) * .25 : 0;
+  const ha = beat - swallow + (sleep ? .35 : 0), hc = Math.cos(ha), hs = Math.sin(ha);
+  const TH = p => { const x = p.x - 7, y = p.y + 24, q = P(x * hc - y * hs + 7, x * hs + y * hc - 24 + (sleep ? 2 : 0)); return TB(sleep ? P(q.x - 2, q.y) : q); };   // 頭：繞脖子轉
+  const flap = flying ? Math.sin(e.phase) : 0, puff = sleep ? 1.12 : mode === 'shake' ? 1.08 : 1;
+  const wingPts = [P(0, 0), P(-6, -5), P(-16, -8), P(-27, -6), P(-31, -2), P(-24, 2), P(-12, 3), P(-3, 2.5)];
+  const wingT = (ang, px, py) => q => { const c = Math.cos(ang), sn = Math.sin(ang); return TB(P(px + q.x * c - q.y * sn, py + q.x * sn + q.y * c)); };
+  const Kt = PX_KF.teal, Ko = PX_KF.orange;
+  // 腳：直直抓住棲木
+  if (!flying && !diving) live(B => {
+    const lw = Math.max(1, Math.round(1.5 * s));                             // 腳的粗細跟著鏡頭
+    for (const lx of [-1.2, 1.6]) { const a = TL(P(lx, -6.5)), b = TL(P(lx + .4, -1.2)); for (let w = 0; w < lw; w++) B.line(a.x + w, a.y, b.x + w, b.y, C(w === lw - 1 && lw > 1 ? PX_KF.legDk : PX_KF.leg), 1); }
+    for (const dx of [-3.5, -.5, 3.5]) { const a = TL(P(.6, -1)), b = TL(P(.6 + dx, .3)); for (let w = 0; w < Math.max(1, Math.round(lw * .7)); w++) B.line(a.x, a.y + w, b.x, b.y + w, C(PX_KF.leg), 1); }
+  }, null);
+  live(B => {
+    if (flying) B.poly(wingPts.map(wingT(-.9 - flap * .9, 2, -24)), Kt[3], 4);   // 遠側翅膀
+    B.poly([P(-13, -24), P(-30, -22.5), P(-31.5, -20), P(-30, -17.5), P(-13, -16.5)].map(TB), Kt[3], 4);   // 尾巴
+    // 身體：上半藍綠、下半橘紅（依局部 y 決定）
+    const body = ellipsePts(-2, -20, 15.5, 8.6 * puff, 0, 24).map(TB), c0 = TB(P(-2, -20)), up = TB(P(-2, -28.6)), lo = TB(P(-2, -11.4));
+    const vx = up.x - lo.x, vy = up.y - lo.y, vl = vx * vx + vy * vy || 1;
+    B.poly(body, (x, y) => {
+      const t = ((x - lo.x) * vx + (y - lo.y) * vy) / vl;                 // 0 腹部 … 1 背
+      if (t > .52) return C(t > .8 ? Kt[2] : Kt[1]);
+      return C(Ko[clamp(band((.52 - t) * 5.5, x, y, .3), 0, 3)]);
+    });
+    B.path([P(-15, -24.5), P(-6, -27), P(4, -27.6)].map(TB), C(PX_KF.back[1]), 1);   // 背到腰的亮藍
+    if (s >= .8) B.path([P(-15, -25.3), P(-6, -27.8), P(4, -28.4)].map(TB), C(PX_KF.back[1]), 1);
+    if (!flying) {                                                          // 收起來的翅膀
+      B.poly([P(8, -26.5), P(-2, -28.5), P(-15, -25.5), P(-21, -22), P(-15, -18.5), P(-2, -17.5), P(6, -20)].map(TB), Kt[2], 4);
+    }
+    // 頭
+    const head = ellipsePts(11, -28.5, 8.6, 8.6, 0, 22).map(TH), hu = TH(P(11, -37)), hl = TH(P(11, -20));
+    const hvx = hu.x - hl.x, hvy = hu.y - hl.y, hvl = hvx * hvx + hvy * hvy || 1;
+    B.poly(head, (x, y) => { const t = ((x - hl.x) * hvx + (y - hl.y) * hvy) / hvl; return C(Kt[t > .75 ? 1 : t > .25 ? 2 : 3]); });
+    B.poly(ellipsePts(8.5, -26.6, 4.6, 2.6, -.1, 10).map(TH), Ko[1]);     // 眼後橘色
+    B.poly(ellipsePts(4.6, -24.6, 2.2, 1.7, .3, 8).map(TH), PX_KF.white[0]);   // 頸側白斑
+    B.poly(ellipsePts(14.6, -22.9, 2.8, 1.5, -.2, 8).map(TH), PX_KF.white[0]);   // 白喉
+    if (D) { B.cleanup(); if (Lpx >= 28) B.rim(.25, .2, [1, 4]); }
+    // 細節（格子夠多才畫）
+    if (D ? Lpx >= 24 : s > .6) {
+      const dot = (p, tags) => { const r = Math.max(.5, .55 * s); for (let yy = Math.floor(p.y - r); yy <= Math.ceil(p.y + r); yy++) for (let xx = Math.floor(p.x - r); xx <= Math.ceil(p.x + r); xx++) if ((xx + .5 - p.x) ** 2 + (yy + .5 - p.y) ** 2 <= r * r) B.setOn(xx, yy, C(PX_KF.spot), tags); };
+      for (const [x, y] of [[4, -24], [0, -25], [-4, -24], [-8, -23], [2, -21.5], [-3, -21], [-8, -20.5], [-12, -22], [-15, -23.5]]) if (!flying) dot(TB(P(x, y)), [4, 1]);   // 翅膀細點
+      for (const [x, y] of [[8, -34], [12, -35], [15, -33], [6, -31], [10, -32], [14, -31.5], [9, -36]]) dot(TH(P(x, y)), [1]);   // 頭頂細點
+      if (!flying) B.path([P(-6, -19), P(-18, -21.5)].map(TB), C(Kt[4]), 4);   // 翅膀邊
+    }
+    B.path([P(17.5, -26.2), P(13, -26.2), P(8, -24.6)].map(TH), C(Kt[4]), 1);   // 顎線
+  }, Kt[3], PX_KF.ol);
+  // 嘴、叼的魚、眼睛（外框之後）
+  live(B => {
+    B.poly([P(17, -30.2), P(36.5, -27.6), P(17, -26.8)].map(TH), PX_KF.beak);
+    B.poly([P(17, -26.8), P(35.5, -27.3), P(17, -25)].map(TH), female ? PX_KF.beakF : PX_KF.beak);
+    if (Lpx >= 40) B.path([P(18, -29.6), P(30, -28.1)].map(TH), C(PX_KF.beakHi), 1);   // 嘴上緣的亮線
+    if (e.carry) {                                                          // 嘴裡橫叼一條小魚
+      const c = e.carry, csp = SPECIES[c.type], len = csp ? csp.len * (c.size || 1) / k : 10, h = len * .22, bt = TH(P(33.5, -27.2));
+      const col = csp && csp.look && csp.look.body ? csp.look.body[1] : (c.type === 'cherry' ? '#e04a3a' : '#c8d0d4');
+      const fa = Math.PI / 2 - .25 + pitch + ha, fc = Math.cos(fa), fs = Math.sin(fa);
+      const FT = q => P(bt.x + dir * (q.x * fc - q.y * fs) * s, bt.y + (q.x * fs + q.y * fc) * s);
+      B.poly(ellipsePts(0, 0, len * .5, h, 0, 12).map(FT), col);
+      B.poly([P(-len * .45, 0), P(-len * .75, -h * 1.3), P(-len * .75, h * 1.3)].map(FT), c.type === 'guppy' && c.sex === 'm' ? GUPPY_MORPHS[c.morph || 0].tail[1] : col);
+      const fe = FT(P(len * .32, -h * .2)); B.set(fe.x, fe.y, C('#111111'), 2);
+    }
+  }, PX_KF.beakHi, '#000000');
+  const eye = TH(P(14.5, -28.8));
+  if (sleep) { const a = TH(P(13.2, -28.6)), b = TH(P(15.8, -28.6)); PXB.line(a.x, a.y, b.x, b.y, C(PX_KF.eye), CREATURE); }
+  else { PXB.disc(eye.x, eye.y, Math.max(.8, 1.7 * s), C(PX_KF.eye), CREATURE); if (s >= .7) PXB.set(eye.x - .55 * s * dir, eye.y - .6 * s, C('#ffffff'), CREATURE); }
+  if (flying) live(B => { B.poly(wingPts.map(wingT(-.6 - flap * 1.1, 2, -25)), Kt[2], 4); if (D && Lpx >= 24) for (let i = 0; i < 4; i++) { const p = wingT(-.6 - flap * 1.1, 2, -25)(P(-8 - i * 5, -2)); B.setOn(p.x, p.y, C(PX_KF.spot), [4]); } if (D) B.rim(.25, .2, [4]); }, Kt[3], PX_KF.ol);   // 近側翅膀
+}
+
+// 樹枝（像素）
+function drawPxBranch(B, d) {
+  const [a0, b0] = woodEnds(d), base = d.x < (TANK.left + TANK.right) / 2 ? a0 : b0, tip = base === a0 ? b0 : a0, Wd = PX_WOOD2.map(C), s = ppu(), z = PXCAM.z;
+  const n = 12, top = [], bot = [];
+  for (let i = 0; i <= n; i++) {
+    const t = i / n, x = lerp(base.x, tip.x, t), y = lerp(base.y, tip.y, t) + Math.sin(t * 5 + d.seed) * 2.5 + t * t * 6, hw = d.h / 2 * (1 - t * .62);
+    top.push(P(x, y - hw)); bot.push(P(x, y + hw));
+  }
+  const poly = [...top, ...bot.slice().reverse()].map(p => P(AX(p.x), AY(p.y)));
+  B.poly(poly, (x, y) => {                                              // 上緣亮、下緣暗、樹皮紋
+    const wx = PXCAM.x + (x + .5) / s, t = clamp((wx - base.x) / ((tip.x - base.x) || 1), 0, 1), i = Math.min(n - 1, Math.floor(t * n));
+    const ty = lerp(top[i].y, top[i + 1].y, t * n - i), by = lerp(bot[i].y, bot[i + 1].y, t * n - i), v = (PXCAM.y + (y + .5) / s - ty) / Math.max(.5, by - ty);
+    const groove = z >= 2 && Math.sin(wx * .35 + v * 4) > .85;
+    return Wd[clamp(band(v * 3.6 + .6 + (groove ? 1 : 0), x, y, .3), 0, 5)];
+  });
+  const dirx = Math.sign(tip.x - base.x), r = rng(d.seed);
+  for (const [t, up, len] of [[.45, -1, 34], [.7, 1, 26], [.88, -1, 22]]) {                                   // 小枝和葉子
+    const i = Math.round(t * n), p = P((top[i].x + bot[i].x) / 2, (top[i].y + bot[i].y) / 2), q = P(p.x + dirx * len * .8, p.y + up * len * .55);
+    B.line(AX(p.x), AY(p.y), AX(q.x), AY(q.y), Wd[3]);
+    for (let k = 0; k < 3; k++) { const lp = P(lerp(p.x, q.x, .45 + k * .25), lerp(p.y, q.y, .45 + k * .25)); B.poly(ellipsePts(lp.x + dirx * 3, lp.y - 3, 6, 2.6, -dirx * .6 + (r() - .5) * .5, 8).map(p2 => P(AX(p2.x), AY(p2.y))), C(k % 2 ? PX_MOSS[1] : PX_MOSS[0])); }
+  }
+}
 // ---------------------------------------------------------------------
 // 一幀
 // ---------------------------------------------------------------------
-const PX_ORDER = { shrimp: 0, snail: 0, nest: 0, larva: 0, tadpole: 1, fish: 2 };
+const PX_ORDER = { shrimp: 0, snail: 0, nest: 0, larva: 0, tadpole: 1, fish: 2, bird: 3 };
 function renderPixel() {
   const z = PXCAM.z, cx = Math.round(PXCAM.x * ppu()), cy = Math.round(PXCAM.y * ppu());
   PXCAM.x = cx / ppu(); PXCAM.y = cy / ppu();                            // 鏡頭對齊格子，畫面才不會抖
@@ -836,6 +945,7 @@ function renderPixel() {
     for (const d of world.decor) {
       if (d.type === 'rock' || d.type === 'boulder') { drawPxRock(B, d); }
       else if (d.type === 'wood') drawPxWood(B, d);
+      else if (d.type === 'branch') drawPxBranch(B, d);
       else if (d.type === 'bubbler') drawPxBubbler(B, d);
       else if (d.type === 'filter') drawPxFilterBody(B, d);
     }
@@ -851,6 +961,7 @@ function renderPixel() {
     else if (e.kind === 'shrimp') drawPxShrimp(e);
     else if (e.kind === 'snail') drawPxSnail(e);
     else if (e.kind === 'nest') drawPxNest(e);
+    else if (e.kind === 'bird') drawPxBird(e);
   }
   layerFill(LAYER.front, view, drawPxFront);
   for (const d of world.decor) if (d.type === 'floater') drawPxFloater(d);

@@ -6,10 +6,11 @@
 const UI = { sel: null, drag: null, mode: 'edit', speed: 1 };
 // 物件面板：用頁籤分類（物件變多時比較好找）
 const PALETTE = [
-  { cat: '造景', items: ['mound', 'boulder', 'rock', 'wood', 'plant', 'carpet', 'fern', 'floater', 'bubbler', 'filter'] },
+  { cat: '造景', items: ['mound', 'boulder', 'rock', 'wood', 'branch', 'plant', 'carpet', 'fern', 'floater', 'bubbler', 'filter'] },
   { cat: '水中生物', items: ['guppy', 'neon', 'neontetra', 'cory', 'redtail', 'cherry', 'nerite'] },
   { cat: '兩棲爬蟲', items: ['frog', 'goldfrog', 'tadpole', 'turtle', 'gecko'] },
   { cat: '昆蟲', items: ['mosquito', 'larva'] },
+  { cat: '鳥類', items: ['kingfisher'] },
   { cat: '迷你版', items: ['whale'] },
   { cat: '餵食', items: ['food', 'cricket', 'fly'] },
 ];
@@ -27,9 +28,9 @@ function drawThumb(cv, type) {
   const keep = world.waterY; world.waterY = 9999;                 // 縮圖都畫成「水面上」的樣子
   if (DECOR_TYPES[type]) {
     const t = DECOR_TYPES[type];
-    const d = { type, x: 0, y: 0, w: t.w, h: type === 'boulder' ? 220 : t.h, rot: type === 'wood' ? .2 : 0, seed: 3, thumb: true };
+    const d = { type, x: type === 'branch' ? 0 : 0, y: 0, w: type === 'branch' ? 260 : t.w, h: type === 'boulder' ? 220 : type === 'branch' ? 16 : t.h, rot: type === 'wood' ? .2 : type === 'branch' ? .12 : 0, seed: 3, thumb: true };
     const sc = Math.min(54 / d.w, 34 / Math.max(d.h, 20));
-    ctx.translate(32, type === 'wood' ? 22 : 40); ctx.scale(sc, sc);
+    ctx.translate(32, type === 'wood' || type === 'branch' ? 22 : 40); ctx.scale(sc, sc);
     if (type === 'plant') { world.waterY = -9999; d.h = 160; }
     if (type === 'fern') { world.waterY = 9999; }
     if (type === 'carpet') { world.waterY = -9999; d.y = 0; ctx.setTransform(dpr * .25, 0, 0, dpr * .25, 32 * dpr, 36 * dpr); }
@@ -41,10 +42,11 @@ function drawThumb(cv, type) {
   } else {
     const e = makeEnt(type, 0, 0, false);
     e.size = e.adult = 1; e.dir = 1; e.amp = .3; e.mode = type === 'turtle' ? 'walk' : 'sit';
-    const conf = { cory: [33, 34, .5], guppy: [36, 22, .55], neon: [33, 22, .6], neontetra: [33, 22, .7], redtail: [37, 22, .17], turtle: [30, 38, .45], frog: [32, 38, .7], goldfrog: [31, 38, .66], tadpole: [34, 22, 1.5],
+    const conf = { kingfisher: [30, 42, .17], cory: [33, 34, .5], guppy: [36, 22, .55], neon: [33, 22, .6], neontetra: [33, 22, .7], redtail: [37, 22, .17], turtle: [30, 38, .45], frog: [32, 38, .7], goldfrog: [31, 38, .66], tadpole: [34, 22, 1.5],
                    gecko: [38, 34, .38], mosquito: [32, 22, 2], nerite: [33, 34, 1.3], cherry: [30, 34, 1.5], larva: [32, 24, 2], whale: [32, 22, .036], cricket: [30, 30, 1.6], fly: [32, 22, 4] }[type];
     if (type === 'larva') e.phase = 1;
     if (type === 'cory') { e.morph = 2; e.cm = 'rest'; }             // 縮圖固定用熊貓鼠（最好認）
+    if (type === 'kingfisher') { e.mode = 'perch'; e.pitch = -.5; e.phase = 0; }
     if (e.sex) { e.sex = type === 'cherry' ? 'f' : 'm'; e.morph = type === 'cherry' ? 1 : 0; e.size = e.adult = 1; }
     if (type === 'tadpole') { e.size = 1; e.meta = .3; }
     if (type === 'whale') { e.amp = .4; e.wmode = 'cruise'; }
@@ -118,6 +120,7 @@ function defaultSpot(type) {
     const s = pick(near.length ? near : spots) || P(x, wy); return [s.x, s.y - 40];
   }
   if (type === 'wood') return [x, wy - 10];
+  if (type === 'branch') return [x, Math.max(TANK.top + 90, wy - 40)];    // 樹枝預設放在水面上方一點點（翠鳥上方要有站的空間）
   return [x, TANK.top + 60];
 }
 function placeObject(type, x, y) {
@@ -131,6 +134,12 @@ function placeObject(type, x, y) {
   select(e);
   const L = SPECIES[type].len * e.size;
   const notes = [];
+  if (SPECIES[type].kind === 'bird' && birdPerches(e).every(p => Math.abs(p.y - (TANK.top + 2)) < 1)) {   // 沒有地方停：說明原因
+    const needY = TANK.top + L * .62 + 12, needLevel = Math.floor((TANK.floor - needY) / (TANK.floor - TANK.top) * 100);
+    notes.push(world.waterY < needY
+      ? `水面上方空間不夠翠鳥站（現在只能停在缸框）：把水位降到 ${needLevel}% 以下，再放石頭或「樹枝」`
+      : '翠鳥需要露出水面的石頭或樹枝才會停在上面（現在只能停在缸框）：從「造景」放一根樹枝');
+  }
   if (L > (TANK.right - TANK.left) * .8) notes.push(`${SPECIES[type].name}約 ${Math.round(L / PX_PER_CM)} cm，這個缸太小了，建議換大缸或調小體型`);
   const warn = compatibilityWarnings(e);                     // 混養提醒
   if (warn.length) notes.push('注意：' + warn.slice(0, 2).join('、'));
@@ -298,7 +307,7 @@ function updatePanels(force) {
     const f = n => el.querySelector(`[data-f="${n}"]`);
     const surf = o.kind === 'gecko' ? (o.surface === 'glass' ? '（背面玻璃）' : '（陸地）') : '';
     f('state').textContent = `${o.dead ? '💀 ' : ''}${o.state || '—'}${surf}${o.sick ? '（水質太差，生病中）' : ''}`;
-    if (f('sex')) f('sex').textContent = (o.sex === 'm' ? '♂ 公' : '♀ 母') + '・' + (sp.morphs === 'shrimp' ? SHRIMP_GRADES : GUPPY_MORPHS)[o.morph || 0].name + (o.preg > 0 ? (o.kind === 'shrimp' ? `・抱卵 ${Math.round(o.preg * 100)}%` : `・懷孕 ${Math.round(o.preg * 100)}%`) : '');
+    if (f('sex')) f('sex').textContent = (o.sex === 'm' ? '♂ 公' : '♀ 母') + (sp.kind === 'bird' ? '' : '・' + (sp.morphs === 'shrimp' ? SHRIMP_GRADES : GUPPY_MORPHS)[o.morph || 0].name) + (o.preg > 0 ? (o.kind === 'shrimp' ? `・抱卵 ${Math.round(o.preg * 100)}%` : `・懷孕 ${Math.round(o.preg * 100)}%`) : '');
     if (f('morph')) f('morph').textContent = CORY_MORPHS[o.morph || 0].name;
     if (f('hunger')) { f('hunger').textContent = Math.round(o.hunger) + '%'; f('hungerBar').style.width = clamp(o.hunger, 0, 100) + '%'; f('hungerBar').style.background = o.hunger < 25 ? '#e0603a' : '#4caf50'; }
     f('hp').textContent = Math.round(o.hp); f('hpBar').style.width = clamp(o.hp, 0, 100) + '%';

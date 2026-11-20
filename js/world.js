@@ -72,9 +72,10 @@ function woodEnds(d) {
   const c = Math.cos(d.rot), s = Math.sin(d.rot);
   return [P(d.x - c * d.w / 2, d.y - s * d.w / 2), P(d.x + c * d.w / 2, d.y + s * d.w / 2)];
 }
+const isStick = d => d.type === 'wood' || d.type === 'branch';      // 長條形的造景（用兩端點計算）
 function decorSpan(d, x) {
   if (d.type === 'plant') return null;
-  if (d.type === 'wood') {
+  if (isStick(d)) {
     const [a, b] = woodEnds(d);
     if (x < Math.min(a.x, b.x) || x > Math.max(a.x, b.x)) return null;
     const t = (x - a.x) / ((b.x - a.x) || 1), y = lerp(a.y, b.y, t), half = d.h / 2 / Math.cos(d.rot);
@@ -126,6 +127,14 @@ function highestTop(x) {
 }
 // 石頭、土坡放下後會落到下面的地面上；水草會長在地面上
 function settle(d) {
+  if (d.type === 'branch') {                                         // 樹枝：一端插在最近的側面玻璃，尖端稍微下垂；高度不變
+    const side = d.x < (TANK.left + TANK.right) / 2 ? -1 : 1;
+    d.w = Math.min(d.w, (TANK.right - TANK.left) * .7);
+    d.rot = side < 0 ? .09 : -.09;
+    d.x = side < 0 ? TANK.left - 14 + Math.cos(d.rot) * d.w / 2 : TANK.right + 14 - Math.cos(d.rot) * d.w / 2;
+    d.y = clamp(d.y, TANK.top + 60, TANK.floor - 30);
+    return;
+  }
   if (d.type === 'wood' || d.type === 'filter') return;
   if (d.type === 'floater') { d.y = world.waterY; return; }
   if (d.type === 'plant' || d.type === 'fern' || d.type === 'carpet') { d.y = groundY(d.x, d.y - 10, 0, d); return; }
@@ -148,7 +157,7 @@ function landSpots(maxAboveWater = Infinity) {
 // ---------------------------------------------------------------------
 function makeDecor(type, x, y, extra = {}) {
   const t = DECOR_TYPES[type];
-  const d = { id: world.nextId++, type, x, y, w: t.w, h: t.h, rot: type === 'wood' ? .22 : 0, seed: Math.random() * 100, ...extra };
+  const d = { id: world.nextId++, type, x, y, w: t.w, h: t.h, rot: type === 'wood' ? .22 : type === 'branch' ? .09 : 0, seed: Math.random() * 100, ...extra };
   world.decor.push(d);
   return d;
 }
@@ -183,6 +192,7 @@ function afterDrop(e) {
   if (e.kind === 'frog') e.mode = 'jump';
   if (e.kind === 'gecko') { if (e.y > wy - 24) e.y = Math.max(TANK.top + 20, wy - 30); initChain(e, -Math.PI / 2); }
   if (e.kind === 'mosquito') e.goal = null;
+  if (e.kind === 'bird') { e.mode = 'fly'; e.perch = null; e.carry = null; e.pitch = 0; e.cool = 3; }
   if (e.kind === 'larva') { e.dive = 0; if (e.y < wy + 6) e.y = wy + 6; }
 }
 // 活餌：蟋蟀放在陸地上，果蠅放在空中

@@ -37,6 +37,7 @@ const ACHIEVEMENTS = [
   { id: 'whale_spout',   cat: '趣味',   icon: '🐋', name: '噴泉',         desc: '看到迷你藍鯨浮上來噴水' },
   { id: 'gecko_tail',    cat: '趣味',   icon: '🦎', name: '金蟬脫殼',     desc: '壁虎斷尾逃走' },
   { id: 'shark_chase',   cat: '趣味',   icon: '🦈', name: '地盤意識',     desc: '紅尾黑鯊趕走靠近的魚' },
+  { id: 'kingfisher',    cat: '趣味',   icon: '🐦', name: '一擊必中',     desc: '翠鳥俯衝抓到魚' },
 ];
 
 // ---------------------------------------------------------------------
@@ -86,6 +87,7 @@ onWorldEvent((type, d) => {
     case 'whaleSpout': unlock('whale_spout'); break;
     case 'autotomy': unlock('gecko_tail'); break;
     case 'chase': unlock('shark_chase'); break;
+    case 'birdCatch': unlock('kingfisher'); break;
   }
 });
 

@@ -5,7 +5,7 @@
 // =====================================================================
 
 const UPDATE = { fish: updFish, turtle: updTurtle, frog: updFrog, gecko: updGecko, mosquito: updMosquito, larva: updLarva,
-                 tadpole: updTadpole, whale: updWhale, nest: updNest, cricket: updCricket, fly: updFly, snail: updSnail, shrimp: updShrimp };
+                 tadpole: updTadpole, whale: updWhale, nest: updNest, cricket: updCricket, fly: updFly, snail: updSnail, shrimp: updShrimp, bird: updBird };
 
 // 轉身：轉完後有 0.8 秒冷卻，避免目標在身邊晃動時原地連續翻轉
 function startTurn(e) { if (!e.turning && !(e.turnCD > 0)) { e.turning = true; e.turnT = 0; } }
@@ -50,7 +50,7 @@ function updCory(e, dt) {
   e.gulpT -= dt;
   // 掠食者或紅尾黑鯊靠近：貼著底部衝開
   let threat = null;
-  for (const o of threatsTo(e)) if (o !== e && !o.dead && Math.abs(o.x - e.x) < 110 && Math.abs(o.y - e.y) < 110 && canEat(o, e)) { threat = o; break; }
+  for (const o of threatsTo(e)) if (o !== e && !o.dead && (o.kind !== 'bird' || birdDiving(o)) && Math.abs(o.x - e.x) < 110 && Math.abs(o.y - e.y) < 110 && canEat(o, e)) { threat = o; break; }
   if (!threat && e.scaredT > 0) { e.scaredT -= dt; threat = e.scaredBy; }
   e.fleeReal = !!threat;
   if (threat && e.cm !== 'flee' && e.cm !== 'gulp') { e.cm = 'flee'; e.fleeT = rand(.8, 1.3); e.dir = Math.sign(e.x - threat.x) || e.dir; }
@@ -143,6 +143,139 @@ function updCory(e, dt) {
   if (food && dist(mouth, food) < 10) eat(e, food);
 }
 
+// ---------------------------------------------------------------------
+// 翠鳥：停棲 → 鎖定 → 俯衝入水 → 抓到就叼回去甩魚、吞下；沒抓到就甩甩水再等
+// mode：fly 飛向棲木／perch 停著／aim 鎖定（身體壓低）／dive 俯衝／under 水下／rise 出水飛回／beat 甩魚／swallow 吞／shake 甩水
+// ---------------------------------------------------------------------
+const birdDiving = o => o.kind === 'bird' && (o.mode === 'dive' || o.mode === 'under');   // 魚只在鳥衝下來時才反應（停著瞄準時看不出來）
+function birdL(e) { return SPECIES[e.type].len * e.size; }
+function birdBeakOff(e, a, dir = e.dir) {                                // 嘴尖相對腳的位置（世界單位），依身體角度
+  const k = e.size * SPECIES[e.type].len / 64, bx = 34, by = -27 + 12;   // 以臀部 (0,-12) 為支點
+  return P(dir * (bx * Math.cos(a) - by * Math.sin(a)) * k, (bx * Math.sin(a) + by * Math.cos(a) - 6) * k);   // 臀部在腳上方 6
+}
+function birdBeak(e) { const o = birdBeakOff(e, e.pitch || 0); return P(e.x + o.x, e.y + o.y); }
+function birdPerches(e) {                                                // 水面上方、附近有水的位置；沒有就停在缸緣
+  const wy = world.waterY, L = birdL(e);
+  let spots = landSpots().filter(p => p.y < wy - 12 && p.y > TANK.top + L * .62 &&   // 上方要留出站起來的高度（約 9 cm）
+    [-80, 0, 80].some(dx => highestTop(clamp(p.x + dx, TANK.left + 5, TANK.right - 5)) > wy + 4));
+  if (!spots.length) for (let x = TANK.left + L * .5; x < TANK.right - L * .5; x += 60) spots.push(P(x, TANK.top + 2));
+  return spots;
+}
+function birdPickPerch(e, far) {
+  const sp = birdPerches(e); if (!sp.length) return null;
+  const others = world.ents.filter(o => o !== e && o.kind === 'bird' && o.perch);
+  const ok = sp.filter(p => !others.some(o => Math.abs(o.perch.x - p.x) < birdL(e) * .6));
+  const list = ok.length ? ok : sp;
+  if (far) return list[Math.floor(Math.random() * list.length)];
+  let best = list[0], bd = Infinity; for (const p of list) { const d = dist(p, e) + Math.random() * 120; if (d < bd) { bd = d; best = p; } }
+  return best;
+}
+function updBird(e, dt) {
+  const sp = SPECIES[e.type], wy = world.waterY, L = birdL(e), D = sp.dive;
+  e.phase += dt * (e.mode === 'fly' || e.mode === 'rise' ? 22 : 3);
+  if (e.cool > 0) e.cool -= dt;
+  const flyTo = (tx, ty, spd) => {                                       // 直線飛、身體微微往前傾
+    const dx = tx - e.x, dy = ty - e.y, d = Math.hypot(dx, dy) || 1, st = Math.min(d, spd * dt);
+    e.x += dx / d * st; e.y += dy / d * st;
+    if (Math.abs(dx) > 4) e.dir = Math.sign(dx);
+    e.pitch = lerp(e.pitch, clamp(Math.atan2(dy, Math.abs(dx) + 1) * .6, -.6, .6), ease(dt, 8));
+    return d;
+  };
+  const land = () => {                                                   // 落在棲木上
+    e.y = e.perch.y; e.x = e.perch.x;
+    if (e.carry) { e.mode = 'beat'; e.modeT = 0; e.state = '把魚往石頭上甩'; }
+    else if (e.missed) { e.mode = 'shake'; e.modeT = 0; e.missed = false; }
+    else { e.mode = 'perch'; e.think = rand(1, 3); }
+  };
+  if (e.mode === 'fly' || e.mode === 'rise') {
+    if (!e.perch) e.perch = birdPickPerch(e);
+    if (!e.perch) { e.state = '找不到可以停的地方'; return; }
+    e.state = e.carry ? '叼著魚飛回去' : e.mode === 'rise' ? '飛回棲木' : '飛向棲木';
+    const wasUnder = e.y > wy;
+    if (flyTo(e.perch.x, e.perch.y - (e.mode === 'rise' && e.y > e.perch.y + 40 ? 30 : 0), e.mode === 'rise' && e.y > wy - 30 ? sp.speed * 1.2 : sp.speed) < 4) land();
+    if (wasUnder && e.y <= wy) { splash(e.x, wy, .5 * e.size); ripple(e.x, wy, 1); }   // 出水
+    return;
+  }
+  // 棲木還在嗎（造景被移走、水位變了）
+  const onRim = Math.abs(e.y - (TANK.top + 2)) < 2;
+  if ((e.mode === 'perch' || e.mode === 'beat' || e.mode === 'swallow' || e.mode === 'shake' || e.mode === 'aim') && !onRim && Math.abs(highestTop(e.x) - e.y) > 6) { e.perch = null; e.mode = 'fly'; return; }
+  if (e.mode === 'beat') {                                                // 甩魚 3 下
+    e.modeT += dt; e.pitch = lerp(e.pitch, -.45, ease(dt, 6));
+    if (e.modeT > 1.8) { e.mode = 'swallow'; e.modeT = 0; e.state = '把魚整條吞下'; }
+    return;
+  }
+  if (e.mode === 'swallow') { e.modeT += dt; if (e.modeT > .9) { e.carry = null; e.mode = 'perch'; e.think = rand(2, 4); e.cool = rand(...D.cool) * 1.5; } return; }
+  if (e.mode === 'shake') { e.modeT += dt; e.state = '甩掉身上的水'; if (e.modeT > 1.1) { e.mode = 'perch'; e.think = rand(1, 3); e.cool = rand(...D.cool); } return; }
+  if (e.mode === 'aim') {                                                 // 鎖定：身體壓低、往前傾
+    e.modeT += dt; e.pitch = lerp(e.pitch, .15, ease(dt, 8)); e.state = '盯著' + (e.target ? entName(e.target) : '水面');
+    const t = e.target;
+    if (!t || t.dead || t.removed || t.y < wy + 2) { e.mode = 'perch'; e.target = null; return; }
+    e.dir = Math.sign(t.x - e.x) || e.dir;
+    if (e.modeT > .45) {                                                  // 出發：以「嘴尖」為準衝向目標（頭朝下）
+      const bk = birdBeak(e), ax = t.x + (t.tx !== undefined ? clamp(t.tx - t.x, -40, 40) * .3 : 0), ay = t.y;
+      const dx = ax - bk.x, dy = ay - bk.y, d = Math.hypot(dx, dy) || 1, v = 600;
+      e.bk = bk; e.vx = dx / d * v; e.vy = dy / d * v; e.mode = 'dive'; e.modeT = 0; e.tried = false; e.state = '俯衝！';
+      emit('birdDive', { e });
+    }
+    return;
+  }
+  if (e.mode === 'dive' || e.mode === 'under') {
+    e.modeT += dt;
+    const t = e.target, alive = t && !t.dead && !t.removed;
+    if (alive && e.modeT < .5) {                                         // 還能微調方向（往目標修正一點）
+      const dx = t.x - e.bk.x, dy = t.y - e.bk.y, d = Math.hypot(dx, dy) || 1, v = Math.hypot(e.vx, e.vy);
+      e.vx = lerp(e.vx, dx / d * v, ease(dt, 3)); e.vy = lerp(e.vy, dy / d * v, ease(dt, 3));
+    }
+    if (e.mode === 'dive') { e.vy += 300 * dt; if (e.bk.y >= wy) { e.mode = 'under'; e.modeT = 0; splash(e.bk.x, wy, 1.1 * e.size); ripple(e.bk.x, wy, 1.6); bubbles(e.bk.x, wy + 10, 5); } }
+    else { const drag = Math.exp(-3 * dt); e.vx *= drag; e.vy *= drag; }
+    e.bk.x = clamp(e.bk.x + e.vx * dt, TANK.left + 10, TANK.right - 10); e.bk.y = Math.min(e.bk.y + e.vy * dt, TANK.floor - 6);
+    if (solidAt(e.bk.x, e.bk.y)) { e.vx *= .3; e.vy = Math.min(0, e.vy); }
+    if (Math.abs(e.vx) > 5) e.dir = Math.sign(e.vx);
+    e.pitch = Math.atan2(e.vy, Math.abs(e.vx) + 1);                       // 身體順著衝的方向
+    const off = birdBeakOff(e, e.pitch); e.x = e.bk.x - off.x; e.y = e.bk.y - off.y;   // 腳的位置由嘴尖推回去
+    if (e.mode === 'under' && !e.tried && alive && dist(e.bk, t) < L * .13) {   // 嘴尖碰到目標：判定抓到沒
+      e.tried = true;
+      const chance = D.success * (t.fleeReal ? .7 : 1) * (t.kind === 'shrimp' ? .8 : 1);
+      if (Math.random() < chance && canEat(e, t)) { e.carry = { type: t.type, size: t.size, morph: t.morph, sex: t.sex }; eat(e, t); emit('birdCatch', { e, prey: t }); }
+      else e.missed = true;
+    }
+    if ((e.mode === 'under' && (e.modeT > .5 || e.tried && e.modeT > .15)) || (e.mode === 'dive' && e.modeT > 1.6)) {
+      e.mode = 'rise'; if (!e.carry) e.missed = true; e.target = null;
+    }
+    return;
+  }
+  // 停著：點頭、轉頭看水面；餓了就找獵物；晚上睡覺
+  e.mode = 'perch';
+  e.pitch = lerp(e.pitch, -.5, ease(dt, 6));
+  if (isNight()) { e.state = '縮著脖子睡覺'; return; }
+  e.think -= dt; e.idleT = (e.idleT || 0) + dt;
+  e.state = '停在棲木上盯著水面';
+  if (e.think <= 0) {
+    e.think = rand(1.2, 3);
+    if (Math.random() < .3) e.dir *= -1;                                  // 轉頭看另一邊
+    if (e.idleT > 40 && Math.random() < .4) { e.perch = birdPickPerch(e, true); e.mode = 'fly'; e.idleT = 0; return; }   // 換個地方
+  }
+  if (e.hunger < sp.huntBelow && !(e.cool > 0) && wy < TANK.floor - 40) {
+    let best = null, bd = Infinity, far = null, fd = Infinity;
+    for (const t of preyCandidates('bird')) {
+      if (!canEat(e, t) || t.y < wy + 4 || t.y - wy > D.depth * e.size) continue;
+      if (solidAt(t.x, wy + 6) || inPlant(t)) continue;                   // 上面被擋住、躲在水草裡
+      const dx = Math.abs(t.x - e.x), drop = t.y - e.y;
+      if (dx <= Math.max(L * .5, drop * 1.05)) {                           // 在下方約 45° 以內：可以直接俯衝
+        const score = dx * .5 + (t.y - wy) * 1.5;                          // 越淺、越近越好
+        if (score < bd) { bd = score; best = t; }
+      } else if (dx < fd) { fd = dx; far = t; }
+    }
+    if (best) { e.target = best; e.mode = 'aim'; e.modeT = 0; e.idleT = 0; e.huntWait = 0; e.dir = Math.sign(best.x - e.x) || e.dir; }
+    else if (far && (e.huntWait = (e.huntWait || 0) + dt) > 6) {           // 魚都在遠處：換到離魚最近的棲木
+      e.huntWait = 0;
+      const sp2 = birdPerches(e); let bp = null, bpd = Infinity;
+      for (const p of sp2) { const d = Math.abs(p.x - far.x); if (d < bpd) { bpd = d; bp = p; } }
+      if (bp && Math.abs(bp.x - e.x) > 40) { e.perch = bp; e.mode = 'fly'; }
+    }
+  }
+}
+
 function fishWander(e) {
   const sp = SPECIES[e.type], wy = world.waterY;
   let tx, ty, tries = 0;
@@ -187,7 +320,7 @@ function updFish(e, dt) {
   const minY = wy + 8 + 6 * e.size, maxY = Math.max(minY, TANK.floor - 8);
   let threat = null, threatName = '';
   for (const o of threatsTo(e))                         // 會吃自己的掠食者靠近就逃
-    if ((o.kind === 'turtle' && o.mode === 'swim' || o.kind === 'fish') && !o.dead && o !== e && Math.abs(o.x - e.x) < 90 && Math.abs(o.y - e.y) < 90 && dist(o, e) < 90 && canEat(o, e)) { threat = o; threatName = entName(o); }
+    if ((o.kind === 'turtle' && o.mode === 'swim' || o.kind === 'fish' || birdDiving(o)) && !o.dead && o !== e && Math.abs(o.x - e.x) < (o.kind === 'bird' ? 120 : 90) && Math.abs(o.y - e.y) < (o.kind === 'bird' ? 120 : 90) && dist(o.kind === 'bird' && o.bk ? o.bk : o, e) < (o.kind === 'bird' ? 120 : 90) && canEat(o, e)) { threat = o; threatName = entName(o); }
   if (!threat && e.scaredT > 0) { e.scaredT -= dt; threat = e.scaredBy; threatName = '紅尾黑鯊'; }   // 被紅尾黑鯊驅趕
   e.fleeReal = !!threat;
   if (!threat && sp.school) {                                  // 魚群連鎖反應：旁邊的同伴真的在逃，自己也跟著逃
@@ -213,7 +346,7 @@ function updFish(e, dt) {
   else if (prey) { e.tx = prey.x; e.ty = prey.y; e.mode = 'chase'; tgt = sp.dash * .8; e.state = '追' + entName(prey); }
   else if (e.court) {                                          // 孔雀魚公魚求偶：游到母魚面前擺出 S 形姿勢
     const f = e.court.f;
-    if (f.dead || f.removed) e.court = null;
+    if (f.dead || f.removed) { e.court = null; e.mode = 'cruise'; tgt = sp.speed; }   // 母魚死了或被吃掉：結束求偶（以前這裡沒設速度，會變成 NaN）
     else {
       e.tx = f.x + f.dir * L * .8; e.ty = f.y - 4; e.mode = 'court';
       const near = dist(e, P(e.tx, e.ty)) < L * .7;
@@ -249,6 +382,7 @@ function updFish(e, dt) {
   }
   const dx = e.tx - e.x;
   const turnAt = Math.max(18, L * (e.chasing ? .5 : e.mode === 'graze' ? .45 : .3));   // 目標偏離夠多才轉身（追趕、啃藻時更不容易轉）
+  if (!Number.isFinite(tgt)) tgt = sp.speed;                     // 安全網：任何分支漏設速度都不會讓座標壞掉
   if (tgt > 0 && Math.abs(dx) > turnAt && Math.sign(dx) !== e.dir && !e.turning && !(e.turnCD > 0)) {   // 懸停、睡覺時不轉身
     if (e.chasing && e.chaseTurns >= 1) { e.chasing = null; e.rest = rand(3, 5); }   // 追趕中最多折返一次，之後就放棄回去休息
     else { if (e.chasing) e.chaseTurns++; startTurn(e); }
@@ -1277,7 +1411,7 @@ function updShrimp(e, dt) {
   if (e.paleT > 0) e.paleT -= dt;
   // 掠食者靠近：彈尾往後逃
   if (e.mode !== 'flip' && e.mode !== 'molt') {
-    for (const o of threatsTo(e)) if ((o.kind === 'fish' || o.kind === 'turtle') && !o.dead && canEat(o, e) && dist(o, e) < 70) {
+    for (const o of threatsTo(e)) if ((o.kind === 'fish' || o.kind === 'turtle' || birdDiving(o)) && !o.dead && canEat(o, e) && dist(o, e) < (o.kind === 'bird' ? 120 : 70)) {
       e.mode = 'flip'; e.flipT = 0; e.fvx = Math.sign(e.x - o.x || -e.dir) * 200; e.fvy = -rand(30, 80); break;
     }
   }

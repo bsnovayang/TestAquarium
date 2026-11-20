@@ -53,6 +53,22 @@ const PRESETS = [
     },
   },
   {
+    id: 'kingfisher', name: '溪邊翠鳥缸', desc: '低水位的溪邊造景，翠鳥停在石頭和沉木上，看準了俯衝抓魚',
+    tank: 'wide', level: .5, mosq: 'off', icons: ['kingfisher', 'guppy', 'cherry'],
+    build(B) {
+      B.decor('boulder', 160, B.floor, { w: 300, h: 420 });               // 左邊的大石頭（棲木）
+      B.decor('mound', 1150, B.floor, { w: 260, h: 380 });                // 右邊的土坡
+      B.decor('wood', 860, B.floor - 150, { rot: -.55, w: 420 });          // 斜伸出水面的沉木
+      B.decor('rock', 540, B.floor + 8); B.decor('rock', 640, B.floor + 8, { w: 90, h: 50 });
+      for (const [x, h] of [[380, 170], [450, 210], [980, 190], [1040, 150]]) B.decor('plant', x, B.floor, { h });
+      B.decor('filter', 1215, B.waterY + 40);
+      B.ent('nerite', 560, B.floor - 60);
+      for (let i = 0; i < 8; i++) B.ent('guppy', B.rx(420, 1000), B.ry(.2, .8), { sex: i % 2 ? 'f' : 'm' });
+      for (let i = 0; i < 6; i++) B.ent('cherry', B.rx(450, 950), B.floor - 30, { sex: i < 2 ? 'm' : 'f' });
+      const k = B.ent('kingfisher', 160, B.top + 100, { sex: 'm' });
+    },
+  },
+  {
     id: 'turtle', name: '烏龜缸', desc: '寬缸和曬背平台，看烏龜曬背、散步、游泳',
     tank: 'wide', level: .55, mosq: 'off', icons: ['turtle', 'redtail', 'wood'],
     build(B) {
