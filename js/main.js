@@ -15,7 +15,7 @@ const cam = { x: 0, y: 0, z: 1 };
 const ART = { pixel: true, zacc: 1 };                                 // 預設像素版；玩家選過一般版才用一般版
 try { ART.pixel = localStorage.getItem('aquarium.art') !== 'vector'; } catch { }
 { const a = new URLSearchParams(location.search).get('art'); if (a) ART.pixel = a === 'pixel'; }
-const PX_ZOOMS = [1, 1.5, 2, 3, 4];                                   // 像素版只用幾個固定倍率（每換一次要重畫整缸的快取）
+const PX_ZOOMS = [.5, 1, 1.5, 2, 3, 4];                                   // 像素版只用幾個固定倍率（每換一次要重畫整缸的快取）
 const pxZoomLevels = () => [fitZoom(), ...PX_ZOOMS.filter(z => z > fitZoom() + .01)];
 function setArt(pixel) {
   ART.pixel = pixel;

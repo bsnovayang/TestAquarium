@@ -164,9 +164,7 @@ const muteHex = h => PXOPT.mute ? mixColor(h, '#7cb4c8', .38) : h;
 function layerFill(L, key, draw, opaque) {                            // 靜態圖層：整個魚缸畫一次，平移時只複製看得到的那一塊
   key += '|' + PXOPT.mute + '|' + PXOPT.detail;
   let gw = Math.ceil(W * ppu()), gh = Math.ceil(H * ppu()), bx = 0, by = 0;
-  if (gw * gh > 3.5e6) {                                                // 整缸太大（寬缸＋4 倍）：只快取看得到的範圍（平移時重畫）
-    bx = Math.round(PXCAM.x * ppu()); by = Math.round(PXCAM.y * ppu()); gw = PXW; gh = PXH; key += '|' + bx + ',' + by;
-  }
+  if (gw * gh > 1.2e6) return layerTiles(L, key, draw, opaque, gw, gh);   // 整缸太大（展示缸、放大 2 倍以上）：分塊快取，只畫看得到的
   if (L.key !== key) {
     const cx = PXCAM.x, cy = PXCAM.y; PXCAM.x = bx / ppu(); PXCAM.y = by / ppu();   // 以快取範圍的左上角為原點畫
     const tmp = new PixBuf(gw, gh); draw(tmp);
@@ -181,6 +179,36 @@ function layerFill(L, key, draw, opaque) {                            // 靜態�
     if (opaque) dst.set(src.subarray(row + ox + x0, row + ox + x1), y * PXW + x0);
     else for (let x = x0; x < x1; x++) { const v = src[row + ox + x]; if (v) dst[y * PXW + x] = v; }
   }
+}
+// 分塊快取：把整缸切成 256×256 格的小塊，只畫看得到的那幾塊；畫過的留著（最多 64 塊，太舊的丟掉）
+// 每塊多畫 3 格邊界再裁掉，造景的外框在塊與塊的交界才不會斷掉
+const PX_TILE = 256, PX_TILE_PAD = 3;
+function layerTiles(L, key, draw, opaque, gw, gh) {
+  if (L.tkey !== key) { L.tiles = new Map(); L.tkey = key; }
+  const s = ppu(), cx = Math.round(PXCAM.x * s), cy = Math.round(PXCAM.y * s), TS = PX_TILE, pad = PX_TILE_PAD, bw = TS + pad * 2;
+  const keepX = PXCAM.x, keepY = PXCAM.y;
+  for (let ty = Math.max(0, Math.floor(cy / TS)); ty <= Math.floor((cy + PXH - 1) / TS) && ty * TS < gh; ty++)
+    for (let tx = Math.max(0, Math.floor(cx / TS)); tx <= Math.floor((cx + PXW - 1) / TS) && tx * TS < gw; tx++) {
+      const id = tx + ',' + ty; let tile = L.tiles.get(id);
+      if (tile) { L.tiles.delete(id); L.tiles.set(id, tile); }               // 最近用過的放到最後
+      else {
+        const buf = new PixBuf(bw, bw);
+        PXCAM.x = (tx * TS - pad) / s; PXCAM.y = (ty * TS - pad) / s;
+        draw(buf);
+        if (PXOPT.mute) for (let i = 0; i < buf.d.length; i++) if (buf.d[i]) buf.d[i] = muteColor(buf.d[i]);
+        tile = buf.d; L.tiles.set(id, tile);
+        if (L.tiles.size > 64) L.tiles.delete(L.tiles.keys().next().value);
+      }
+      const ox = tx * TS - cx, oy = ty * TS - cy, wMax = Math.min(TS, gw - tx * TS), hMax = Math.min(TS, gh - ty * TS);
+      const x0 = Math.max(0, -ox), x1 = Math.min(wMax, PXW - ox);
+      if (x1 <= x0) continue;
+      for (let y = Math.max(0, -oy); y < hMax && oy + y < PXH; y++) {
+        const srow = (y + pad) * bw + pad, drow = (oy + y) * PXW + ox;
+        if (opaque) PXB.d.set(tile.subarray(srow + x0, srow + x1), drow + x0);
+        else for (let x = x0; x < x1; x++) { const v = tile[srow + x]; if (v) PXB.d[drow + x] = v; }
+      }
+    }
+  PXCAM.x = keepX; PXCAM.y = keepY;
 }
 // 局部座標 → 畫面格子：原點 (wx, wy)、縮放 s（每單位幾格）、sx 左右（±1）、可選旋轉（繞局部 pivot）
 function mapper(wx, wy, s, sx = 1, sy = 1, rot = 0, pvx = 0, pvy = 0) {
@@ -1289,6 +1317,72 @@ function drawPxFly(e) {
   const h = T(P(1.8, -.2)); PXB.set(h.x, h.y, C('#c0392b'), CREATURE);
 }
 
+// 前景草：一根根細葉，水裡的會擺動
+function drawPxCarpet(d) {
+  const wy = world.waterY, r = rng(d.seed), n = Math.round(d.w / 4), s = ppu(), c1 = C('#4f9a3a'), c2 = C('#6ab04a'), c3 = C('#8fd06a');
+  for (let i = 0; i < n; i++) {
+    const x = d.x - d.w / 2 + r() * d.w, base = groundY(x, d.y - 20, 30), h = d.h * (.5 + r() * .6), sway = base > wy ? Math.sin(world.t * 1.6 + x * .1) * 2.5 : .5, col = r() < .5 ? c1 : c2, tipDot = r() < .3;
+    const a = P(AX(x), AY(base)), b = P(AX(x + sway), AY(base - h));
+    if (s >= 1.5) pxThick(PXB, a, b, Math.max(1, 1.6 * s), col, 0); else PXB.line(a.x, a.y, b.x, b.y, col);
+    if (tipDot) PXB.set(b.x, b.y, c3);
+  }
+}
+// 蕨類：幾片往外彎的葉子，兩側小羽片
+function drawPxFern(d) {
+  const r = rng(d.seed), s = ppu(), stem = C('#3f7a2c'), lf = [C('#4f9a3a'), C('#5fae44')];
+  for (let k = 0; k < 6; k++) {
+    const a = -Math.PI / 2 + (k - 2.5) * .32 + Math.sin(world.t * .6 + k) * .03, len = d.h * (.65 + r() * .45), pts = [];
+    for (let i = 0; i <= 6; i++) { const t = i / 6; pts.push(P(d.x + Math.cos(a) * len * t + (k - 2.5) * 3 * t * t * 4, d.y + Math.sin(a) * len * t + len * .35 * t * t)); }
+    for (let i = 1; i < pts.length; i++) for (const sd of [-1, 1]) {
+      const p = pts[i], q = pts[i - 1], ang = Math.atan2(p.y - q.y, p.x - q.x) + sd * 1.1, l = 7 * (1 - i / 8);
+      PXB.poly(ellipsePts(p.x + Math.cos(ang) * l * .5, p.y + Math.sin(ang) * l * .5, l * .55, 1.8, ang, 8).map(p2 => P(AX(p2.x), AY(p2.y))), lf[i % 2], 0);
+    }
+    PXB.path(chaikin(pts, false, 1).map(p => P(AX(p.x), AY(p.y))), stem);
+  }
+}
+
+// ---------------------------------------------------------------------
+// 迷你藍鯨（共用 whaleRig；局部座標身長 100、頭在 +50）
+// 背部深藍、腹部淺色，斑駁的淺色斑點、喉腹摺；胸鰭近側另外一層
+// ---------------------------------------------------------------------
+function drawPxWhale(e) {
+  const R = whaleRig(e), n = R.nodes, kw = whaleL(e) / 100, k = kw * PXOPT.cscale, S = ppu() * k, tb = n[n.length - 1], D = PXOPT.detail;
+  const T = mapper(e.x, e.y, S, R.sx, 1);
+  live(B => {
+    const fl = R.flukeRot, cf = Math.cos(fl), sf = Math.sin(fl), F = p => T(P(tb.x + p.x * cf - p.y * sf, tb.y + p.x * sf + p.y * cf));
+    B.poly(chaikin([P(0, -.8), P(5, -1.6), P(10, -1.2), P(12, 0), P(10, 1.2), P(5, 1.6), P(0, .8)], true, 1).map(F), '#3f5f7d');   // 尾鰭
+    const pf = (dx, dy, rot, pts, col) => { const c = Math.cos(rot), sn = Math.sin(rot), o = P(n[3].x + dx, n[3].y + n[3].h * dy); B.poly(chaikin(pts, true, 1).map(p => T(P(o.x + p.x * c - p.y * sn, o.y + p.x * sn + p.y * c))), col); };
+    pf(0, .5, .55 + Math.sin(e.phase * .5) * .08, [P(0, -1), P(-14, 1.5), P(-15, 3), P(-2, 1.5)], '#36536f');   // 遠側胸鰭
+    const top = n.map((q, i) => P(q.x, q.y - q.h * (i < 3 ? .8 : 1))), bot = n.map(q => P(q.x, q.y + q.h));
+    B.poly(chaikin([P(n[0].x + 3, n[0].y + .5), ...top, P(tb.x - 1, tb.y), ...bot.slice().reverse()], true, 2).map(T), '#6f90ad');
+    const band = (f0, f1, i1) => { const A = [], Bq = []; for (let i = 0; i <= i1; i++) { const q = n[i], tf = i < 3 ? .8 : 1; A.push(P(q.x, q.y + q.h * f0 * (f0 < 0 ? tf : 1))); Bq.push(P(q.x, q.y + q.h * f1 * (f1 < 0 ? tf : 1))); } return chaikin([...A, ...Bq.reverse()], true, 1); };
+    B.poly(band(-1.05, -.25, n.length - 2).map(T), '#4a6c8c');               // 背部
+    B.poly(band(-1.05, -.7, n.length - 3).map(T), '#3e5f80');                // 背脊最深
+    B.poly(band(.4, 1.05, 7).map(T), '#c3d3df');                             // 腹部
+    const d9 = n[9]; B.poly([P(d9.x + 2, d9.y - d9.h + .2), P(d9.x - 1.5, d9.y - d9.h - 1.6), P(d9.x - 2.5, d9.y - d9.h + .3)].map(T), '#3e5f80');   // 小背鰭
+    if (D) B.cleanup();
+    if (D && S >= .5) B.rim(.25, .15);
+    if (S >= .5) for (let i = 0; i < 26; i++) { const q = n[1 + (i * 7) % 10], f = ((i * 37) % 10) / 10 - .6, p = T(P(q.x + (i % 3) * 2, q.y + q.h * f)); B.setOn(p.x, p.y, C('#a8c0d4')); if (S >= 1.5) B.setOn(p.x + 1, p.y, C('#a8c0d4')); }   // 斑駁
+    if (S >= .6) for (let j = 0; j < 4; j++) { const pts = []; for (let i = 0; i <= 5; i++) { const q = n[i]; pts.push(T(P(q.x, q.y + q.h * (.92 - j * .14)))); } B.path(pts, (x, y) => B.tag[y * B.w + x] === 1 ? C('#8aa2b8') : 0); }   // 喉腹摺
+  }, '#2e4660', '#1e3046');
+  // 嘴、眼、噴氣孔
+  if (S >= .4) PXB.path(chaikin([P(n[0].x + 3, n[0].y + .8), P(n[1].x, n[1].y + 2), P(n[1].x - 4, n[1].y + 2.6)], false, 1).map(T), C('#22344a'), CREATURE);
+  const ec = T(P(n[1].x - 4.6, n[1].y + 1.2)); PXB.disc(ec.x, ec.y, Math.max(.6, .7 * S), C('#0e1620'), CREATURE);
+  if (S >= .6) { const bh = T(P(n[1].x - 2, n[1].y - n[1].h * .8)); PXB.line(bh.x - S, bh.y, bh.x + S, bh.y, C('#2a4058'), CREATURE); }
+  live(B => {                                                            // 近側胸鰭
+    const c = Math.cos(.45 + Math.sin(e.phase * .5 + 1) * .08), sn = Math.sin(.45 + Math.sin(e.phase * .5 + 1) * .08), o = P(n[3].x + 1, n[3].y + n[3].h * .55);
+    B.poly(chaikin([P(0, -1), P(-15, 1.5), P(-16, 3), P(-2, 1.6)], true, 1).map(p => T(P(o.x + p.x * c - p.y * sn, o.y + p.x * sn + p.y * c))), (x, y) => C(y < T(o).y + 1.2 * S ? '#7a98b4' : '#5a7a98'));
+  }, '#2e4660', '#2e4660');
+  if (e.wmode === 'spout' && e.spoutT !== undefined) {                   // 噴水柱
+    const bh = P(e.x + R.sx * kw * (n[1].x - 2), e.y + kw * (n[1].y - n[1].h * .8)), H0 = kw * 14, fade = Math.min(1, e.spoutT * 3) * Math.min(1, (2.4 - e.spoutT) * 2);
+    for (let i = 0; i < 26; i++) {
+      const t = ((e.spoutT * .9 + i / 26) % 1); if (fade * (1 - t) < .25) continue;
+      const x = bh.x + Math.sin(i * 1.7) * t * kw * 3.2, y = bh.y - t * H0 + t * t * H0 * .25;
+      PXB.disc(AX(x), AY(y), Math.max(.6, kw * (.5 + t * 1.6) * ppu()), C(fade * (1 - t) > .5 ? '#ffffff' : '#d8f0fa'), CREATURE);
+    }
+  }
+}
+
 // 斑馬螺
 function drawPxSnail(e) {
   const s = ppu() * e.size * PXOPT.cscale, T = mapper(e.x, e.y, s, e.dir, 1), und = Math.sin(e.phase * 3) * .8;
@@ -1460,8 +1554,8 @@ function drawPxBranch(B, d) {
 // 一幀
 // ---------------------------------------------------------------------
 // 還沒有像素版的生物、造景：先用一般版的繪圖畫在同樣解析度的畫布上，再貼進像素格子（過渡期用，補完一種就少一種）
-const PX_NATIVE_KINDS = { fish: 1, shrimp: 1, snail: 1, nest: 1, bird: 1, axolotl: 1, crab: 1, turtle: 1, frog: 1, tadpole: 1, gecko: 1, mosquito: 1, larva: 1, cricket: 1, fly: 1 };
-const PX_NATIVE_DECOR = { rock: 1, boulder: 1, wood: 1, branch: 1, bubbler: 1, filter: 1, plant: 1, floater: 1, mound: 1, mudflat: 1 };
+const PX_NATIVE_KINDS = { fish: 1, shrimp: 1, snail: 1, nest: 1, bird: 1, axolotl: 1, crab: 1, turtle: 1, frog: 1, tadpole: 1, gecko: 1, mosquito: 1, larva: 1, cricket: 1, fly: 1, whale: 1 };
+const PX_NATIVE_DECOR = { rock: 1, boulder: 1, wood: 1, branch: 1, bubbler: 1, filter: 1, plant: 1, floater: 1, mound: 1, mudflat: 1, carpet: 1, fern: 1 };
 let PX_VC = null;
 function vectorInto(B, draw, tag) {
   if (!PX_VC || PX_VC.width !== B.w || PX_VC.height !== B.h) { PX_VC = document.createElement('canvas'); PX_VC.width = B.w; PX_VC.height = B.h; PX_VC.c = PX_VC.getContext('2d', { willReadFrequently: true }); }
@@ -1502,7 +1596,7 @@ function renderPixel() {
     // 造景的外框：一圈深色（用 tag 1 標記的區塊）
     B.outline(PXPAL.stoneOl, PXPAL.stoneOl);
   });
-  for (const d of world.decor) if (d.type === 'filter') drawPxFilterBubbles(d);
+  for (const d of world.decor) if (d.type === 'filter') drawPxFilterBubbles(d); else if (d.type === 'carpet') drawPxCarpet(d); else if (d.type === 'fern') drawPxFern(d);   // 會擺動的：每幀畫
   drawPxMolts();
   for (const f of world.food) drawPxFood(f);
   const list = world.ents.slice().sort((a, b) => (PX_ORDER[a.kind] || 0) - (PX_ORDER[b.kind] || 0));
@@ -1522,6 +1616,7 @@ function renderPixel() {
     else if (e.kind === 'larva') drawPxLarva(e);
     else if (e.kind === 'cricket') drawPxCricket(e);
     else if (e.kind === 'fly') drawPxFly(e);
+    else if (e.kind === 'whale') drawPxWhale(e);
   }
   drawPxTailBits();
   const fb = list.filter(e => !PX_NATIVE_KINDS[e.kind]);
