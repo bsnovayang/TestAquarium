@@ -577,12 +577,13 @@ function drawPxFront(B) {
 // ---------------------------------------------------------------------
 const PX_FISH = {
   guppy: { ramp: ['#eef4f8', '#c4d4e0', '#9cb2c4', '#6e8aa2', '#465e74'], fin: '#d6e2ea', ol: '#2c3c4c' },
+  shark: { ramp: ['#4e545c', '#2e3236', '#24272b', '#1a1c1f', '#101214'], fin: '#1c1e21', ol: '#08090a', tail: ['#ff7a5a', '#f04a30', '#b0261a'] },   // 紅尾黑鯊：全身黑、尾鰭紅
   tetra: { ramp: ['#f2f6f8', '#cfd8de', '#a2b0ba', '#728290', '#465460'], fin: '#e2eaef', ol: '#2e3a44', red: ['#ff7484', '#ff3348', '#c41e36'], blue: ['#b8f8ff', '#40d8ff', '#1a90c8'] },
 };
 function drawPxFish(e) {
   const sp = SPECIES[e.type]; if (sp.cory) return drawPxCory(e);
   const lk = sp.look, R = fishRig(e), n = R.nodes, tb = n[FISH_N - 1], k = e.size * sp.len / 64, s = ppu() * k * PXOPT.cscale;
-  const shape = lk.shape, pal = PX_FISH[shape === 'tetra' ? 'tetra' : 'guppy'], Rm = pal.ramp;
+  const shape = lk.shape, pal = PX_FISH[shape] || PX_FISH.guppy, Rm = pal.ramp;
   const juv = e.size < e.adult * .6, male = e.sex === 'm' && !juv, M = GUPPY_MORPHS[e.morph || 0];
   const T = mapper(e.x, e.y, s, R.sx, e.dead ? -1 : 1);
   const ct = Math.cos(R.tailRot), st = Math.sin(R.tailRot);
@@ -601,7 +602,8 @@ function drawPxFish(e) {
       } else B.poly(tail.map(TT), pal.fin, FIN);
     } else {
       tail = FISH_TAILS[lk.tailType || 'fork'];
-      B.poly(tail.map(TT), pal.fin, FIN);
+      if (pal.tail) { B.poly(tail.map(TT), pal.tail[2], FIN); B.poly(tail.map(q => TT(P(q.x * .8, q.y * .8))), pal.tail[1], FIN); B.poly(tail.map(q => TT(P(q.x * .45, q.y * .5))), pal.tail[0], FIN); }   // 紅尾
+      else B.poly(tail.map(TT), pal.fin, FIN);
     }
     // 背鰭、臀鰭
     const F = fishFins(n, lk.dorsalTall);
@@ -659,7 +661,7 @@ function drawPxFish(e) {
   }, Rm[3], pal.ol);
   // 眼睛：虹膜＋瞳孔＋反光；嘴
   const eye = T(P(n[0].x - 1, n[0].y - 2.5 * (lk.hScale || 1)));
-  if (D && Lpx >= 30) { PXB.disc(eye.x, eye.y, 3.8 * s, C(shape === 'tetra' ? '#c8e8f0' : '#d8d0b0'), CREATURE); PXB.disc(eye.x, eye.y, 2.5 * s, C(PXPAL.black), CREATURE); }
+  if (D && Lpx >= 30) { PXB.disc(eye.x, eye.y, 3.8 * s, C(shape === 'tetra' ? '#c8e8f0' : shape === 'shark' ? '#c8a050' : '#d8d0b0'), CREATURE); PXB.disc(eye.x, eye.y, 2.5 * s, C(PXPAL.black), CREATURE); }
   else PXB.disc(eye.x, eye.y, Math.max(.7, 3.6 * s), C(PXPAL.black), CREATURE);
   if (D ? Lpx >= 22 : s > .5) PXB.set(eye.x - Math.max(.6, s), eye.y - Math.max(.6, s * 1.2), C('#ffffff'), CREATURE);
   if (D && Lpx >= 36) { const m = T(P(n[0].x + 5, n[0].y + 1.6)); PXB.set(m.x, m.y, C(Rm[4]), CREATURE); }
@@ -1600,7 +1602,17 @@ function renderPixel() {
   drawPxMolts();
   for (const f of world.food) drawPxFood(f);
   const list = world.ents.slice().sort((a, b) => (PX_ORDER[a.kind] || 0) - (PX_ORDER[b.kind] || 0));
-  for (const e of list) {
+  for (const e of list) drawPxEnt(e);
+  drawPxTailBits();
+  const fb = list.filter(e => !PX_NATIVE_KINDS[e.kind]);
+  if (fb.length) vectorInto(PXB, () => { for (const e of fb) DRAW[e.kind](e); }, CREATURE);   // 還沒有像素版的生物（暫代）
+  layerFill(LAYER.front, view, drawPxFront);
+  for (const d of world.decor) if (d.type === 'floater') drawPxFloater(d);
+  drawPxParticles();
+  drawPxSurface();
+  if (PXOPT.light === 'glow') drawPxPlankton();
+}
+function drawPxEnt(e) {
     if (e.kind === 'fish') drawPxFish(e);
     else if (e.kind === 'shrimp') drawPxShrimp(e);
     else if (e.kind === 'snail') drawPxSnail(e);
@@ -1617,15 +1629,44 @@ function renderPixel() {
     else if (e.kind === 'cricket') drawPxCricket(e);
     else if (e.kind === 'fly') drawPxFly(e);
     else if (e.kind === 'whale') drawPxWhale(e);
-  }
-  drawPxTailBits();
-  const fb = list.filter(e => !PX_NATIVE_KINDS[e.kind]);
-  if (fb.length) vectorInto(PXB, () => { for (const e of fb) DRAW[e.kind](e); }, CREATURE);   // 還沒有像素版的生物（暫代）
-  layerFill(LAYER.front, view, drawPxFront);
-  for (const d of world.decor) if (d.type === 'floater') drawPxFloater(d);
-  drawPxParticles();
-  drawPxSurface();
-  if (PXOPT.light === 'glow') drawPxPlankton();
+}
+// ---------------------------------------------------------------------
+// 物件面板的縮圖（像素版）：在 32×22 格裡畫，每格放大成 2×2 px（和遊戲裡一樣看得到一格一格）
+// 物件放在魚缸外面很遠的地方畫（不會碰到缸裡的造景），畫完把那一小塊拿出來
+// ---------------------------------------------------------------------
+const PXT_W = 32, PXT_H = 22;
+let PXT_CV = null;
+function drawThumbPx(cv, S) {
+  const dpr = Math.min(devicePixelRatio || 1, 2), ctx = cv.getContext('2d');
+  cv.width = 64 * dpr; cv.height = 44 * dpr; ctx.clearRect(0, 0, cv.width, cv.height);
+  const keepCam = { ...PXCAM }, keepWy = world.waterY, OX = -8000, OY = S.obj && S.obj.type === 'floater' ? TANK.floor - 80 : TANK.floor;   // 浮萍要水面在缸底上面才會畫
+  PXB.d.fill(0); PXB.tag.fill(0);
+  try {
+    PXCAM.z = S.sc; PXCAM.x = OX - S.tx / S.sc; PXCAM.y = OY - S.ty / S.sc;
+    world.waterY = S.wy > 5000 ? 99999 : S.wy < -5000 ? -99999 : OY + S.wy;
+    if (S.what === 'food') for (const [x, y] of S.obj) drawPxFood({ x: PXCAM.x + x, y: PXCAM.y + y });
+    else if (S.what === 'decor') {
+      const d = { ...S.obj, x: OX, y: OY };
+      if (d.type === 'rock' || d.type === 'boulder') drawPxRock(PXB, d);
+      else if (d.type === 'mound') drawPxMound(PXB, d);
+      else if (d.type === 'mudflat') drawPxMudflat(PXB, d);
+      else if (d.type === 'wood') drawPxWood(PXB, d);
+      else if (d.type === 'branch') drawPxBranch(PXB, d);
+      else if (d.type === 'bubbler') drawPxBubbler(PXB, d);
+      else if (d.type === 'filter') drawPxFilterBody(PXB, d);
+      PXB.outline(PXPAL.stoneOl, PXPAL.stoneOl);                         // 造景的外框
+      if (d.type === 'plant') drawPxPlant(d);
+      else if (d.type === 'carpet') drawPxCarpet(d);
+      else if (d.type === 'fern') drawPxFern(d);
+      else if (d.type === 'floater') drawPxFloater(d);
+    } else { const e = S.obj; e.x = OX; e.y = OY; drawPxEnt(e); }
+  } catch (err) { console.warn('像素縮圖失敗', err); }
+  finally { Object.assign(PXCAM, keepCam); world.waterY = keepWy; }
+  if (!PXT_CV) { PXT_CV = document.createElement('canvas'); PXT_CV.width = PXT_W; PXT_CV.height = PXT_H; }
+  const tc = PXT_CV.getContext('2d'), img = tc.createImageData(PXT_W, PXT_H), out = new Uint32Array(img.data.buffer);
+  for (let y = 0; y < PXT_H; y++) for (let x = 0; x < PXT_W; x++) out[y * PXT_W + x] = PXB.d[y * PXW + x];
+  tc.putImageData(img, 0, 0);
+  ctx.imageSmoothingEnabled = false; ctx.drawImage(PXT_CV, 0, 0, cv.width, cv.height);
 }
 // 夜光：發光的浮游生物（慢慢漂、一閃一閃）
 function drawPxPlankton() {

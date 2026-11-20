@@ -23,6 +23,7 @@ function setArt(pixel) {
   if (pixel) { const lv = pxZoomLevels(); cam.z = lv.reduce((a, b) => Math.abs(b - cam.z) < Math.abs(a - cam.z) ? b : a); }
   else cam.z = clamp(cam.z, fitZoom(), Math.max(fitZoom(), 3));
   camClamp(); resize();
+  if (typeof buildPalette === 'function' && document.getElementById('palette').childElementCount) { buildPalette(); const g = document.getElementById('pmGrid'); if (g) g.innerHTML = ''; }   // 縮圖換成對應的畫風
 }
 const fitZoom = () => Math.min(VIEW_W / W, VIEW_H / H);
 function camClamp() {

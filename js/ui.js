@@ -21,26 +21,21 @@ const nameOf = t => SPECIES[t]?.name || DECOR_TYPES[t]?.name || (t === 'food' ? 
 // ---------------------------------------------------------------------
 // 物件面板（縮圖直接用遊戲裡的繪圖函式畫）
 // ---------------------------------------------------------------------
-function drawThumb(cv, type) {
-  const ctx = cv.getContext('2d'), dpr = Math.min(devicePixelRatio || 1, 2);
-  cv.width = 64 * dpr; cv.height = 44 * dpr;
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, 64, 44);
-  G.begin(ctx);
-  const keep = world.waterY; world.waterY = 9999;                 // 縮圖都畫成「水面上」的樣子
+// 縮圖要擺什麼、放多大：{ what: 'decor'|'food'|'ent', obj, tx, ty, sc, wy }
+//   tx, ty：物件原點在 64×44 縮圖裡的位置；sc：每個世界單位幾 px；wy：水面高度（相對物件原點）
+function thumbSpec(type) {
   if (DECOR_TYPES[type]) {
     const t = DECOR_TYPES[type];
-    const d = { type, x: type === 'branch' ? 0 : 0, y: 0, w: type === 'branch' ? 260 : t.w, h: type === 'boulder' ? 220 : type === 'branch' ? 16 : t.h, rot: type === 'wood' ? .2 : type === 'branch' ? .12 : 0, seed: 3, thumb: true };
-    const sc = Math.min(54 / d.w, 34 / Math.max(d.h, 20));
-    ctx.translate(32, type === 'wood' || type === 'branch' ? 22 : 40); ctx.scale(sc, sc);
-    if (type === 'plant') { world.waterY = -9999; d.h = 160; }
-    if (type === 'fern') { world.waterY = 9999; }
-    if (type === 'carpet') { world.waterY = -9999; d.y = 0; ctx.setTransform(dpr * .25, 0, 0, dpr * .25, 32 * dpr, 36 * dpr); }
-    if (type === 'floater') { world.waterY = 0; ctx.setTransform(dpr * .4, 0, 0, dpr * .4, 32 * dpr, 26 * dpr); }
-    if (type === 'filter') { world.waterY = -20; ctx.setTransform(dpr * .32, 0, 0, dpr * .32, 32 * dpr, 20 * dpr); d.y = 0; }
-    drawDecor(d);
-  } else if (type === 'food') {
-    for (const [x, y] of [[26, 18], [34, 22], [30, 28], [38, 15], [22, 26]]) drawFood({ x, y });
-  } else {
+    const d = { type, x: 0, y: 0, w: type === 'branch' ? 260 : t.w, h: type === 'boulder' ? 220 : type === 'branch' ? 16 : t.h, rot: type === 'wood' ? .2 : type === 'branch' ? .12 : 0, seed: 3, thumb: true };
+    const S = { what: 'decor', obj: d, tx: 32, ty: type === 'wood' || type === 'branch' ? 22 : 40, sc: Math.min(54 / d.w, 34 / Math.max(d.h, 20)), wy: 9999 };   // 縮圖都畫成「水面上」的樣子
+    if (type === 'plant') { S.wy = -9999; d.h = 160; }
+    if (type === 'carpet') Object.assign(S, { wy: -9999, tx: 32, ty: 36, sc: .25 });
+    if (type === 'floater') Object.assign(S, { wy: 0, tx: 32, ty: 26, sc: .4 });
+    if (type === 'filter') Object.assign(S, { wy: -20, tx: 32, ty: 20, sc: .32 });
+    return S;
+  }
+  if (type === 'food') return { what: 'food', obj: [[26, 18], [34, 22], [30, 28], [38, 15], [22, 26]], tx: 0, ty: 0, sc: 1, wy: 9999 };
+  {
     const e = makeEnt(type, 0, 0, false);
     e.size = e.adult = 1; e.dir = 1; e.amp = .3; e.mode = type === 'turtle' ? 'walk' : 'sit';
     const conf = { axolotl: [33, 34, .135], kingfisher: [30, 42, .17], cory: [33, 34, .5], guppy: [36, 22, .55], neon: [33, 22, .6], neontetra: [33, 22, .7], redtail: [37, 22, .17], turtle: [30, 38, .45], frog: [32, 38, .7], goldfrog: [31, 38, .66], tadpole: [34, 22, 1.5],
@@ -52,10 +47,23 @@ function drawThumb(cv, type) {
     if (e.sex) { e.sex = e.kind === 'shrimp' ? 'f' : 'm'; e.morph = e.kind === 'shrimp' ? 1 : 0; e.size = e.adult = 1; }
     if (type === 'tadpole') { e.size = 1; e.meta = .3; }
     if (type === 'whale') { e.amp = .4; e.wmode = 'cruise'; }
-    ctx.translate(conf[0], conf[1]); ctx.scale(conf[2], conf[2]);
     if (type === 'gecko') e.surface = 'ground';
     if (type === 'mosquito') { e.id = 0; e.phase = .013; }        // 固定翅膀角度，縮圖才看得清楚
-    DRAW[e.kind](e);
+    return { what: 'ent', obj: e, tx: conf[0], ty: conf[1], sc: conf[2], wy: 9999 };
+  }
+}
+function drawThumb(cv, type) {
+  const S = thumbSpec(type);
+  if (typeof ART !== 'undefined' && ART.pixel) return drawThumbPx(cv, S);   // 像素版的縮圖
+  const ctx = cv.getContext('2d'), dpr = Math.min(devicePixelRatio || 1, 2);
+  cv.width = 64 * dpr; cv.height = 44 * dpr;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, 64, 44);
+  G.begin(ctx);
+  const keep = world.waterY; world.waterY = S.wy;
+  if (S.what === 'food') for (const [x, y] of S.obj) drawFood({ x, y });
+  else {
+    ctx.setTransform(dpr * S.sc, 0, 0, dpr * S.sc, S.tx * dpr, S.ty * dpr);
+    if (S.what === 'decor') drawDecor(S.obj); else DRAW[S.obj.kind](S.obj);
   }
   world.waterY = keep;
 }
