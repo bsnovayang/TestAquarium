@@ -389,6 +389,10 @@ function bindSidePanel() {
   // 設定
   const s = world.settings, box = $('setPanel');
   box.innerHTML = `
+    <div class="sub">畫風</div>
+    <select id="artStyle"><option value="vector">一般</option><option value="pixel">像素（測試中，部分生物暫用一般版）</option></select>
+    <label><input type="checkbox" id="pxHybrid"> 像素版：平滑光影（光束、暗角）</label>
+    <div class="sub">生物</div>
     <label><input type="checkbox" data-set="death"> 生物會死亡</label>
     <div class="sub">捕食規則</div>
     ${RULES.map(r => `<label><input type="checkbox" data-rule="${r.id}"> ${r.label}</label>`).join('')}
@@ -412,6 +416,8 @@ function bindSidePanel() {
     if (t.dataset.rule) s.rules[t.dataset.rule] = t.checked;
     if (t.id === 'mosqRate') { s.mosqRate = t.value; world.spawnT = 1; }
     if (t.id === 'dayCycle') s.dayCycle = t.value;
+    if (t.id === 'artStyle') setArt(t.value === 'pixel');
+    if (t.id === 'pxHybrid') { PXOPT.hybrid = t.checked; try { localStorage.setItem('aquarium.pxHybrid', t.checked ? '1' : ''); } catch { } }
   });
 }
 function syncSettings() {
@@ -420,6 +426,7 @@ function syncSettings() {
   document.querySelectorAll('[data-rule]').forEach(c => c.checked = !!s.rules[c.dataset.rule]);
   $('mosqRate').value = s.mosqRate;
   $('dayCycle').value = s.dayCycle;
+  $('artStyle').value = ART.pixel ? 'pixel' : 'vector'; $('pxHybrid').checked = PXOPT.hybrid;
   syncTankUI();
   $('water').value = Math.round(world.level * 100); $('waterVal').textContent = $('water').value + '%';
 }

@@ -16,6 +16,7 @@ const PXOPT = {
   hybrid: false,      // 混合光影：放大後再疊平滑的半透明光束、暗角、水面光暈
   detail: true,       // 依格子數加細節＋自動清理雜點（關掉 = 改善前，給比較頁用）
 };
+try { PXOPT.hybrid = !!localStorage.getItem('aquarium.pxHybrid'); } catch { }
 const CREATURE = 9;   // 生物的格子在 PXB.tag 標成 9（燈光模式下保持明亮）
 const PXCAM = { z: 1, x: 0, y: 0 };                                   // x, y：畫面左上角的世界座標
 const ppu = () => .5 * PXCAM.z;                                       // 每個世界單位幾格
@@ -944,16 +945,36 @@ function drawPxBranch(B, d) {
 // ---------------------------------------------------------------------
 // 一幀
 // ---------------------------------------------------------------------
+// 還沒有像素版的生物、造景：先用一般版的繪圖畫在同樣解析度的畫布上，再貼進像素格子（過渡期用，補完一種就少一種）
+const PX_NATIVE_KINDS = { fish: 1, shrimp: 1, snail: 1, nest: 1, bird: 1 };
+const PX_NATIVE_DECOR = { rock: 1, boulder: 1, wood: 1, branch: 1, bubbler: 1, filter: 1, plant: 1, floater: 1 };
+let PX_VC = null;
+function vectorInto(B, draw, tag) {
+  if (!PX_VC || PX_VC.width !== B.w || PX_VC.height !== B.h) { PX_VC = document.createElement('canvas'); PX_VC.width = B.w; PX_VC.height = B.h; PX_VC.c = PX_VC.getContext('2d', { willReadFrequently: true }); }
+  const c = PX_VC.c, s = ppu(), keep = G.c;
+  c.setTransform(1, 0, 0, 1, 0, 0); c.clearRect(0, 0, B.w, B.h);
+  c.setTransform(s, 0, 0, s, -PXCAM.x * s, -PXCAM.y * s);
+  G.c = c; try { draw(); } finally { G.c = keep; }
+  const img = c.getImageData(0, 0, B.w, B.h).data, d = B.d;
+  for (let i = 0, j = 0, n = B.w * B.h; i < n; i++, j += 4) {
+    const a = img[j + 3]; if (a < 90) continue;                          // 半透明的邊緣不要（保持像素感）
+    const col = ((255 << 24) | (img[j + 2] << 16) | (img[j + 1] << 8) | img[j]) >>> 0;
+    d[i] = a > 220 || !d[i] ? col : mixU(d[i], col, a / 255); B.tag[i] = tag;
+  }
+}
 const PX_ORDER = { shrimp: 0, snail: 0, nest: 0, larva: 0, tadpole: 1, fish: 2, bird: 3 };
 function renderPixel() {
   const z = PXCAM.z, cx = Math.round(PXCAM.x * ppu()), cy = Math.round(PXCAM.y * ppu());
   PXCAM.x = cx / ppu(); PXCAM.y = cy / ppu();                            // 鏡頭對齊格子，畫面才不會抖
+  if (PXCAM.x < 0 || PXCAM.y < 0 || PXCAM.x + PXW / ppu() > W || PXCAM.y + PXH / ppu() > H) PXB.d.fill(C('#15181a'));   // 鏡頭比魚缸大：外面塗暗
   const view = [z, W, H].join(','), wkey = Math.round(world.waterY) + ',' + Math.round(world.water.algae / 5) + ',' + Math.round(world.water.dirt / 8);
   layerFill(LAYER.back, view + '|' + wkey, drawPxBack, true);
   PXB.tag.fill(0);
   if (!PXOPT.hybrid && PXOPT.light === 'day') drawPxShafts();          // 混合模式改用平滑的光束（畫在放大之後）
   for (const d of world.decor) if (d.type === 'plant') drawPxPlant(d);
   layerFill(LAYER.decor, view + '|' + wkey + '|' + world.decor.map(d => [d.type, d.x | 0, d.y | 0, d.w | 0, d.h | 0, (d.rot || 0).toFixed(2)].join(':')).join(';'), B => {
+    const fb = world.decor.filter(d => !PX_NATIVE_DECOR[d.type]);
+    if (fb.length) vectorInto(B, () => { for (const d of fb) drawDecor(d); }, 1);   // 土坡、泥灘、前景草、蕨類（暫代）
     for (const d of world.decor) {
       if (d.type === 'rock' || d.type === 'boulder') { drawPxRock(B, d); }
       else if (d.type === 'wood') drawPxWood(B, d);
@@ -975,6 +996,8 @@ function renderPixel() {
     else if (e.kind === 'nest') drawPxNest(e);
     else if (e.kind === 'bird') drawPxBird(e);
   }
+  const fb = list.filter(e => !PX_NATIVE_KINDS[e.kind]);
+  if (fb.length) vectorInto(PXB, () => { for (const e of fb) DRAW[e.kind](e); }, CREATURE);   // 還沒有像素版的生物（暫代）
   layerFill(LAYER.front, view, drawPxFront);
   for (const d of world.decor) if (d.type === 'floater') drawPxFloater(d);
   drawPxParticles();
