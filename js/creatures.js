@@ -171,6 +171,7 @@ function birdPickPerch(e, far) {
   return best;
 }
 function updBird(e, dt) {
+  if (SPECIES[e.type].dipper) return updDipper(e, dt);
   const sp = SPECIES[e.type], wy = world.waterY, L = birdL(e), D = sp.dive;
   e.phase += dt * (e.mode === 'fly' || e.mode === 'rise' ? 22 : 3);
   if (e.cool > 0) e.cool -= dt;
@@ -258,7 +259,7 @@ function updBird(e, dt) {
   if (e.hunger < sp.huntBelow && !(e.cool > 0) && wy < TANK.floor - 40) {
     let best = null, bd = Infinity, far = null, fd = Infinity;
     for (const t of preyCandidates('bird')) {
-      if (!canEat(e, t) || t.y < wy + 4 || t.y - wy > D.depth * e.size) continue;
+      if (t.kind === 'larva' || !canEat(e, t) || t.y < wy + 4 || t.y - wy > D.depth * e.size) continue;   // 翠鳥不抓孑孓
       if (solidAt(t.x, wy + 6) || inPlant(t)) continue;                   // 上面被擋住、躲在水草裡
       const dx = Math.abs(t.x - e.x), drop = t.y - e.y;
       if (dx <= Math.max(L * .5, drop * 1.05)) {                           // 在下方約 45° 以內：可以直接俯衝
@@ -414,7 +415,8 @@ function updFish(e, dt) {
     return;
   }
   if (e.wasOut) { e.wasOut = false; if (e.vy > 60) splash(e.x, wy, .4 * e.size * sp.len / 64); }
-  if (sp.cory) return updCory(e, dt);                          // 鼠魚：缸底的行為另外寫
+  if (sp.cory) return updCory(e, dt);
+  if (sp.goby) return updGoby(e, dt);                          // 鼠魚：缸底的行為另外寫
   if (e.vy > 0) { e.vy = lerp(e.vy, 0, ease(dt, 4)); e.y += e.vy * dt; }   // 掉進水裡的減速
 
   e.think -= dt;
@@ -1928,4 +1930,241 @@ function updFiddler(e, dt) {
     e.state = mud ? '用小螯挖泥巴吃（把吃剩的泥搓成小球）' : '用小螯在地上找東西吃（這裡不是泥灘，吃不太到）';
     if ((e.pelT = (e.pelT || 0) - dt) <= 0) { e.pelT = rand(1.6, 2.8); if (mud && e.pel.length < 24) e.pel.push({ x: e.x + rand(-14, 14) * k, y: e.y, t: 0 }); }
   } else e.state = '站在洞口張望';
+}
+
+
+// =====================================================================
+// 河烏：停在溪邊低矮的石頭上點頭（整個身體上下蹲）、眨眼露出白色眼瞼；
+//   餓了就從石頭跳進水裡：在溪底逆著水流走、翻石頭找水生昆蟲，看到獵物就走過去或用翅膀游過去；
+//   憋氣時間到就浮上水面，飛回石頭、甩水
+// mode：fly 飛／perch 停著／shake 甩水／hop 跳進水裡／under 水裡（sub：walk 溪底走、swim 游、up 浮上去）
+// =====================================================================
+function dipperBeak(e) {                                                 // 嘴尖（以臀部 (0,-12) 為支點轉）
+  const k = e.size * SPECIES[e.type].len / 64, a = e.pitch || 0, bx = 23, by = -14.4;
+  return P(e.x + e.dir * (bx * Math.cos(a) - by * Math.sin(a)) * k, e.y + (bob => (bx * Math.sin(a) + by * Math.cos(a) - 12 + bob) * k)((e.bob || 0) * 3));
+}
+function dipperPerches(e) {                                              // 貼近水面的石頭（比翠鳥的棲木低）
+  const wy = world.waterY, L = birdL(e);
+  const s = landSpots().filter(p => p.y < wy - 3 && wy - p.y < L * .45 && p.y > TANK.top + L * .62 &&
+    [-50, 0, 50].some(dx => highestTop(clamp(p.x + dx, TANK.left + 5, TANK.right - 5)) > wy + 4));
+  return s.length ? s : birdPerches(e);
+}
+function dipperPick(e, far) {
+  const sp = dipperPerches(e); if (!sp.length) return null;
+  const others = world.ents.filter(o => o !== e && o.kind === 'bird' && o.perch), ok = sp.filter(p => !others.some(o => Math.abs(o.perch.x - p.x) < birdL(e) * .6)), list = ok.length ? ok : sp;
+  if (far) return list[Math.floor(Math.random() * list.length)];
+  let best = list[0], bd = Infinity; for (const p of list) { const d = Math.abs(p.x - e.x) + Math.abs(p.y - e.y) + Math.random() * 80; if (d < bd) { bd = d; best = p; } }
+  return best;
+}
+function waterXNear(x, range) {                                          // 附近夠深的水
+  for (let dx = 20; dx < range; dx += 10) for (const s of [1, -1]) { const xx = x + s * dx; if (xx > TANK.left + 30 && xx < TANK.right - 30 && highestTop(xx) > world.waterY + 30) return xx; }
+  return null;
+}
+function updDipper(e, dt) {
+  const sp = SPECIES[e.type], wy = world.waterY, L = birdL(e), k = e.size * sp.len / 64;
+  e.phase += dt * (e.mode === 'fly' ? 20 : e.mode === 'under' && e.sub === 'swim' ? 8 : 3);
+  if (e.cool > 0) e.cool -= dt;
+  if (e.blinkT > 0) e.blinkT -= dt; else if (e.mode !== 'fly' && Math.random() < dt * .35) e.blinkT = .2;   // 眨眼
+  e.bk = null;
+  if (e.mode === 'fly') {
+    if (!e.perch) e.perch = dipperPick(e);
+    if (!e.perch) { e.state = '找不到可以停的地方'; return; }
+    e.state = '貼著水面飛回石頭'; e.bob = 0;
+    const was = e.y > wy, dx = e.perch.x - e.x, dy = e.perch.y - e.y, d = Math.hypot(dx, dy) || 1, st = Math.min(d, sp.speed * dt);
+    e.x += dx / d * st; e.y += dy / d * st; if (Math.abs(dx) > 3) e.dir = Math.sign(dx);
+    e.pitch = lerp(e.pitch || 0, clamp(Math.atan2(dy, Math.abs(dx) + 1) * .5, -.5, .5), ease(dt, 8));
+    if (was && e.y <= wy) splash(e.x, wy, .5 * e.size);
+    if (d < 4) { e.x = e.perch.x; e.y = e.perch.y; e.mode = e.wet ? 'shake' : 'perch'; e.modeT = 0; e.wet = false; e.think = rand(1, 3); }
+    return;
+  }
+  if (e.mode === 'hop') {                                                // 從石頭跳進水裡
+    e.vy += 900 * dt; e.x = clamp(e.x + e.vx * dt, TANK.left + 20, TANK.right - 20); e.y += e.vy * dt;
+    e.pitch = lerp(e.pitch || 0, .7, ease(dt, 6)); e.state = '跳進水裡';
+    if (e.y > wy + 4) { e.mode = 'under'; e.sub = 'swim'; e.diveT = rand(10, 18); e.wet = true; splash(e.x, wy, .7 * e.size); bubbles(e.x, wy + 10, 6); e.vx *= .3; e.vy = 60; e.target = null; }
+    e.y = Math.min(e.y, TANK.floor);
+    return;
+  }
+  if (e.mode === 'under') return updDipperUnder(e, dt, sp, wy, L, k);
+  const onRim = Math.abs(e.y - (TANK.top + 2)) < 2;
+  if (!onRim && Math.abs(highestTop(e.x) - e.y) > 6) { e.perch = null; e.mode = 'fly'; return; }   // 石頭被移走、水位變了
+  e.pitch = lerp(e.pitch || 0, 0, ease(dt, 6));
+  if (e.mode === 'shake') { e.modeT += dt; e.state = '甩掉身上的水'; e.bob = 0; if (e.modeT > 1.1) { e.mode = 'perch'; e.cool = Math.max(e.cool || 0, rand(3, 8)); } return; }
+  e.mode = 'perch';
+  if (isNight()) { e.state = '縮成一團睡覺'; e.bob = 0; return; }
+  if (e.dipN > 0) { e.dipPh += dt * 10; e.bob = Math.abs(Math.sin(e.dipPh)); if (e.dipPh >= e.dipN * Math.PI) { e.dipN = 0; e.bob = 0; e.dipT = rand(.8, 3); } }   // 點頭
+  else if ((e.dipT = (e.dipT ?? 1) - dt) <= 0) { e.dipN = 2 + Math.floor(Math.random() * 3); e.dipPh = 0; }
+  e.state = '停在溪邊石頭上點頭';
+  e.think -= dt; e.idleT = (e.idleT || 0) + dt;
+  if (e.think <= 0) {
+    e.think = rand(1.5, 4); if (Math.random() < .3) e.dir *= -1;
+    if (e.idleT > 50 && Math.random() < .4) { e.perch = dipperPick(e, true); e.mode = 'fly'; e.idleT = 0; return; }
+  }
+  if (e.hunger < sp.huntBelow && !(e.cool > 0) && wy < TANK.floor - 40 && !e.dipN) {
+    const wx = waterXNear(e.x, 170);
+    if (wx !== null) { e.mode = 'hop'; e.dir = Math.sign(wx - e.x) || e.dir; e.vx = (wx - e.x) * 1.6; e.vy = -170; e.idleT = 0; e.bob = 0; }
+  }
+}
+function updDipperUnder(e, dt, sp, wy, L, k) {
+  e.diveT -= dt; e.bob = 0;
+  let beak = dipperBeak(e); e.bk = beak;
+  if (e.target && (e.chaseT = (e.chaseT || 0) + dt) > 4) { e.ignore = e.target; e.ignoreT = 10; e.target = null; }   // 追太久：放棄這一隻
+  if (e.ignoreT > 0) e.ignoreT -= dt; else e.ignore = null;
+  if (!e.target || e.target.dead || e.target.removed || !canEat(e, e.target) || e.target.y < wy) {   // 找獵物：以溪底的水生昆蟲、蝦、小螃蟹為主；魚只追近的
+    e.target = null; e.chaseT = 0; let bd = 380;
+    for (const t of preyCandidates('bird')) {
+      if (t === e.ignore || t.y < wy + 2 || inPlant(t) || !canEat(e, t)) continue;
+      const d = dist(beak, t) * (t.kind === 'fish' ? 2.5 : 1);
+      if (t.kind === 'fish' && d > 300) continue;
+      if (d < bd) { bd = d; e.target = t; }
+    }
+  }
+  const t = e.target;
+  if ((e.diveT <= 0 || e.hunger > 96) && e.sub !== 'up') e.sub = 'up';
+  if (e.sub === 'up') {                                                  // 浮上水面
+    e.state = '浮上水面換氣'; e.y -= 110 * dt; e.pitch = lerp(e.pitch || 0, -.5, ease(dt, 6));
+    if (e.y < wy + 2) { e.y = wy - 2; splash(e.x, wy, .6 * e.size); e.perch = dipperPick(e); e.mode = 'fly'; e.sub = null; e.target = null; e.cool = rand(5, 12); }
+    return;
+  }
+  const g = groundY(e.x, e.y - 10, 24);
+  if (t && g > wy + L * .32 && (t.y < g - 50 || (Math.abs(t.x - e.x) > 260 && t.y < g - 20))) e.sub = 'swim';
+  else if (e.sub === 'swim' && e.y >= g - 4) e.sub = 'walk';
+  if (e.sub === 'swim') {                                                // 用翅膀在水裡游
+    const aim = t ? P(t.x - (beak.x - e.x), t.y - (beak.y - e.y)) : P(e.x + e.dir * 30, g);
+    const dx = aim.x - e.x, dy = aim.y - e.y, d = Math.hypot(dx, dy) || 1, spd = 120 * e.size;
+    e.vx = lerp(e.vx || 0, dx / d * spd, ease(dt, 3)); e.vy = lerp(e.vy || 0, dy / d * spd, ease(dt, 3));
+    const top = wy + L * .32;
+    if (g < top) { e.sub = 'walk'; return; }                             // 水太淺游不起來：改成在溪底涉水走
+    let nx = clamp(e.x + e.vx * dt, TANK.left + L * .3, TANK.right - L * .3), ny = clamp(e.y + e.vy * dt, top, g);
+    if (solidAt(nx, ny - 10 * k)) { nx = e.x; ny = Math.max(top, e.y - 40 * dt); if (ny <= top + .5) e.sub = 'up'; }
+    e.x = nx; e.y = ny; if (Math.abs(e.vx) > 5) e.dir = Math.sign(e.vx);
+    e.pitch = clamp(Math.atan2(e.vy, Math.abs(e.vx) + 1), -.8, .9);
+    e.state = t ? `用翅膀在水裡游，追${entName(t)}` : '游向溪底';
+    if (ny >= g - .5) { e.y = g; e.sub = 'walk'; }
+  } else {                                                               // 在溪底走
+    if (g < wy + 4) { e.sub = 'up'; return; }                            // 走到水外面了
+    e.y = g; e.vx = e.vy = 0;
+    const fl = flowSpeed(), goal = t ? t.x : e.x + (fl > 0 ? -1 : (e.walkDir || (e.walkDir = Math.random() < .5 ? -1 : 1))) * 100;   // 沒獵物：逆著水流走
+    const dx = goal - e.x;
+    if (Math.abs(dx) > 3) {
+      e.dir = Math.sign(dx);
+      const nx = e.x + e.dir * Math.min(Math.abs(dx), 45 * e.size * dt), ng = groundY(nx, e.y - 10, 24);
+      if (nx < TANK.left + L * .3 || nx > TANK.right - L * .3 || solidAt(nx, ng - 8 * k) || ng < wy + 4) { if (t && g > wy + L * .32) e.sub = 'swim'; else { e.walkDir = -(e.walkDir || 1); if (t) { e.ignore = t; e.ignoreT = 8; e.target = null; } } }
+      else { e.x = nx; e.y = ng; e.dist = (e.dist || 0) + 45 * e.size * dt / k; }
+    }
+    e.pitch = lerp(e.pitch || 0, .55 + Math.sin(e.phase * 2) * .15, ease(dt, 6));   // 頭朝下，一下一下啄
+    e.state = t ? `在溪底走向${entName(t)}` : '在溪底逆著水流走，翻石頭找水生昆蟲';
+    if (!t && (e.peckT = (e.peckT || 0) - dt) <= 0) {                    // 石頭底下的水生昆蟲（不另外模擬成生物）
+      e.peckT = rand(.8, 1.6); dust(beak.x, g, .3);
+      if (Math.random() < .25) { e.hunger = Math.min(100, e.hunger + 6); addFx(beak.x, beak.y, '+6', '#ffb020'); }
+    }
+  }
+  beak = dipperBeak(e); e.bk = beak;
+  if (e.missCD > 0) e.missCD -= dt;
+  else if (t && dist(beak, t) < L * .13) {
+    if (Math.random() < (t.kind === 'larva' ? .9 : t.kind === 'shrimp' ? .75 : .6)) { eat(e, t); emit('dipperCatch', { e, prey: t }); e.target = null; }
+    else e.missCD = .8;
+  }
+  if (Math.random() < dt * 2) bubbles(e.x - e.dir * 4 * k, e.y - 22 * k, 1);   // 羽毛裡的空氣冒出小氣泡
+}
+
+// =====================================================================
+// 明潭吻鰕虎：趴在溪底或石頭上（有水流時臉朝上游），一跳一跳換位置；
+//   看到飼料、孑孓、小蝦就跳過去吃；公魚遇到別的公魚會張開背鰭威嚇、把對方趕走；
+//   母魚在公魚旁邊的石頭底下產卵，公魚守在卵旁邊；有危險就跳開
+// gm：sink 沉下來／sit 趴著／hop 跳／display 威嚇
+// =====================================================================
+function gobyMouth(e) { const L = SPECIES[e.type].len * e.size; return P(e.x + e.dir * L * .48, e.y + L / 64); }
+function gobyRest(e, x) { return highestTop(x) - 7 * SPECIES[e.type].len * e.size / 64; }   // 趴著時身體中心的高度
+function gobyHop(e, tx, ty, dur, arc) {
+  for (let i = 1; i < 6; i++) { const f = i / 6, x = lerp(e.x, tx, f), need = lerp(e.y, ty, f) - (highestTop(x) - 10); if (need > 0) arc = Math.max(arc, need / Math.sin(Math.PI * f) + 4); }   // 跳過擋在中間的石頭
+  e.gm = 'hop'; e.hx0 = e.x; e.hy0 = e.y; e.hx1 = tx; e.hy1 = ty; e.hd = dur; e.hopT = 0; e.harc = arc; if (Math.abs(tx - e.x) > 2) e.dir = Math.sign(tx - e.x); }
+function gobySpot(e, range, away) {                                     // 水裡的一個落腳點（地面或石頭上）
+  const wy = world.waterY;
+  for (let i = 0; i < 12; i++) {
+    const x = clamp(e.x + (away ? away * rand(.4, 1) * range : rand(-range, range)), TANK.left + 30, TANK.right - 30), y = highestTop(x);
+    if (y > wy + 16 && !solidAt(x, y - 8)) return P(x, y);
+  }
+  return null;
+}
+function updGoby(e, dt) {
+  const sp = SPECIES[e.type], wy = world.waterY, L = sp.len * e.size, k = L / 64, fl = flowSpeed();
+  if (wy >= TANK.floor - 10) { e.state = '缺水'; if (world.settings.death) kill(e, '缺水死亡'); return; }
+  e.phase += dt * (e.gm === 'hop' ? 16 : 2.5); e.pec = (e.pec || 0) + dt * 6;
+  e.flare = lerp(e.flare || 0, e.gm === 'display' ? 1 : 0, ease(dt, 6));
+  if (e.rivalCD > 0) e.rivalCD -= dt;
+  if (!e.hopFlee) for (const o of threatsTo(e)) {                         // 危險：跳開
+    if (o.dead || !canEat(o, e)) continue;
+    const active = o.kind === 'bird' ? birdDiving(o) : o.kind === 'axolotl' ? o.mode === 'lunge' || o.mode === 'walk' : o.kind === 'turtle' ? o.mode === 'swim' : o.kind !== 'crab';
+    const p = o.bk || o;
+    if (active && Math.abs(p.x - e.x) < 120 && Math.abs(p.y - e.y) < 120) {
+      const s = gobySpot(e, 220, Math.sign(e.x - p.x) || 1);
+      if (s) { gobyHop(e, s.x, gobyRest(e, s.x), .35, 18 * k); e.hopFlee = true; e.state = '逃開' + entName(o); }
+      break;
+    }
+  }
+  if (e.gm === 'sink' || e.gm === undefined) {
+    e.vy = Math.min((e.vy || 0) + 150 * dt, 90); e.y = Math.max(wy + 6, e.y + e.vy * dt); e.state = '沉下來';
+    const g = gobyRest(e, e.x);
+    if (g < wy + 6) { const s = gobySpot(e, 300); if (s) gobyHop(e, s.x, gobyRest(e, s.x), .4, 6 * k); return; }   // 下面是露出水面的石頭：游到別的地方
+    if (e.y >= g) { e.y = g; e.gm = 'sit'; e.vy = 0; e.think = rand(1, 3); }
+    return;
+  }
+  if (e.gm === 'hop') {
+    e.hopT += dt; const t = Math.min(1, e.hopT / e.hd);
+    e.x = lerp(e.hx0, e.hx1, t); e.y = Math.max(wy + 6, lerp(e.hy0, e.hy1, t) - Math.sin(Math.PI * t) * e.harc);
+    if (t >= 1) {
+      e.hopFlee = false; e.think = rand(1.5, 5);
+      const f = e.eatTarget; e.eatTarget = null;
+      if (f && !f.removed && dist(gobyMouth(e), f) < 18 * k + 6 && canEat(e, f)) eat(e, f);
+      e.gm = e.y < gobyRest(e, e.x) - 4 ? 'sink' : 'sit';
+    }
+    return;
+  }
+  if (e.gm === 'display') {                                               // 張開背鰭威嚇，然後衝過去把對方趕走
+    e.modeT += dt; e.state = '張開背鰭威嚇另一隻公魚';
+    if (e.modeT > 1.2) {
+      const r = e.rival; e.gm = 'sit'; e.think = rand(2, 4);
+      if (r && !r.dead && r.gm !== 'hop') { const s = gobySpot(r, 200, Math.sign(r.x - e.x) || 1); if (s) gobyHop(r, s.x, gobyRest(r, s.x), .4, 14 * k); gobyHop(e, r.x, gobyRest(e, r.x), .3, 8 * k); }
+    }
+    return;
+  }
+  if (gobyRest(e, e.x) < wy + 6) { const s = gobySpot(e, 300); if (s) { gobyHop(e, s.x, gobyRest(e, s.x), .4, 10 * k); return; } }   // 停的地方露出水面了：跳回水裡
+  e.y = gobyRest(e, e.x);                                                 // 趴著
+  if (fl > 0) e.dir = -1;                                                 // 臉朝上游
+  e.think -= dt;
+  if (e.hunger < sp.huntBelow) {
+    const m = gobyMouth(e), f = findPrey(e, sp.sight, t => t.y > wy && t.y > e.y - 150, m);
+    if (f) {
+      const d = dist(m, f);
+      if (d < 16 * k + 4) { eat(e, f); return; }
+      const side = Math.sign(f.x - e.x) || e.dir, tx = clamp(f.x - side * L * .45, TANK.left + 30, TANK.right - 30);
+      if ((e.think <= 0 || d < 130) && highestTop(tx) > wy + 16) { gobyHop(e, tx, Math.min(gobyRest(e, tx), f.y), .22 + d / 700, 6 * k); e.eatTarget = f; e.state = '跳過去吃' + entName(f); return; }
+    }
+  }
+  if (e.sex === 'm' && isAdult(e) && !(e.rivalCD > 0)) {                  // 公魚的地盤
+    const r = entsOfType(e.type).find(o => o !== e && o.type === e.type && o.sex === 'm' && !o.dead && isAdult(o) && Math.abs(o.x - e.x) < 80 && Math.abs(o.y - e.y) < 40);
+    if (r) { e.gm = 'display'; e.modeT = 0; e.rival = r; e.dir = Math.sign(r.x - e.x) || e.dir; e.rivalCD = rand(15, 25); r.rivalCD = Math.max(r.rivalCD || 0, 6); emit('gobyDisplay', { e }); return; }
+  }
+  const B = sp.gobyBreed;                                                 // 繁殖：卵產在石頭底下，公魚守著
+  if (e.sex === 'f' && isAdult(e) && world.settings.breed && e.hunger > 55 && B) {
+    e.breedT = (e.breedT ?? rand(80, 160)) - dt;
+    if (e.breedT <= 0) {
+      e.breedT = rand(...B.cool);
+      const m = entsOfType(e.type).find(o => o.type === e.type && o.sex === 'm' && !o.dead && isAdult(o) && dist(o, e) < 160 && !(o.guard && !o.guard.removed));
+      const room = capFor('fish') - countKind('fish');
+      if (m && room > 0) {
+        const nest = makeEnt('nest', m.x - m.dir * L * .3, m.y + 4 * k);
+        Object.assign(nest, { of: e.type, medium: 'glass', hatch: B.hatch, count: Math.min(room, Math.round(rand(...B.count))) });
+        m.guard = nest; e.hunger -= 15;
+        logEvent(`🥚 ${sp.name}在石頭底下產卵（${nest.count} 顆），公魚在旁邊守著`); emit('gobySpawn', { e });
+      }
+    }
+  }
+  if (e.think <= 0) {                                                     // 閒著：跳一小段換位置
+    e.think = rand(2, 6);
+    if (e.guard && !e.guard.removed) { const gx = clamp(e.guard.x + rand(-30, 30), TANK.left + 30, TANK.right - 30); gobyHop(e, gx, gobyRest(e, gx), .3, 6 * k); return; }
+    e.guard = null;
+    const s = gobySpot(e, 140); if (s) gobyHop(e, s.x, gobyRest(e, s.x), .3 + Math.abs(s.x - e.x) / 500, rand(6, 18) * k);
+  }
+  e.state = e.guard && !e.guard.removed ? '守著石頭底下的卵' : fl > 0 ? '趴在石頭上，臉朝上游' : '趴在石頭上休息';
 }

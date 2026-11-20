@@ -225,7 +225,7 @@ function drawPlant(d) {
     const pts = [], hk = d.h * (.7 + .3 * Math.sin(d.seed + k * 2.1));
     for (let i = 0; i <= 8; i++) {
       const t = i / 8, y = d.y - hk * t, under = y > wy;
-      const sway = under ? Math.sin(world.t * 1.4 + k * 1.3 + t * 3 + d.seed) * 12 * t : 4 * t;
+      const sway = under ? Math.sin(world.t * 1.4 + k * 1.3 + t * 3 + d.seed) * 12 * t + flowSpeed() * .4 * t : 4 * t;   // 有水流時往下游彎
       pts.push(P(d.x + (k - 1.5) * 9 + sway + Math.sin(k + t * 4) * 4, y));
     }
     const sm = chaikin(pts, false, 2);
@@ -579,6 +579,7 @@ function drawCory(e) {
 
 function drawFish(e) {
   if (SPECIES[e.type].cory) return drawCory(e);
+  if (SPECIES[e.type].goby) return drawGoby(e);
   if (fishLodOn && SPECIES[e.type].len * e.size * screenScale() < FISH_LOD_PX) return drawFishLOD(e);
   const shape = (SPECIES[e.type].look || {}).shape;
   if (shape === 'shark') return drawSharkFish(e);
@@ -1115,6 +1116,7 @@ function kfFish(c, x, y, k) {                                            // 嘴�
   G.restore();
 }
 function drawBird(e) {
+  if (SPECIES[e.type].dipper) return drawDipper(e);
   const sp = SPECIES[e.type], k = e.size * sp.len / 64, mode = e.mode, female = e.sex === 'f';
   const flying = mode === 'fly' || mode === 'rise', diving = mode === 'dive' || mode === 'under', sleep = mode === 'perch' && isNight();
   G.save(); G.tf(e.x, e.y, 0, e.dir * k, k);
@@ -1801,6 +1803,80 @@ function drawCrab(e) {
     if (grabK > 0 && s === e.dir) { const reach = P(s * 38, b + 10); pc = P(lerp(pc.x, reach.x, grabK), lerp(pc.y, reach.y, grabK)); fa = lerp(fa, s > 0 ? 0 : Math.PI, grabK); gape = .8 * (1 - grabK) + .1; }
     crabClaw(P(s * (minor ? 12 : 17), b - 4), pc, fa, sz, gape, minor ? { claw: [M.leg[0], M.leg[1], M.leg[2]], tip: M.tip } : M, minor ? 1 : 1.15);
   }
+  G.restore();
+}
+
+// ---------------------------------------------------------------------
+// 河烏（局部座標：身長 64，腳在 y = 0，臀部 (0,-12) 是身體轉動的支點）
+// 圓胖、全身深巧克力色、短尾翹起、腳粗壯偏灰；眨眼時露出白色眼瞼；在水裡羽毛帶著空氣，看起來銀亮
+// ---------------------------------------------------------------------
+const DP = { body: '#4b3a2f', dark: '#30251e', light: '#6b5444', leg: '#a39a98', legDk: '#7a7070', beak: '#1c1612', eye: '#140e0a' };
+function dipperLegs(e) {                                                  // 站著／在溪底走時的兩隻腳（點頭時膝蓋彎）
+  const bob = (e.bob || 0) * 3, walk = e.mode === 'under', w = (e.dist || 0) * .4;
+  return [[-1.5, 0], [2, Math.PI]].map(([hx, ph]) => {
+    const lift = walk ? Math.max(0, Math.sin(w + ph)) * 2 : 0, foot = P(hx + (walk ? -Math.cos(w + ph) * 3 : 0), -lift);
+    return { hip: P(hx, -11 + bob), knee: P(hx - 2.5 - bob * .6, -6 + bob * .5), foot };
+  });
+}
+function drawDipper(e) {
+  const sp = SPECIES[e.type], k = e.size * sp.len / 64, mode = e.mode, swim = mode === 'under' && e.sub !== 'walk', flying = mode === 'fly', sleep = mode === 'perch' && isNight();
+  const bob = (e.bob || 0) * 3, shakeX = mode === 'shake' ? Math.sin(world.t * 60) * .8 : 0;
+  G.save(); G.tf(e.x, e.y, 0, e.dir * k, k);
+  if (e.dead) G.alpha(.6);
+  if (!flying && !swim && mode !== 'hop') for (const L of dipperLegs(e)) {
+    G.line([L.hip, L.knee, L.foot], 2, DP.leg);
+    for (const dx of [-3, 1, 4]) G.line([L.foot, P(L.foot.x + dx, L.foot.y + .2)], 1, DP.leg);
+  }
+  G.tf(shakeX, bob); G.tf(0, -12, e.pitch || 0); G.tf(0, 12);
+  const flap = flying ? Math.sin(e.phase) : swim ? Math.sin(e.phase) * .6 : 0, puff = sleep ? 1.12 : mode === 'shake' ? 1.08 : 1;
+  const wingPts = [P(0, 0), P(-6, -4), P(-15, -6), P(-22, -4), P(-24, -1), P(-18, 2), P(-9, 3), P(-2, 2.5)];
+  if (flying || swim) { G.save(); G.tf(1, -23, -.8 - flap * .9); G.poly(chaikin(wingPts, true, 1), DP.dark); G.restore(); }
+  G.save(); G.tf(-12, -20, -.35 - (e.bob || 0) * .25); G.poly(chaikin([P(0, -2.5), P(-11, -3), P(-12, 0), P(-11, 2.5), P(0, 2.5)], true, 1), DP.dark); G.restore();   // 翹起的短尾巴
+  G.poly(ellipsePts(-1, -19, 14, 9.6 * puff, 0, 28), { lin: [0, -29, 0, -10, [[0, DP.light], [.35, DP.body], [1, DP.dark]]] }, 'rgba(20,14,10,.5)', .6);
+  if (!flying && !swim) G.poly(chaikin([P(6, -24), P(-4, -26.5), P(-14, -23), P(-18, -19.5), P(-12, -16.5), P(0, -16), P(5, -19)], true, 1), DP.dark, 'rgba(20,14,10,.4)', .5);   // 收起的翅膀
+  G.save(); if (sleep) G.tf(-2, 2);
+  G.circle(10, -26.5, 7.6, { lin: [0, -34, 0, -19, [[0, DP.light], [1, DP.body]]] }, 'rgba(20,14,10,.5)', .6);
+  G.poly([P(16.4, -28), P(23, -26.4), P(16.6, -25.2)], DP.beak);
+  if (sleep) G.line([P(11.4, -27.8), P(14, -27.8)], .7, DP.eye);
+  else if (e.blinkT > 0) G.circle(12.7, -27.8, 1.6, '#f4f2ee', 'rgba(40,30,20,.5)', .3);       // 眨眼：白色的眼瞼
+  else { G.circle(12.7, -27.8, 1.4, DP.eye); G.circle(12.3, -28.3, .45, '#ffffff'); }
+  G.restore();
+  if (flying || swim) { G.save(); G.tf(1, -24, -.5 - flap * 1.1); G.poly(chaikin(wingPts, true, 1), DP.body, 'rgba(20,14,10,.4)', .5); G.restore(); }
+  if (swim) { G.save(); G.alpha(.3); for (let i = 0; i < 6; i++) G.circle(-10 + i * 3.4, -24 + Math.sin(i * 2.1) * 3, .35, '#e8f4ff'); G.restore(); }   // 游泳時羽毛上的空氣（銀亮）
+  G.restore();
+}
+
+// ---------------------------------------------------------------------
+// 明潭吻鰕虎（局部座標：身長 64、頭在 +x、身體中心 y = 0）
+// 圓筒形身體、大頭、眼睛長在頭頂；兩個背鰭（第一背鰭公魚高、藍綠色帶黑斑）、圓尾鰭；腹鰭癒合成吸盤
+// ---------------------------------------------------------------------
+const GOBY_TOP = [[32, -1], [30, -4.5], [25, -7.5], [18, -8.5], [8, -8], [-4, -7], [-16, -5.5], [-24, -4]];
+const GOBY_BOT = [[-24, 3.5], [-16, 4.5], [-4, 6], [8, 7], [18, 7.5], [26, 5.5], [31, 2.5]];
+const GOBY_COL = { m: ['#a89878', '#7e6c52', '#5a4a36'], f: ['#c8b896', '#a08e6e', '#6e5e46'] };
+function drawGoby(e) {
+  const sp = SPECIES[e.type], k = e.size * sp.len / 64, male = e.sex === 'm' && e.size > e.adult * .6, fl = e.flare || 0, C0 = GOBY_COL[male ? 'm' : 'f'];
+  const sw = e.gm === 'hop' ? Math.sin(e.phase) * .25 : Math.sin(e.phase) * .04;
+  G.save(); G.tf(e.x, e.y, 0, e.dir * k, (e.dead ? -1 : 1) * k);
+  if (e.dead) G.alpha(.65);
+  G.save(); G.tf(-24, 0, sw);                                             // 圓尾鰭
+  G.poly(chaikin([P(0, -4), P(-9, -7), P(-14, -3.5), P(-14.5, 3.5), P(-9, 7), P(0, 4)], true, 2), male ? 'rgba(200,130,80,.75)' : 'rgba(180,160,120,.6)', 'rgba(60,40,20,.4)', .4);
+  if (male) G.line(chaikin([P(-9, -6.6), P(-14, -3), P(-14.4, 3), P(-9, 6.6)], false, 1), 1, '#f07030');
+  for (let i = 0; i < 3; i++) for (let j = -2; j <= 2; j++) G.circle(-4 - i * 3.5, j * 2.2, .45, male ? '#5a2a1a' : '#6e5e46');
+  G.restore();
+  G.poly(chaikin([P(-3, -6.8), P(-6, -11 - fl * 2), P(-20, -9.5 - fl), P(-23, -4.2)], true, 1), male ? 'rgba(190,150,110,.7)' : 'rgba(190,170,130,.55)', 'rgba(60,40,20,.4)', .4);   // 第二背鰭
+  if (male) G.line([P(-5.6, -10.8 - fl * 2), P(-20, -9.5 - fl)], .8, '#f07030');
+  G.poly(chaikin([P(-6, 5.6), P(-9, 9), P(-20, 7.5), P(-22, 3.8)], true, 1), male ? 'rgba(190,150,110,.6)' : 'rgba(190,170,130,.5)');   // 臀鰭
+  G.poly(chaikin([...GOBY_TOP, ...GOBY_BOT].map(([x, y]) => P(x, y)), true, 2), { lin: [0, -8.5, 0, 7.5, [[0, C0[1]], [.55, C0[0]], [1, '#e8e0cc']]] }, 'rgba(40,30,20,.5)', .6);
+  for (let i = 0; i < 6; i++) G.poly(ellipsePts(14 - i * 7, -1 + (i % 2) * .6, 2.6, 1.8, 0, 10), male ? 'rgba(70,50,30,.45)' : 'rgba(60,45,30,.7)');   // 體側的斑塊
+  if (male) for (const [x, y] of [[24, 1], [26.5, 2.5], [22, 3.2], [27.5, -.2], [20, 1.5]]) G.circle(x, y, .55, '#e0502a');   // 公魚臉頰的橘紅點
+  const h1 = male ? 9 + fl * 5 : 6 + fl * 2;                              // 第一背鰭：威嚇時張高
+  G.poly(chaikin([P(8, -8), P(6, -8 - h1), P(1, -8 - h1 * .85), P(-1, -7.2)], true, 1), male ? '#3aa8a0' : 'rgba(190,170,130,.6)', 'rgba(30,40,40,.5)', .4);
+  if (male) { G.circle(3, -8 - h1 * .5, 1.2, '#1a2a2a'); G.line([P(6, -8 - h1), P(1, -8 - h1 * .85)], .8, '#f0a040'); }
+  G.poly(ellipsePts(13, 7.6, 3.4, 1.3, 0, 10), 'rgba(220,210,190,.8)');   // 腹鰭吸盤
+  const pf = Math.sin(e.pec || 0) * 1.5;
+  G.poly(chaikin([P(17, 1), P(12, -2 + pf), P(9, 2 + pf), P(12, 5), P(16, 4)], true, 1), 'rgba(210,190,150,.6)', 'rgba(60,40,20,.35)', .3);   // 胸鰭
+  G.circle(24.5, -5.6, 2.2, '#d8c890', 'rgba(40,30,20,.6)', .4); G.circle(24.8, -5.6, 1.4, '#141010'); G.circle(24.3, -6.2, .45, '#fff');
+  G.line([P(31.5, 1.5), P(28, 2.4)], .6, 'rgba(40,30,20,.7)');
   G.restore();
 }
 

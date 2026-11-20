@@ -7,11 +7,11 @@ const UI = { sel: null, drag: null, mode: 'edit', speed: 1 };
 // 物件面板：用頁籤分類（物件變多時比較好找）
 const PALETTE = [
   { cat: '造景', items: ['mound', 'mudflat', 'boulder', 'rock', 'wood', 'branch', 'plant', 'carpet', 'fern', 'floater', 'bubbler', 'filter'] },
-  { cat: '水中生物', items: ['guppy', 'neon', 'neontetra', 'cory', 'redtail', 'cherry', 'crystal', 'nerite'] },
+  { cat: '水中生物', items: ['guppy', 'neon', 'neontetra', 'cory', 'redtail', 'goby', 'cherry', 'crystal', 'nerite'] },
   { cat: '兩棲爬蟲', items: ['axolotl', 'frog', 'goldfrog', 'tadpole', 'turtle', 'gecko'] },
   { cat: '昆蟲', items: ['mosquito', 'larva'] },
   { cat: '螃蟹', items: ['streamcrab', 'fiddler'] },
-  { cat: '鳥類', items: ['kingfisher'] },
+  { cat: '鳥類', items: ['kingfisher', 'dipper'] },
   { cat: '迷你版', items: ['whale'] },
   { cat: '餵食', items: ['food', 'cricket', 'fly'] },
 ];
@@ -39,7 +39,7 @@ function thumbSpec(type) {
     const e = makeEnt(type, 0, 0, false);
     e.size = e.adult = 1; e.dir = 1; e.amp = .3; e.mode = type === 'turtle' ? 'walk' : 'sit';
     const conf = { axolotl: [33, 34, .135], kingfisher: [30, 42, .17], cory: [33, 34, .5], guppy: [36, 22, .55], neon: [33, 22, .6], neontetra: [33, 22, .7], redtail: [37, 22, .17], turtle: [30, 38, .45], frog: [32, 38, .7], goldfrog: [31, 38, .66], tadpole: [34, 22, 1.5],
-                   gecko: [38, 34, .38], mosquito: [32, 22, 2], nerite: [33, 34, 1.3], cherry: [30, 34, 1.5], crystal: [30, 34, 1.4], streamcrab: [32, 40, .4], fiddler: [32, 40, .82], larva: [32, 24, 2], whale: [32, 22, .036], cricket: [30, 30, 1.6], fly: [32, 22, 4] }[type];
+                   gecko: [38, 34, .38], mosquito: [32, 22, 2], nerite: [33, 34, 1.3], cherry: [30, 34, 1.5], crystal: [30, 34, 1.4], streamcrab: [32, 40, .4], dipper: [28, 40, .14], goby: [34, 24, .42], fiddler: [32, 40, .82], larva: [32, 24, 2], whale: [32, 22, .036], cricket: [30, 30, 1.6], fly: [32, 22, 4] }[type];
     if (type === 'larva') e.phase = 1;
     if (type === 'cory') { e.morph = 2; e.cm = 'rest'; }             // 縮圖固定用熊貓鼠（最好認）
     if (type === 'kingfisher') { e.mode = 'perch'; e.pitch = -.5; e.phase = 0; }
@@ -317,7 +317,7 @@ function updatePanels(force) {
     const f = n => el.querySelector(`[data-f="${n}"]`);
     const surf = o.kind === 'gecko' ? (o.surface === 'glass' ? '（背面玻璃）' : '（陸地）') : '';
     f('state').textContent = `${o.dead ? '💀 ' : ''}${o.state || '—'}${surf}${o.sick ? '（水質太差，生病中）' : ''}`;
-    if (f('sex')) f('sex').textContent = (o.sex === 'm' ? '♂ 公' : '♀ 母') + (sp.kind === 'bird' ? '' : '・' + morphList(sp)[o.morph || 0].name) + (o.preg > 0 ? (o.kind === 'shrimp' ? `・抱卵 ${Math.round(o.preg * 100)}%` : `・懷孕 ${Math.round(o.preg * 100)}%`) : '');
+    if (f('sex')) f('sex').textContent = (o.sex === 'm' ? '♂ 公' : '♀ 母') + (sp.kind === 'bird' ? '' : '・' + (sp.morphs || o.type === 'guppy' ? morphList(sp)[o.morph || 0].name : '')) + (o.preg > 0 ? (o.kind === 'shrimp' ? `・抱卵 ${Math.round(o.preg * 100)}%` : `・懷孕 ${Math.round(o.preg * 100)}%`) : '');
     if (f('morph')) f('morph').textContent = (sp.morphs === 'axo' ? AXO_MORPHS : CORY_MORPHS)[o.morph || 0].name;
     if (f('hunger')) { f('hunger').textContent = Math.round(o.hunger) + '%'; f('hungerBar').style.width = clamp(o.hunger, 0, 100) + '%'; f('hungerBar').style.background = o.hunger < 25 ? '#e0603a' : '#4caf50'; }
     f('hp').textContent = Math.round(o.hp); f('hpBar').style.width = clamp(o.hp, 0, 100) + '%';
@@ -408,6 +408,8 @@ function bindSidePanel() {
     <select id="mosqRate"><option value="off">不出現</option><option value="low">少</option><option value="mid">中</option><option value="high">多</option></select>
     <div class="sub">日夜循環</div>
     <select id="dayCycle"><option value="off">關閉（固定白天）</option><option value="fast">快速（4 分鐘一天）</option><option value="normal">一般（12 分鐘一天）</option><option value="real">跟現實時間同步</option></select>
+    <div class="sub">水流（溪流，往右流）</div>
+    <select id="flowSet"><option value="off">沒有</option><option value="low">緩</option><option value="high">急</option></select>
     <div class="sub">行為</div>
     <label><input type="checkbox" data-set="breed"> 生物會繁殖</label>
     <label><input type="checkbox" data-set="sizeCheck"> 依體型判斷能不能吃</label>
@@ -424,6 +426,7 @@ function bindSidePanel() {
     if (t.dataset.rule) s.rules[t.dataset.rule] = t.checked;
     if (t.id === 'mosqRate') { s.mosqRate = t.value; world.spawnT = 1; }
     if (t.id === 'dayCycle') s.dayCycle = t.value;
+    if (t.id === 'flowSet') s.flow = t.value;
     if (t.id === 'artStyle') setArt(t.value === 'pixel');
     if (t.id === 'pxHybrid') { PXOPT.hybrid = t.checked; try { localStorage.setItem('aquarium.pxHybrid', t.checked ? '1' : ''); } catch { } }
   });
@@ -433,7 +436,7 @@ function syncSettings() {
   document.querySelectorAll('[data-set]').forEach(c => c.checked = !!s[c.dataset.set]);
   document.querySelectorAll('[data-rule]').forEach(c => c.checked = !!s.rules[c.dataset.rule]);
   $('mosqRate').value = s.mosqRate;
-  $('dayCycle').value = s.dayCycle;
+  $('dayCycle').value = s.dayCycle; $('flowSet').value = s.flow || 'off';
   $('artStyle').value = ART.pixel ? 'pixel' : 'vector'; $('pxHybrid').checked = PXOPT.hybrid;
   syncTankUI();
   $('water').value = Math.round(world.level * 100); $('waterVal').textContent = $('water').value + '%';

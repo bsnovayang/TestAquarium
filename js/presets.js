@@ -110,6 +110,24 @@ const PRESETS = [
     },
   },
   {
+    id: 'taiwan', name: '台灣溪流缸', desc: '有水流的山溪：河烏在石頭上點頭、潛到溪底找蟲，明潭吻鰕虎趴在石頭上搶地盤',
+    tank: 'wide', level: .42, mosq: 'off', icons: ['dipper', 'goby', 'streamcrab'],
+    build(B) {
+      B.decor('mound', 140, B.floor, { w: 340, h: 330 });
+      B.decor('boulder', 430, B.floor, { w: 200, h: 290 });              // 貼近水面的大石頭（河烏的棲點）
+      B.decor('boulder', 930, B.floor, { w: 180, h: 285 });
+      B.decor('boulder', 1180, B.floor, { w: 200, h: 330 });
+      for (const [x, w, h] of [[600, 120, 60], [700, 90, 45], [780, 110, 55], [1050, 140, 70]]) B.decor('rock', x, B.floor + 8, { w, h });   // 溪底的石頭
+      B.decor('fern', 120, 0).y = highestTop(TANK.left + (120 - 16) * (TANK.right - TANK.left) / 1248);
+      B.decor('filter', 1215, B.waterY + 40);
+      const k = B.ent('dipper', 430, B.top + 100);
+      for (let i = 0; i < 6; i++) B.ent('goby', B.rx(560, 1100), B.floor - 30, { sex: i % 2 ? 'f' : 'm' });
+      B.ent('streamcrab', 660, B.floor - 10, { sex: 'm', morph: 1 }); B.ent('streamcrab', 1000, B.floor - 10, { sex: 'f', morph: 0 });
+      for (let i = 0; i < 6; i++) B.ent('cherry', B.rx(560, 1080), B.floor - 30, { sex: i < 2 ? 'm' : 'f' });
+      world.settings.flow = 'low';
+    },
+  },
+  {
     id: 'turtle', name: '烏龜缸', desc: '寬缸和曬背平台，看烏龜曬背、散步、游泳',
     tank: 'wide', level: .55, mosq: 'off', icons: ['turtle', 'redtail', 'wood'],
     build(B) {
@@ -194,6 +212,7 @@ function presetBuilder() {
 }
 function loadPreset(id) {
   const p = PRESETS.find(q => q.id === id) || PRESETS[0];
+  world.settings.flow = 'off';                                          // 水流由配置決定（台灣溪流缸會打開）
   world.decor = []; world.ents = []; world.food = []; resetLogs();
   world.water = { dirt: 5, algae: 3 };
   applyTankDims(p.tank);

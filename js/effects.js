@@ -51,8 +51,11 @@ function tickParticles(dt) {
     if (p.type === 'drop') {
       p.vy += 600 * dt; p.x += p.vx * dt; p.y += p.vy * dt;
       if (p.vy > 0 && p.y > wy) p.t = p.life;                  // 掉回水面就消失
+    } else if (p.type === 'drift') {                            // 水流帶著的細沙、碎屑
+      p.x += p.vx * dt; p.y += p.vy * dt + Math.sin(p.t * 2 + p.seed) * 3 * dt;
+      if (p.x > TANK.right - 2 || p.y < wy + 3 || solidAt(p.x, p.y)) p.t = p.life;
     } else if (p.type === 'bubble') {
-      p.y += p.vy * dt; p.x += Math.sin(p.t * 5 + p.seed) * 12 * dt;
+      p.y += p.vy * dt; p.x += Math.sin(p.t * 5 + p.seed) * 12 * dt + flowSpeed() * .5 * dt;
       p.vy = Math.max(p.vy - 10 * dt, -70);
       if (p.y <= wy + 2) { p.t = p.life; if (Math.random() < .3) ripple(p.x, wy, .25); }   // 浮到水面破掉
       if (solidAt(p.x, p.y)) p.t = p.life;
@@ -63,6 +66,11 @@ function tickParticles(dt) {
     }
   }
   world.particles = world.particles.filter(p => p.t < p.life);
+  const fl = flowSpeed();
+  if (fl > 0 && (world.flowT = (world.flowT || 0) - dt) <= 0) {     // 溪水：不斷有細沙從上游漂下來
+    world.flowT = .9 / fl;
+    addParticle({ type: 'drift', x: rand(TANK.left, TANK.right - 40), y: rand(wy + 8, TANK.floor - 6), vx: fl * rand(.7, 1.4), vy: rand(-2, 2), r: rand(.6, 1.5), life: rand(3, 7), seed: rand(0, 6) });
+  }
   // 氣泡石冒泡
   for (const d of world.decor) if (d.type === 'bubbler' && d.y > wy + 10) {
     d.bubT = (d.bubT || 0) - dt;
@@ -76,6 +84,7 @@ function drawParticles() {
     if (p.type === 'drop') { G.alpha(.8); G.circle(p.x, p.y, p.r, '#e8f6ff'); }
     else if (p.type === 'bubble') { G.alpha(.75); G.circle(p.x, p.y, p.r, null, '#f2fbff', 1); G.circle(p.x - p.r * .35, p.y - p.r * .35, p.r * .3, '#ffffff'); }
     else if (p.type === 'dust') { G.alpha(.35 * k); G.circle(p.x, p.y, p.r * (1.5 - k * .5), '#c9b48a'); }
+    else if (p.type === 'drift') { G.alpha(.55 * Math.min(1, k * 3, (1 - k) * 4)); G.circle(p.x, p.y, p.r, '#eef4e8'); }
     else if (p.type === 'ripple') { G.alpha(.7 * k); G.poly(ellipsePts(p.x, p.y + 1, p.r, p.r * .22, 0, 20), null, '#ffffff', 1.3); }
     G.restore();
   }

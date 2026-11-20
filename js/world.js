@@ -37,9 +37,12 @@ const world = {
     autotomy: true,      // 壁虎被抓時可能斷尾
     waterSim: true,      // 水質與藻類
     dayCycle: 'normal',  // 日夜循環：off / fast / normal / real
+    flow: 'off',         // 水流（溪流）：off / low / high；往右（下游）流
   },
 };
 
+const FLOW_SPEED = { off: 0, low: 16, high: 36 };                  // 水流速度（px／秒）
+const flowSpeed = () => (world.waterY < TANK.floor - 10 ? FLOW_SPEED[world.settings.flow] || 0 : 0);
 function updateWaterY() { world.waterY = TANK.floor - world.level * (TANK.floor - TANK.top); }
 
 function applyTankDims(key) {
@@ -190,7 +193,7 @@ function makeEnt(type, x, y, push = true) {
 function afterDrop(e) {
   const wy = world.waterY;
   e.vx = e.vy = e.v = 0; e.turning = false; e.turnT = 0;
-  if (e.kind === 'fish') { e.mode = 'cruise'; e.tx = e.x; e.ty = e.y; if (SPECIES[e.type].cory) { e.cm = 'sink'; e.vy = 0; } }
+  if (e.kind === 'fish') { e.mode = 'cruise'; e.tx = e.x; e.ty = e.y; if (SPECIES[e.type].cory) { e.cm = 'sink'; e.vy = 0; } if (SPECIES[e.type].goby) { e.gm = 'sink'; e.vy = 0; } }
   if (e.kind === 'turtle') e.mode = e.y > wy + 4 ? 'swim' : 'fall';
   if (e.kind === 'frog') e.mode = 'jump';
   if (e.kind === 'gecko') { if (e.y > wy - 24) e.y = Math.max(TANK.top + 20, wy - 30); initChain(e, -Math.PI / 2); }
@@ -430,7 +433,7 @@ function updFood(f, dt) {
   f.t += dt;
   const wy = world.waterY, g = groundY(f.x, f.y - 2, 4) - 2;
   if (f.y < wy) { f.vy = Math.min(f.vy + 500 * dt, 300); if (f.y + f.vy * dt >= wy && wy < TANK.floor - 4) ripple(f.x, wy, .2); }
-  else { f.vy = lerp(f.vy, 16, ease(dt, 6)); f.x += Math.sin(world.t * 2 + f.id) * 4 * dt; }
+  else { f.vy = lerp(f.vy, 16, ease(dt, 6)); f.x = clamp(f.x + Math.sin(world.t * 2 + f.id) * 4 * dt + flowSpeed() * (f.y >= g - .5 ? .15 : .8) * dt, TANK.left + 4, TANK.right - 4); }   // 水流把飼料往下游帶
   f.y = Math.min(f.y + f.vy * dt, g);
   if (f.t > 90) f.removed = true;
 }

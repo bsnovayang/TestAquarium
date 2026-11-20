@@ -42,6 +42,14 @@ const SPECIES = {
     growTime: 200, birth: .3, breed: { how: 'stick', cool: [200, 320], count: [6, 12], hatch: 40 },
     look: { shape: 'cory', hScale: 1 },
   },
+  // 明潭吻鰕虎（Rhinogobius candidianus，台灣特有種，約 6～8 cm）：用腹鰭癒合成的吸盤趴在溪底石頭上，臉朝上游；
+  // 一跳一跳地短距離移動；公魚第一背鰭高、帶藍綠色和黑斑，臉頰有橘紅色小點，有地盤、會張開背鰭威嚇；
+  // 母魚把卵產在石頭底下，公魚在旁邊守著
+  goby: {
+    name: '明潭吻鰕虎', kind: 'fish', goby: true, len: 117, speed: 20, dash: 160, sight: 200, hungerTime: 1200, huntBelow: 80, hit: 22,
+    sexed: true, femaleScale: .85, growTime: 220, birth: .25, gobyBreed: { cool: [240, 360], count: [8, 14], hatch: 50 },
+    look: { shape: 'goby' },
+  },
   redtail: {
     name: '紅尾黑鯊', kind: 'fish', len: 216, speed: 30, dash: 120, sight: 180, hungerTime: 1000, huntBelow: 75, hit: 34,
     growTime: 300, birth: .3, territorial: true, bottom: true, grazer: true,   // 地盤性、待在底層、會啃食藻類；水族缸內幾乎不繁殖
@@ -52,6 +60,9 @@ const SPECIES = {
   // 叼回原處把魚往石頭上甩幾下再整條吞下。公鳥嘴全黑、母鳥下嘴喙橘紅色
   kingfisher: { name: '翠鳥', kind: 'bird', len: 290, speed: 300, sight: 560, hungerTime: 1500, huntBelow: 88, hit: 30,
                 dive: { depth: 160, success: .5, cool: [6, 14] }, sexed: true, femaleScale: 1 },
+  // 河烏（Cinclus pallasii，約 21 cm）：全身深巧克力色、圓胖、短尾巴常翹著；停在溪邊石頭上不停「點頭」（整個身體上下蹲），
+  // 眨眼時露出白色的眼瞼；潛進水裡在溪底逆著水流走、翻石頭找水生昆蟲，也會用翅膀在水裡游；台灣中低海拔溪流的留鳥
+  dipper: { name: '河烏', kind: 'bird', dipper: true, len: 380, speed: 260, sight: 380, hungerTime: 1300, huntBelow: 96, hit: 32 },   // 幾乎一整天都在覓食
   // 六角恐龍（墨西哥鈍口螈，約 20 cm）：一輩子保持幼體的樣子（幼態延續），完全住在水裡；
   // 頭兩側各 3 根羽毛狀外鰓、寬扁的頭和「微笑」的嘴、從頭後到尾尖的鰭；伏擊型，張嘴把獵物吸進去
   axolotl: { name: '六角恐龍', kind: 'axolotl', len: 360, speed: 16, swim: 60, sight: 220, hungerTime: 2400, huntBelow: 80, hit: 26,
@@ -218,7 +229,8 @@ const RULES = [
   { id: 'bird_fish',      pred: 'bird',    prey: 'fish',     label: '翠鳥俯衝抓小魚' },
   { id: 'bird_shrimp',    pred: 'bird',    prey: 'shrimp',   label: '翠鳥抓蝦' },
   { id: 'bird_tadpole',   pred: 'bird',    prey: 'tadpole',  label: '翠鳥抓蝌蚪' },
-  { id: 'bird_crab',      pred: 'bird',    prey: 'crab',     label: '翠鳥抓水裡的螃蟹' },
+  { id: 'bird_crab',      pred: 'bird',    prey: 'crab',     label: '翠鳥、河烏抓水裡的螃蟹' },
+  { id: 'bird_larva',     pred: 'bird',    prey: 'larva',    label: '河烏吃水生昆蟲（孑孓）' },
   { id: 'crab_food',      pred: 'crab',    prey: 'food',     label: '螃蟹吃飼料' },
   { id: 'crab_carrion',   pred: 'crab',    prey: 'carrion',  label: '清溪蟹清理動物屍體' },
   { id: 'crab_shrimp',    pred: 'crab',    prey: 'shrimp',   label: '清溪蟹夾小蝦' },

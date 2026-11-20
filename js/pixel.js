@@ -345,7 +345,7 @@ function drawPxPlant_v1(d) {                                              // 水
       const pts = [], hk = d.h * (.7 + .3 * Math.sin(d.seed + k * 2.1));
       for (let i = 0; i <= 8; i++) {
         const t = i / 8, y = d.y - hk * t, under = y > wy;
-        const sway = under ? Math.sin(world.t * 1.4 + k * 1.3 + t * 3 + d.seed) * 12 * t : 4 * t;
+        const sway = under ? Math.sin(world.t * 1.4 + k * 1.3 + t * 3 + d.seed) * 12 * t + flowSpeed() * .4 * t : 4 * t;   // 有水流時往下游彎
         pts.push(P(d.x + (k - 1.5) * 9 + sway + Math.sin(k + t * 4) * 4, y));
       }
       const stem = k % 2 ? L[3] : L[2], A = pts.map(p => P(AX(p.x), AY(p.y)));
@@ -449,7 +449,7 @@ function drawPxPlant(d) {
       const back = k === 0 || k === 3, pts = [], hk = d.h * (.7 + .3 * Math.sin(d.seed + k * 2.1));
       for (let i = 0; i <= 10; i++) {
         const t = i / 10, y = d.y - hk * t, under = y > wy;
-        const sway = under ? Math.sin(world.t * 1.4 + k * 1.3 + t * 3 + d.seed) * 12 * t : 4 * t;
+        const sway = under ? Math.sin(world.t * 1.4 + k * 1.3 + t * 3 + d.seed) * 12 * t + flowSpeed() * .4 * t : 4 * t;   // 有水流時往下游彎
         pts.push(P(d.x + (k - 1.5) * 9 + sway + Math.sin(k + t * 4) * 4, y));
       }
       const stem = back ? L[4] : L[3], A = pts.map(p => P(AX(p.x), AY(p.y)));
@@ -581,7 +581,7 @@ const PX_FISH = {
   tetra: { ramp: ['#f2f6f8', '#cfd8de', '#a2b0ba', '#728290', '#465460'], fin: '#e2eaef', ol: '#2e3a44', red: ['#ff7484', '#ff3348', '#c41e36'], blue: ['#b8f8ff', '#40d8ff', '#1a90c8'] },
 };
 function drawPxFish(e) {
-  const sp = SPECIES[e.type]; if (sp.cory) return drawPxCory(e);
+  const sp = SPECIES[e.type]; if (sp.cory) return drawPxCory(e); if (sp.goby) return drawPxGoby(e);
   const lk = sp.look, R = fishRig(e), n = R.nodes, tb = n[FISH_N - 1], k = e.size * sp.len / 64, s = ppu() * k * PXOPT.cscale;
   const shape = lk.shape, pal = PX_FISH[shape] || PX_FISH.guppy, Rm = pal.ramp;
   const juv = e.size < e.adult * .6, male = e.sex === 'm' && !juv, M = GUPPY_MORPHS[e.morph || 0];
@@ -1385,6 +1385,76 @@ function drawPxWhale(e) {
   }
 }
 
+// ---------------------------------------------------------------------
+// 河烏（和一般版同一套局部座標與動作）
+// ---------------------------------------------------------------------
+function drawPxDipper(e) {
+  const sp = SPECIES[e.type], k = e.size * sp.len / 64 * PXOPT.cscale, S = ppu() * k, mode = e.mode, swim = mode === 'under' && e.sub !== 'walk', flying = mode === 'fly', sleep = mode === 'perch' && isNight(), D = PXOPT.detail;
+  const bob = (e.bob || 0) * 3, shakeX = mode === 'shake' ? Math.sin(world.t * 60) * .8 : 0, a = e.pitch || 0, ca = Math.cos(a), sa = Math.sin(a), puff = sleep ? 1.12 : mode === 'shake' ? 1.08 : 1;
+  const T0 = mapper(e.x, e.y, S, e.dir, 1);
+  const TB = p => { const x = p.x, y = p.y + 12; return T0(P(shakeX + x * ca - y * sa, bob - 12 + x * sa + y * ca)); };   // 身體：以臀部為支點轉
+  const rot = (o, ang, pts) => { const c = Math.cos(ang), s2 = Math.sin(ang); return pts.map(p => TB(P(o.x + p.x * c - p.y * s2, o.y + p.x * s2 + p.y * c))); };
+  const flap = flying ? Math.sin(e.phase) : swim ? Math.sin(e.phase) * .6 : 0;
+  const wingPts = chaikin([P(0, 0), P(-6, -4), P(-15, -6), P(-22, -4), P(-24, -1), P(-18, 2), P(-9, 3), P(-2, 2.5)], true, 1);
+  let eyeP = null;
+  live(B => {
+    if (!flying && !swim && mode !== 'hop') for (const L of dipperLegs(e)) {
+      pxThick(B, T0(L.hip), T0(L.knee), Math.max(1, 2 * S), DP.leg); pxThick(B, T0(L.knee), T0(L.foot), Math.max(1, 1.8 * S), DP.leg);
+      for (const dx of [-3, 1, 4]) { const f = T0(L.foot), q = T0(P(L.foot.x + dx, L.foot.y + .2)); B.line(f.x, f.y, q.x, q.y, C(DP.leg), 1); }
+    }
+    if (flying || swim) B.poly(rot(P(1, -23), -.8 - flap * .9, wingPts), DP.dark);
+    B.poly(rot(P(-12, -20), -.35 - (e.bob || 0) * .25, chaikin([P(0, -2.5), P(-11, -3), P(-12, 0), P(-11, 2.5), P(0, 2.5)], true, 1)), DP.dark);   // 尾巴
+    const yT = TB(P(-1, -28.6)).y, yB = TB(P(-1, -9.4)).y;
+    B.poly(ellipsePts(-1, -19, 14, 9.6 * puff, 0, 24).map(TB), (x, y) => C([DP.light, DP.body, DP.dark][clamp(band((y - yT) / Math.max(1, yB - yT) * 2.6 - .4, x, y, .3), 0, 2)]));
+    if (!flying && !swim) B.poly(chaikin([P(6, -24), P(-4, -26.5), P(-14, -23), P(-18, -19.5), P(-12, -16.5), P(0, -16), P(5, -19)], true, 1).map(TB), DP.dark);   // 收起的翅膀
+    const hd = sleep ? P(-2, 2) : P(0, 0), H = p => TB(P(p.x + hd.x, p.y + hd.y)), hy = H(P(10, -26.5)).y;
+    B.poly(ellipsePts(10, -26.5, 7.6, 7.6, 0, 18).map(H), (x, y) => C(y < hy - 2 * S ? DP.light : DP.body));
+    B.poly([P(16.4, -28), P(23, -26.4), P(16.6, -25.2)].map(H), DP.beak);
+    eyeP = H(P(12.7, -27.8));
+    if (D) B.cleanup();
+    if (D && S >= .5) B.rim(.22, .15);
+    if (S >= .9 && !flying && !swim) B.path(chaikin([P(5, -19.5), P(-4, -17), P(-14, -19)], false, 1).map(TB), (x, y) => B.tag[y * B.w + x] === 1 ? C('#241c16') : 0);   // 翅膀的邊
+  }, '#1a120c', '#1a120c');
+  if (eyeP) {
+    if (sleep) PXB.line(eyeP.x - 1.2 * S, eyeP.y, eyeP.x + 1.2 * S, eyeP.y, C(DP.eye), CREATURE);
+    else if (e.blinkT > 0) PXB.disc(eyeP.x, eyeP.y, Math.max(.7, 1.6 * S), C('#f4f2ee'), CREATURE);   // 白色眼瞼
+    else { PXB.disc(eyeP.x, eyeP.y, Math.max(.6, 1.4 * S), C(DP.eye), CREATURE); if (S >= 1.2) PXB.set(eyeP.x - .4 * S * e.dir, eyeP.y - .5 * S, C('#ffffff'), CREATURE); }
+  }
+  if (flying || swim) live(B => B.poly(rot(P(1, -24), -.5 - flap * 1.1, wingPts), (x, y) => C(DP.body)), '#1a120c', '#1a120c');
+  if (swim && S >= .4) for (let i = 0; i < 10; i++) { if (((world.t * 4 + i) | 0) % 3 === 0) continue; const p = TB(P(-12 + i * 2.6, -22 + Math.sin(i * 2.1) * 4)); PXB.set(p.x, p.y, C('#e8f4ff'), CREATURE); }   // 羽毛上的空氣
+}
+
+// ---------------------------------------------------------------------
+// 明潭吻鰕虎
+// ---------------------------------------------------------------------
+function drawPxGoby(e) {
+  const sp = SPECIES[e.type], S = ppu() * e.size * sp.len / 64 * PXOPT.cscale, male = e.sex === 'm' && e.size > e.adult * .6, fl = e.flare || 0, C0 = GOBY_COL[male ? 'm' : 'f'], D = PXOPT.detail;
+  const T = mapper(e.x, e.y, S, e.dir, e.dead ? -1 : 1), sw = e.gm === 'hop' ? Math.sin(e.phase) * .25 : Math.sin(e.phase) * .04, cs = Math.cos(sw), ss = Math.sin(sw);
+  const TT = p => T(P(-24 + p.x * cs - p.y * ss, p.x * ss + p.y * cs));
+  const FIN = 4, finC = male ? '#c89a6e' : '#c8b896', h1 = male ? 9 + fl * 5 : 6 + fl * 2;
+  live(B => {
+    B.poly(chaikin([P(0, -4), P(-9, -7), P(-14, -3.5), P(-14.5, 3.5), P(-9, 7), P(0, 4)], true, 2).map(TT), male ? '#d0905a' : finC, FIN);   // 尾鰭
+    B.poly(chaikin([P(-3, -6.8), P(-6, -11 - fl * 2), P(-20, -9.5 - fl), P(-23, -4.2)], true, 1).map(T), finC, FIN);   // 第二背鰭
+    B.poly(chaikin([P(-6, 5.6), P(-9, 9), P(-20, 7.5), P(-22, 3.8)], true, 1).map(T), finC, FIN);                    // 臀鰭
+    B.poly(chaikin([P(8, -8), P(6, -8 - h1), P(1, -8 - h1 * .85), P(-1, -7.2)], true, 1).map(T), male ? '#3aa8a0' : finC, FIN);   // 第一背鰭
+    const yT = T(P(0, -8.5)).y, yB = T(P(0, 7.5)).y;
+    B.poly(chaikin([...GOBY_TOP, ...GOBY_BOT].map(([x, y]) => P(x, y)), true, 2).map(T), (x, y) => { const v = (y - yT) / ((yB - yT) || 1); return C(v < .3 ? C0[1] : v < .72 ? C0[0] : '#e8e0cc'); });
+    for (let i = 0; i < 6; i++) B.poly(ellipsePts(14 - i * 7, -1 + (i % 2) * .6, 2.6, 1.8, 0, 8).map(T), male ? mixColor(C0[0], C0[2], .5) : C0[2]);   // 體側的斑塊
+    const pf = Math.sin(e.pec || 0) * 1.5;
+    B.poly(chaikin([P(17, 1), P(12, -2 + pf), P(9, 2 + pf), P(12, 5), P(16, 4)], true, 1).map(T), mixColor(finC, '#ffffff', .2), FIN);   // 胸鰭
+    if (D) B.cleanup();
+    if (D && S >= .5) B.rim(.28, .2);
+    if (S >= .6) {                                                        // 鰭的點列、鰭緣
+      for (let i = 0; i < 3; i++) for (let j = -2; j <= 2; j++) { const p = TT(P(-4 - i * 3.5, j * 2.2)); B.setOn(p.x, p.y, C(male ? '#6a3020' : '#7e6c52'), [FIN]); }
+      if (male) { B.path(chaikin([P(-9, -6.6), P(-14, -3), P(-14.4, 3), P(-9, 6.6)], false, 1).map(TT), (x, y) => B.tag[y * B.w + x] === FIN ? C('#f07030') : 0); const a = T(P(-5.6, -10.8 - fl * 2)), b = T(P(-20, -9.5 - fl)); B.lineOn(a.x, a.y, b.x, b.y, C('#f07030'), FIN); }
+    }
+    if (male && S >= .5) { const sp2 = T(P(3, -8 - h1 * .5)); B.disc(sp2.x, sp2.y, Math.max(.6, 1.2 * S), C('#1a2a2a'), FIN); for (const [x, y] of [[24, 1], [26.5, 2.5], [22, 3.2], [27.5, -.2], [20, 1.5]]) { const p = T(P(x, y)); B.setOn(p.x, p.y, C('#e0502a')); } }   // 背鰭的黑斑、臉頰的橘紅點
+  }, C0[2], '#2a1e12');
+  const ec = T(P(24.5, -5.6));
+  PXB.disc(ec.x, ec.y, Math.max(.7, 2.2 * S), C('#d8c890'), CREATURE); PXB.disc(ec.x, ec.y, Math.max(.5, 1.4 * S), C('#141010'), CREATURE);
+  if (S >= 1.2) PXB.set(ec.x - .5 * S * e.dir, ec.y - .6 * S, C('#ffffff'), CREATURE);
+}
+
 // 斑馬螺
 function drawPxSnail(e) {
   const s = ppu() * e.size * PXOPT.cscale, T = mapper(e.x, e.y, s, e.dir, 1), und = Math.sin(e.phase * 3) * .8;
@@ -1434,6 +1504,7 @@ function drawPxParticles() {
     } else if (p.type === 'dust') { if (bayer(x | 0, y | 0) < k * .7) PXB.disc(x, y, Math.max(.6, p.r * s * .7), dust, 0); }
     else if (p.type === 'ripple') { if (k > .2) { const r = p.r * s; PXB.set(x - r, y, wht); PXB.set(x + r, y, wht); if (r > 3) { PXB.set(x - r + 1, y, wht); PXB.set(x + r - 1, y, wht); } } }
     else if (p.type === 'drop') PXB.set(x, y, C('#e8f6ff'));
+    else if (p.type === 'drift') { if (k > .15 && k < .9) PXB.set(x, y, C(p.r > 1.1 ? '#f0f6ea' : '#d8e6dc')); }
   }
 }
 function drawPxSurface() {                                            // 水面：一條亮線＋波動的亮點
@@ -1456,6 +1527,7 @@ const PX_KF = {
   beak: '#1c1c22', beakHi: '#4a4a56', beakF: '#e0582c', leg: '#f0502c', legDk: '#b03418', spot: '#9ff0ff', eye: '#101014', ol: '#0a2c3e', olWarm: '#5a2a10',
 };
 function drawPxBird(e) {
+  if (SPECIES[e.type].dipper) return drawPxDipper(e);
   const sp = SPECIES[e.type], k = e.size * sp.len / 64, s = ppu() * k * PXOPT.cscale, mode = e.mode, female = e.sex === 'f';
   const flying = mode === 'fly' || mode === 'rise', diving = mode === 'dive' || mode === 'under', sleep = mode === 'perch' && isNight();
   const Lpx = 64 * s, D = PXOPT.detail, pitch = e.pitch || 0, ca = Math.cos(pitch), sa = Math.sin(pitch), dir = e.dir;

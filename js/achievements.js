@@ -40,6 +40,8 @@ const ACHIEVEMENTS = [
   { id: 'gecko_tail',    cat: '趣味',   icon: '🦎', name: '金蟬脫殼',     desc: '壁虎斷尾逃走' },
   { id: 'shark_chase',   cat: '趣味',   icon: '🦈', name: '地盤意識',     desc: '紅尾黑鯊趕走靠近的魚' },
   { id: 'kingfisher',    cat: '趣味',   icon: '🐦', name: '一擊必中',     desc: '翠鳥俯衝抓到魚' },
+  { id: 'dipper_catch',  cat: '趣味',   icon: '🫧', name: '潛水高手',     desc: '河烏在水底抓到獵物' },
+  { id: 'goby_display',  cat: '趣味',   icon: '⚔️', name: '地盤之爭',     desc: '明潭吻鰕虎公魚張開背鰭威嚇對手' },
   { id: 'crab_scavenge', cat: '趣味',   icon: '🦀', name: '溪流清道夫',   desc: '拉氏清溪蟹把缸底的屍體清掉' },
   { id: 'fiddler_wave',  cat: '趣味',   icon: '👋', name: '招潮',         desc: '招潮蟹公蟹在自己挖的洞口揮動大螯' },
 ];
@@ -93,6 +95,8 @@ onWorldEvent((type, d) => {
     case 'chase': unlock('shark_chase'); break;
     case 'birdCatch': unlock('kingfisher'); break;
     case 'scavenge': unlock('crab_scavenge'); break;
+    case 'dipperCatch': unlock('dipper_catch'); break;
+    case 'gobyDisplay': unlock('goby_display'); break;
     case 'crabHatch': unlock('crab_hatch'); break;
     case 'fiddlerWave': unlock('fiddler_wave'); break;
   }
